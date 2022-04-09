@@ -1,2 +1,3 @@
-# p2p_3d_printing
+# PeerPrint
+
 A distributed system allowing for sharing and running of 3D printing jobs

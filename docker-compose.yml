@@ -1,0 +1,23 @@
+version: '2.4'
+
+x-base: &base
+  build: 
+    context: .
+  command: python3 -m peerprint.server --debug --base_dir=/volume
+  volumes:
+    - "/tmp:/tmp" #enable IPC comms for debugging
+
+services:
+  server1:
+    <<: *base
+    volumes: 
+      - "./peerprint/networking/testdata/server1/:/volume"
+  server2:
+    <<: *base
+    volumes: 
+      - "./peerprint/networking/testdata/server1/:/volume"
+  cli1:
+    <<: *base
+    command: python3 -m peerprint.cli --base_dir=/volume
+    profiles:
+      - "cli"
