@@ -16,8 +16,13 @@ services:
     <<: *base
     volumes: 
       - "./peerprint/networking/testdata/server1/:/volume"
-  cli1:
+  cli:
     <<: *base
     command: python3 -m peerprint.cli --base_dir=/volume
     profiles:
-      - "cli"
+      - "cli1"
+  test:
+    <<: *base
+    command: python -m unittest discover -s peerprint -p "*_test.py"
+    profiles:
+      - "test"
