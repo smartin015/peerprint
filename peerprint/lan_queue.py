@@ -8,22 +8,20 @@ import random
 import time
 import json
 
-from ..print_queue import PrintQueueInterface, QueueJob
-from ..storage import queries
+from .storage import queries
 from .discovery import P2PDiscovery
+from .adapter import Adapter
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
 #
 # Queue state is synchronized back to the storage system, to allow for multi-queue queries
 class LANPrintQueueBase(SyncObj):
-  def __init__(self, name, addr, peers, ready_cb, logger):
+  def __init__(self, adapter: Adapter, peers, logger):
     self._logger = logger
-    self.name = name
-    self.addr = addr
-    self.ready_cb = ready_cb
-    conf = SyncObjConf(onReady=self.ready_cb, dynamicMembershipChange=True)
-    super(LANPrintQueueBase, self).__init__(addr, peers, conf)
+    self._adapter = adapter
+    conf = SyncObjConf(onReady=adapter.on_ready, dynamicMembershipChange=True)
+    super(LANPrintQueueBase, self).__init__(adapter.get_host_addr(), peers, conf)
 
   # ==== Network methods ====
 
@@ -41,66 +39,72 @@ class LANPrintQueueBase(SyncObj):
   # ==== Hooks to save to storage ====
 
   @replicated
-  def _syncPrinter(self, peer, state):
-    self._logger.debug(f"@replicated _syncPrinter({peer}, _)")
-    queries.syncPrinter(self.addr, peer, state)
+  def _syncPeer(self, peer, state):
+    self._logger.debug(f"@replicated _syncPeer({peer}, _)")
+    queries.syncPeer(self._adapter.get_namespace(), peer, state)
   
   @replicated  
-  def _createJob(self, job):
-    self._logger.debug(f"@replicated _createJob {job}")
-    queries.createJob(self.name, job)
+  def _createJob(self, peer, hash_, json):
+    self._logger.debug(f"@replicated _createJob {hash}")
+    local_id = self._adapter.upsert_job(hash_, json)
+    queries.upsertJob(self._adapter.get_namespace(), local_id, hash_, json)
 
   @replicated
-  def _removeJob(self, peer, name: str):
-    if peer == self.name:
-      return # Local removal is handled by caller
+  def _removeJob(self, peer, hash_):
     self._logger.debug("@replicated _removeJob")
-    queries.removeJob(self.name, name)
+    local_id = queries.removeJob(self._adapter.get_namespace(), hash_)
+    self._adapter.remove_job(local_id)
+ 
+  @replicated
+  def _acquireJob(self, peer, hash_):
+    self._logger.debug("@replicated _acquireJob")
+    queries.acquireJob(self._adapter.get_namespace(), hash_)
+ 
+  @replicated
+  def _releaseJob(self, peer, hash_):
+    self._logger.debug("@replicated _releaseJob")
+    queries.releaseJob(self._adapter.get_namespace(), hash_)
  
   @replicated
   def _syncFiles(self, peer, files):
     self._logger.debug(f"@replicated _syncFiles({peer}, len({len(files)}))")
-    queries.syncFiles(self.addr, peer, files)
+    queries.syncFiles(peer, files)
 
   @replicated
-  def _syncAssigned(self, peer, assignment):
-    if peer == self.name:
-      return # Local assignment handled by caller (potential race condition?)
+  def _syncAssigned(self, peer: str, assignment: dict[str,str]):
     self._logger.debug(f"@replicated _syncAssigned()")
-    queries.syncAssigned(self.addr, self.name, assignment)
+    queries.syncAssigned(self._adapter.get_namespace(), assignment)
 
   # ==== Mutation methods ====
 
-  def setPrinterState(self, state):
-    self._syncPrinter(self.addr, state)
+  def syncPeer(self, state: dict):
+    self._syncPeer(self._adapter.get_host_addr(), state)
 
   def registerFiles(self, files: dict):
-    self._logger.debug(f"registering files: {files}")
-    self._syncFiles(self.addr, files)
+    self._syncFiles(self._adapter.get_host_addr(), files)
 
-  def runAssignment(self):
-    assignment = queries.runMultiPrinterAssignment(self.name, self.addr, self._logger)
-    self._syncAssigned(self, self.name, assignment)
-    return assignment
+  def syncAssigned(self, assignment: dict[str,str]):
+    self._syncAssigned(self._adapter.get_namespace(), assignment)
 
-  def createJob(self, job):
-    self._createJob(job)
+  def createJob(self, hash_, json):
+    self._createJob(self._adapter.get_host_addr(), hash_, json)
 
-  def removeJob(self, name: str):
-    # TODO fix desync issue if consensus fails
-    self._removeJob(self.name, name)
-    return queries.removeJob(self.name, name)
+  def removeJob(self, hash_: str):
+    self._removeJob(self._adapter.get_host_addr(), hash_)
+
+  def acquireJob(self, hash_: str):
+    self._acquireJob(self._adapter.get_host_addr(), hash_)
+
+  def releaseJob(self, hash_: str):
+    self._releaseJob(self._adapter.get_host_addr(), hash_)
 
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
 # on a namespace instead of using a list of specific peers.
-# 
-# This class also handles syncing of files from a FileShare object.
-class LANPrintQueue(PrintQueueInterface, P2PDiscovery):
-  def __init__(self, namespace, addr, ready_cb, fileshare, logger):
-    super().__init__(namespace, addr)
+class LANPrintQueue(P2PDiscovery):
+  def __init__(self, adapter: Adapter, logger):
+    super().__init__(adapter.get_namespace(), adapter.get_host_addr())
     self._logger = logger
-    self._fs = fileshare
-    self.ready_cb = ready_cb
+    self._adapter = adapter
     self.q = None
     self._logger.info(f"Starting discovery")
     self.t = threading.Thread(target=self.spin, daemon=True)
@@ -109,13 +113,6 @@ class LANPrintQueue(PrintQueueInterface, P2PDiscovery):
   def destroy(self):
     self._logger.info(f"Destroying discovery and SyncObj")
     super(LANPrintQueue, self).destroy()
-    self.q.destroy()
-
-  def _on_queue_ready(self):
-    files = queries.getFiles("local")
-    self._logger.info(f"Registering {len(files)} files")
-    self.q.registerFiles(files)
-    self.ready_cb(self.namespace)
 
   def _on_host_added(self, host):
     if self.q is not None:
@@ -129,7 +126,7 @@ class LANPrintQueue(PrintQueueInterface, P2PDiscovery):
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.namespace, self.addr, results.keys(), self._on_queue_ready, self._logger)
+    self.q = LANPrintQueueBase(self._adapter, results.keys(), self._logger)
 
 
 def main():

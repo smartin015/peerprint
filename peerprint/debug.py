@@ -9,10 +9,10 @@ import yaml
 
 def main():
     parser = argparse.ArgumentParser(description='Debug client for main_headless')
-    parser.add_argument('base_dir', help='Base directory matching that of main_headless instance')
+    parser.add_argument('--config', help='Server config file path')
     args = parser.parse_args()
 
-    with open(os.path.join(args.base_dir, "server.yaml"), 'r') as f:
+    with open(args.config, 'r') as f:
       data = yaml.safe_load(f.read())
 
     logging.basicConfig(level=logging.DEBUG)
