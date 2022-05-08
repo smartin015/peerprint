@@ -1,6 +1,0 @@
-db_path: 'server1.sqlite3'
-debug_socket: "ipc:///tmp/server1.ipc"
-printer: 
-  width: 100
-  height: 100
-  depth: 100

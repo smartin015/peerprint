@@ -1,2 +1,0 @@
-db_path: 'server2.sqlite3'
-debug_socket: "ipc:///tmp/server2.ipc"

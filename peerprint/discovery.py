@@ -3,9 +3,12 @@ import random
 import select
 import time
 
+from peerprint import __version__ as version
+
 class P2PDiscovery:
   def __init__(self, namespace, advertise_addr, min_broadcast_pd=5, ttl=20):
-    self.namespace = namespace
+    # Version is appended to the namespace to prevent different versions of peerprint from colliding
+    self.namespace = f"{namespace}|{version}"
     self.ttl = ttl
     self.min_broadcast_pd = min_broadcast_pd
     self.addr = advertise_addr
@@ -27,7 +30,9 @@ class P2PDiscovery:
     if host == self.addr:
       return # Don't count our own host in the list of peers
     # Filter all hosts that haven't contacted us in the TTL
+    # print("ping", host, ts)
     if self.host_timestamps.get(host) is None:
+      # print("_on_host_added", host)
       self._on_host_added(host)
       self.next_broadcast = 0 # Get the new host up to speed quickly
     self.host_timestamps[host] = ts
@@ -39,6 +44,7 @@ class P2PDiscovery:
         removed.append(k)
     for k in removed:
       del self.host_timestamps[k]
+      # print("_on_host_removed", k)
       self._on_host_removed(k)
 
   def _on_host_added(self, host):
@@ -54,6 +60,7 @@ class P2PDiscovery:
     self.running = False
 
   def spin(self):
+    # print("spin start")
     startup = time.time()
     self.running = True
     while self.running:
@@ -75,8 +82,9 @@ class P2PDiscovery:
           #incoming message from remote server
           data = read_sockets[0].recv(4096)
           if data.startswith(self.namespace.encode()):
-            data = data.decode("utf8").split("|")[1]
+            data = data.decode("utf8").split("|")[-1]
             self._handlePing(data, ts)
+    # print("spin end")
 
 if __name__ == "__main__":
   import sys

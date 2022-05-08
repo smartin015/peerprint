@@ -1,2 +1,0 @@
-debug_socket: "ipc:///tmp/server1.ipc"
-start_port: 6750
