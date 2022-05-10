@@ -7,7 +7,6 @@ import threading
 import logging
 import random
 import time
-import json
 from pathlib import Path
 
 from .discovery import P2PDiscovery
@@ -16,7 +15,7 @@ from .filesharing import pack_job
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
 class LANPrintQueueBase(SyncObj):
-    def __init__(self, ns, addr, peers, basedir, logger):
+    def __init__(self, ns, addr, peers, basedir, ready_cb, logger):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
       self.ns = ns
@@ -24,7 +23,7 @@ class LANPrintQueueBase(SyncObj):
       if basedir is not None:
           self.basedir = Path(basedir)
           conf = SyncObjConf(
-                onReady=self.on_ready, 
+                onReady=ready_cb, 
                 dynamicMembershipChange=True,
                 journalFile=str(self.basedir / "journal"),
                 fullDumpFile=str(self.basedir / "dump"),
@@ -36,12 +35,9 @@ class LANPrintQueueBase(SyncObj):
             )
       self.peers = ReplDict()
       self.jobs = ReplDict()
-      self.locks = ReplLockManager(autoUnlockTime=600)
+      self.locks = ReplLockManager(selfID=f"{self.ns}:{self.addr}", autoUnlockTime=600)
 
       super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
-
-    def on_ready(self):
-      self._logger.info("Queue ready")
 
     # ==== Network methods ====
 
@@ -62,7 +58,7 @@ class LANPrintQueueBase(SyncObj):
     def syncPeer(self, state: dict):
       self.peers[self.addr] = state
 
-    def createJob(self, hash_, manifest: str):
+    def createJob(self, hash_, manifest: dict):
       self.jobs[hash_] = (self.addr, manifest)
 
     def removeJob(self, hash_: str):
@@ -91,7 +87,7 @@ class LANPrintQueueBase(SyncObj):
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
 # on a namespace instead of using a list of specific peers.
 class LANPrintQueue(P2PDiscovery):
-  def __init__(self, ns, addr, basedir, logger):
+  def __init__(self, ns, addr, basedir, ready_cb, logger):
     super().__init__(ns, addr)
 
     (host, port) = addr.rsplit(':', 1)
@@ -103,6 +99,7 @@ class LANPrintQueue(P2PDiscovery):
     self._logger = logger
     self.addr = addr
     self.ns = ns
+    self.ready_cb = ready_cb
 
     self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
     self.q = None
@@ -125,5 +122,5 @@ class LANPrintQueue(P2PDiscovery):
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self._logger)
+    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self.ready_cb, self._logger)
 
