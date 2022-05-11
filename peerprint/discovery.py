@@ -5,6 +5,8 @@ import time
 
 from peerprint import __version__ as version
 
+DISCOVERY_PORT = 37020
+
 class P2PDiscovery:
   def __init__(self, namespace, advertise_addr, min_broadcast_pd=5, ttl=20):
     # Version is appended to the namespace to prevent different versions of peerprint from colliding
@@ -59,7 +61,7 @@ class P2PDiscovery:
       # Thanks to @stevenreddie
       self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
       self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-      self.sock.bind(("", 37020))
+      self.sock.bind(("", DISCOVERY_PORT))
       self.sock.settimeout(0.2)
       self.t = threading.Thread(target=self.spin, daemon=True)
       self.t.start()
@@ -77,7 +79,7 @@ class P2PDiscovery:
         self._on_startup_complete(self.host_timestamps)
         startup = None
 
-      self.sock.sendto(f"{self.namespace}|{self.addr}".encode(), ('<broadcast>', 37020))
+      self.sock.sendto(f"{self.namespace}|{self.addr}".encode(), ('<broadcast>', DISCOVERY_PORT))
       self.next_broadcast = ts + self.min_broadcast_pd * (1 + random.random())
       self._prune(ts)
       while ts < self.next_broadcast:
