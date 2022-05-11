@@ -7,12 +7,8 @@ class TestPackJob(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         p = Path(self.tempdir.name)
-        self.paths = [
-            (p / 'a.gcode'),
-            (p / 'b.gcode'),
-            (p / 'c.gcode'),
-        ]
-        for path in self.paths:
+        self.paths = dict([(n, p / n) for n in ['a.gcode', 'b.gcode', 'c.gcode']])
+        for path in self.paths.values():
             path.touch()
 
     def tearDown(self):
@@ -20,28 +16,28 @@ class TestPackJob(unittest.TestCase):
 
     def test_pack_job_with_files(self):
         manifest = dict(man='ifest')
-        outpath = tempfile.NamedTemporaryFile(suffix=".zip")
-        with pack_job(manifest, [str(p) for p in self.paths], outpath.name) as f:
+        with tempfile.NamedTemporaryFile(suffix=".zip") as outpath:
+            pack_job(manifest, self.paths, outpath.name)
             with tempfile.TemporaryDirectory() as td:
-                result = unpack_job(outpath, td)
+                result = unpack_job(outpath.name, td)
                 self.assertEqual(result[0], manifest)
-                self.assertEqual([Path(p).name for p in result[1]], [p.name for p in self.paths])
+                self.assertEqual([Path(p).name for p in result[1]], list(self.paths.keys()))
 
     def test_pack_job_hash_matching(self):
         manifest = dict(man='ifest')
-        tf1 = tempfile.NamedTemporaryFile(suffix=".zip")
-        tf2 = tempfile.NamedTemporaryFile(suffix=".zip")
-        with pack_job(manifest, [str(p) for p in self.paths], tf1.name) as f1:
-            with pack_job(manifest, [str(p) for p in self.paths], tf2.name) as f2:
-                self.assertEqual(f1.job_hash, f2.job_hash)
+        with tempfile.NamedTemporaryFile(suffix=".zip") as tf1:
+            with tempfile.NamedTemporaryFile(suffix=".zip") as tf2:
+                h1 = pack_job(manifest, self.paths, tf1.name)
+                h2 = pack_job(manifest, self.paths, tf2.name)
+                self.assertEqual(h1, h2)
 
     def test_pack_job_hash_not_matching(self):
         manifest = dict(man='ifest')
-        tf1 = tempfile.NamedTemporaryFile(suffix=".zip")
-        tf2 = tempfile.NamedTemporaryFile(suffix=".zip")
-        with pack_job(manifest, [str(p) for p in self.paths], tf1.name) as f1:
-            with pack_job(manifest, [str(p) for p in self.paths[1:]], tf2.name) as f2:
-                self.assertNotEqual(f1.job_hash, f2.job_hash)
+        with tempfile.NamedTemporaryFile(suffix=".zip") as tf1:
+            with tempfile.NamedTemporaryFile(suffix=".zip") as tf2:
+                h1 = pack_job(manifest, self.paths, tf1.name)
+                h2 = pack_job(manifest, dict(list(self.paths.items())[1:]), tf2.name)
+                self.assertNotEqual(h1, h2)
         
 
     def test_manifest_references_all_files(self):

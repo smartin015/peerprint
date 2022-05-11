@@ -15,7 +15,7 @@ from .filesharing import pack_job
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
 class LANPrintQueueBase(SyncObj):
-    def __init__(self, ns, addr, peers, basedir, ready_cb, logger):
+    def __init__(self, ns, addr, peers, basedir, ready_cb, logger, testing=False):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
       self.ns = ns
@@ -37,7 +37,8 @@ class LANPrintQueueBase(SyncObj):
       self.jobs = ReplDict()
       self.locks = ReplLockManager(selfID=f"{self.ns}:{self.addr}", autoUnlockTime=600)
 
-      super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
+      if not testing:
+        super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
 
     # ==== Network methods ====
 
@@ -87,7 +88,7 @@ class LANPrintQueueBase(SyncObj):
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
 # on a namespace instead of using a list of specific peers.
 class LANPrintQueue(P2PDiscovery):
-  def __init__(self, ns, addr, basedir, ready_cb, logger):
+  def __init__(self, ns, addr, basedir, ready_cb, logger, testing=False):
     super().__init__(ns, addr)
 
     (host, port) = addr.rsplit(':', 1)
@@ -100,11 +101,11 @@ class LANPrintQueue(P2PDiscovery):
     self.addr = addr
     self.ns = ns
     self.ready_cb = ready_cb
-
-    self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
     self.q = None
-    self.t = threading.Thread(target=self.spin, daemon=True)
-    self.t.start()
+    self._testing = testing
+    if not self._testing:
+        self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
+        self.spin_async()
 
   def destroy(self):
     self._logger.info(f"Destroying discovery and SyncObj")
@@ -122,5 +123,5 @@ class LANPrintQueue(P2PDiscovery):
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self.ready_cb, self._logger)
+    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self.ready_cb, self._logger, self._testing)
 
