@@ -54,52 +54,48 @@ class Shell(cmd.Cmd):
     # ==== Metadata commands ====
     
     def do_syncpeer(self, arg):
-      'Sync peer state: json'
-      self.lan.q.syncPeer(json.loads(arg))
+      'Sync peer state: status run'
+      status, runstr = arg.split(maxsplit=1)
+      self.lan.q.syncPeer(status, json.loads(runstr))
       self.log(f"Synced peer state ({arg})")
 
     # ===== Database and inmemory (network queue) getters =====
 
     def do_peers(self, arg):
       'Print peers'
-      for name, data in self.lan.q.peers.items():
+      for name, data in self.lan.q.getPeers().items():
           self.log(f"{name}: {data}")
 
     def do_jobs(self, arg):
-      for name, data in self.lan.q.jobs.items():
-          self.log(f"{name}: {data}")
+      for job in self.lan.q.getJobs():
+          self.log(str(job))
 
     def do_locks(self, arg):
-      for (lid, val) in self.lan.q.locks._ReplLockManager__lockImpl._ReplLockManagerImpl__locks.items():
-          self.log(f"{lid}: {val}")
+      for (peer, locks) in self.lan.q.locks.getPeerLocks().items():
+          self.log(f"{peer}: {locks}")
 
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
     import sys  
-    import yaml
     import argparse
-    import zmq
 
     from .lan_queue import LANPrintQueue
     parser = argparse.ArgumentParser(description='Start a network queue server')
     parser.add_argument('--ns', type=str)
     parser.add_argument('--addr', type=str)
-    parser.add_argument('--debug', type=str)
     args = parser.parse_args()
 
-    lan = LANPrintQueue(args.ns, args.addr, None, logging.getLogger("queue"))
+    def on_ready(q):
+        print("on_ready")
+
+    lan = LANPrintQueue(args.ns, args.addr, None, on_ready, logging.getLogger("queue"))
     sh = Shell()
     sh.attach(lan)
-    context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    logging.info(f"Starting debug REP socket at {args.debug}")
-    socket.bind(args.debug)
     while True:
-      msg = socket.recv_string()
-      logging.debug(f"USER: {msg}")
+      msg = input(">> ")
       sh.onecmd(msg)
-      socket.send_string(sh.stdout.dump())
+      sys.stdout.write(sh.stdout.dump())
 
 if __name__ == "__main__":
   main()

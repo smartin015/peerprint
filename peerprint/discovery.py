@@ -2,6 +2,7 @@ import socket
 import random
 import select
 import time
+import threading
 
 from peerprint import __version__ as version
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
 
   b = BasicDiscovery(sys.argv[1], sys.argv[2])
   print("Starting discovery")
-  b.spin()
+  b.spin_async()
+  input()
   
 
