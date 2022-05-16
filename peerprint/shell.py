@@ -86,10 +86,10 @@ def main():
     parser.add_argument('--addr', type=str)
     args = parser.parse_args()
 
-    def on_ready(q):
-        print("on_ready")
+    def on_update(q):
+        print("<update>")
 
-    lan = LANPrintQueue(args.ns, args.addr, None, on_ready, logging.getLogger("queue"))
+    lan = LANPrintQueue(args.ns, args.addr, None, on_update, logging.getLogger("queue"))
     sh = Shell()
     sh.attach(lan)
     while True:

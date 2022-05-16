@@ -1,5 +1,4 @@
 from pysyncobj import SyncObj, SyncObjConf, FAIL_REASON, SyncObjException
-from pysyncobj.batteries import ReplLockManager, ReplDict
 from typing import Optional
 from collections import defaultdict
 from dataclasses import dataclass
@@ -12,54 +11,44 @@ from collections import defaultdict
 
 from .discovery import P2PDiscovery
 from .filesharing import pack_job
+from .sync_objects import CPReplDict, CPReplLockManager
 
-class ReplLockManagerEnhanced(ReplLockManager):
-    """ReplLockManager leaves a lot of introspection unimplemented - it's far more efficient
-       to observe whether a lock is currently held before trying to acquire it."""
+class PeerDict(CPReplDict):
+    def _items_equal(self, a, b):
+        return a['status'] == b['status'] and a['run'] == b['run']
 
-    def notAcquired(self, lockID: str) -> bool:
-        """Check if lock is open / not acquired by anyone"""
-        existingLock = self._consumer()._ReplLockManagerImpl__locks.get(lockID)
-        if existingLock is not None:
-            return time.time() - existingLock[1] > self._ReplLockManager__autoUnlockTime
-        return True
-
-    def getPeerLocks(self) -> dict:
-        result = defaultdict(list)
-        now = time.time()
-        for (lid, val) in self._consumer()._ReplLockManagerImpl__locks.items():
-            (peer, acquired_at) = val
-            if time.time() - acquired_at < self._ReplLockManager__autoUnlockTime:
-                result[peer].append(lid)
-        return result
+class JobDict(CPReplDict):
+    def _items_equal(self, a, b):
+        return False # assume always not equal insertion
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
 class LANPrintQueueBase(SyncObj):
     PEER_TIMEOUT = 60
 
-    def __init__(self, ns, addr, peers, basedir, ready_cb, logger, testing=False):
+    def __init__(self, ns, addr, peers, basedir, update_cb, logger, testing=False):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
       self.ns = ns
       self.acquire_timeout = 5
       self.addr = addr
+      self.update_cb = update_cb 
       if basedir is not None:
           self.basedir = Path(basedir)
           conf = SyncObjConf(
-                onReady=ready_cb, 
+                onReady=self.update_cb, 
                 dynamicMembershipChange=True,
                 journalFile=str(self.basedir / "journal"),
                 fullDumpFile=str(self.basedir / "dump"),
           )
       else: 
           conf = SyncObjConf(
-                onReady=ready_cb, 
+                onReady=self.update_cb, 
                 dynamicMembershipChange=True,
             )
-      self.peers = ReplDict()
-      self.jobs = ReplDict()
-      self.locks = ReplLockManagerEnhanced(selfID=self.addr, autoUnlockTime=600)
+      self.peers = PeerDict(self.update_cb)
+      self.jobs = JobDict(self.update_cb)
+      self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
 
       if not testing:
         super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
@@ -144,7 +133,7 @@ class LANPrintQueueBase(SyncObj):
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
 # on a namespace instead of using a list of specific peers.
 class LANPrintQueue(P2PDiscovery):
-  def __init__(self, ns, addr, basedir, ready_cb, logger, testing=False):
+  def __init__(self, ns, addr, basedir, update_cb, logger, testing=False):
     super().__init__(ns, addr)
 
     (host, port) = addr.rsplit(':', 1)
@@ -156,20 +145,17 @@ class LANPrintQueue(P2PDiscovery):
     self._logger = logger
     self.addr = addr
     self.ns = ns
-    self.ready_cb = ready_cb
+    self.update_cb = update_cb
     self.q = None
     self._testing = testing
     if not self._testing:
         self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
         self.spin_async()
 
-  def _on_ready(self):
-      if self.ready_cb is not None:
-        self.ready_cb(self)
-
   def destroy(self):
     self._logger.info(f"Destroying discovery and SyncObj")
-    super(LANPrintQueue, self).destroy()
+    super().destroy()
+    self.q.destroy()
 
   def _on_host_added(self, host):
     if self.q is not None:
@@ -183,5 +169,5 @@ class LANPrintQueue(P2PDiscovery):
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self._on_ready, self._logger, self._testing)
+    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self.update_cb, self._logger, self._testing)
 
