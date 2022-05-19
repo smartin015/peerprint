@@ -32,12 +32,14 @@ class TestLANQueuePeers(unittest.TestCase):
 
     def test_peer_added_after_startup(self):
         self.q._on_startup_complete({})
+        self.q.q.peers = {}
         self.q.q.addNodeToCluster = MagicMock()
         self.q._on_host_added("peer1")
         self.q.q.addNodeToCluster.assert_called_with("peer1", callback=ANY)
         
     def test_peer_removed_after_startup(self):
         self.q._on_startup_complete({"peer1": True})
+        self.q.q.peers = {}
         self.q.q.removeNodeFromCluster = MagicMock()
         self.q._on_host_removed("peer1")
         self.q.q.removeNodeFromCluster.assert_called_with("peer1", callback=ANY)
@@ -60,7 +62,7 @@ class TestLanQueueOperations(unittest.TestCase):
         self.q.q.createJob("hash", self.manifest)
         self.assertEqual(self.q.q.jobs["hash"], (self.addr, self.manifest))
         self.q.q.acquireJob("hash")
-        self.q.q.locks.tryAcquire.assert_called_with("hash", sync=True)
+        self.q.q.locks.tryAcquire.assert_called_with("hash", sync=True, timeout=ANY)
         self.q.q.releaseJob("hash")
         self.q.q.locks.release.assert_called_with("hash")
         self.q.q.removeJob("hash")

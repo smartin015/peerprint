@@ -29,6 +29,7 @@ class LANPrintQueueBase(SyncObj):
     def __init__(self, ns, addr, peers, basedir, update_cb, logger, testing=False):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
+      self.testing = testing # Skips SyncObj creation
       self.ns = ns
       self.acquire_timeout = 5
       self.addr = addr
@@ -50,10 +51,14 @@ class LANPrintQueueBase(SyncObj):
       self.jobs = JobDict(self.update_cb)
       self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
 
-      if not testing:
+      if not self.testing:
         super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
 
     # ==== Network methods ====
+
+    def destroy(self):
+        if not self.testing:
+            super().destroy()
 
     def addPeer(self, addr):
       self._logger.info(f"{self.ns}: Adding peer {addr}")
@@ -63,7 +68,7 @@ class LANPrintQueueBase(SyncObj):
     def removePeer(self, addr):
       self._logger.info(f"{self.ns}: Removing peer {addr}")
       self.removeNodeFromCluster(addr, callback=self.queueMemberChangeCallback)
-      self.peers.pop(addr)
+      self.peers.pop(addr, None)
 
     def queueMemberChangeCallback(self, result, error):
       if error != FAIL_REASON.SUCCESS:
@@ -79,7 +84,7 @@ class LANPrintQueueBase(SyncObj):
       print("peers[addr]=", self.peers.get(addr))
       for (addr, val) in self.peers.items():
           if val.get('ts', 0) < time.time() - self.PEER_TIMEOUT:
-              self.peers.pop(addr)
+              self.peers.pop(addr, None)
     
     def getPeers(self):
       result = {}
@@ -105,7 +110,7 @@ class LANPrintQueueBase(SyncObj):
         return jobs
 
     def removeJob(self, hash_: str):
-      self.jobs.pop(hash_)
+      self.jobs.pop(hash_, None)
 
     def acquireJob(self, hash_: str):
       try:

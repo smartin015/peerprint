@@ -1,7 +1,10 @@
 import hashlib
 import zipfile
 import json
+import time
+import re
 from pathlib import Path
+from peerprint import __version__ as version
 
 try:
     import zlib
@@ -18,13 +21,42 @@ def _content_hash(path) -> str:
     return h.hexdigest()
 
 
+# Inspired by https://stackoverflow.com/a/1007615
+def packed_name(s, ts=time.time()):
+    if s.strip() == "":
+        s = "untitled"
+
+    # Remove all non-word characters (everything except numbers and letters)
+    s = re.sub(r"[^\w\s]", '', s)
+    # Replace all runs of whitespace with underscore
+    s = re.sub(r"\s+", '_', s)
+
+    return f"cpq_{s}_{int(ts)}.gjob"
+
+
 def pack_job(manifest: dict, filepaths: dict, dest: str):
     # TODO validation - ensure the correct files are available given the manifest object)
     zf = zipfile.ZipFile(dest, mode='w')
+
+    # Sanitize short paths
+    filepaths = dict([(short.split("/")[-1], full) for (short, full) in filepaths.items()])
+
+    # Strip off paths in manifest (paths are stripped in zip file as well)
+    # and remove unnecessary state/identity fields
+    for s in manifest["sets"]:
+        s["path"] = s["path"].split("/")[-1]
+        if filepaths.get(s["path"]) is None:
+            raise ValueError(f"Job contains set with path={s['path']}, but filepaths has no matching short name")
+        for k in ("id", "remaining", "rank", "sd"):
+            s.pop(k, None)
+    for k in ("acquired", "draft", "id", "remaining", "created"):
+        manifest.pop(k, None)
+
+
     try:
         for (shortpath, fullpath) in filepaths.items():
             zf.write(fullpath, arcname=shortpath, compress_type=compression)
-        zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr("manifest.json", json.dumps(dict(**manifest, version=version)))
     finally:
         zf.close()
     
