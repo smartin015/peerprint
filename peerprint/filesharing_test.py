@@ -1,7 +1,8 @@
 import unittest
+import logging
 import tempfile
 from pathlib import Path
-from filesharing import pack_job, unpack_job, packed_name
+from filesharing import pack_job, unpack_job, packed_name, Fileshare
 
 class TestPackJob(unittest.TestCase):
     def setUp(self):
@@ -56,4 +57,45 @@ class TestPackedName(unittest.TestCase):
             ("space is cool", "cpq_space_is_cool_123.gjob"),
                 ]:
             self.assertEqual(packed_name(tc, ts), want)
+
+class TestFileshare(unittest.TestCase):
+    def setUp(self):
+        NUMFS = 2
+        self.td = [tempfile.TemporaryDirectory() for i in range(NUMFS)]
+        self.fs = [Fileshare("localhost:0", self.td[i].name, logging.getLogger(f"TestFileshare{i}")) for i in range(NUMFS)]
+        for fs in self.fs:
+            fs.connect()
+        self.addr = [f"localhost:{fs.httpd.socket.getsockname()[1]}" for fs in self.fs]
+
+    def tearDown(self):
+        for td in self.td:
+            td.cleanup()
+
+    def testPostReceive(self):
+        DATA = "hello"
+        HASH = "hash123"
+        with tempfile.NamedTemporaryFile(suffix=".gjob", mode='w') as tf:
+            tf.write(DATA)
+            tf.flush()
+            self.fs[0].postJob(HASH, tf.name)
+            path = self.fs[1].getJob(self.addr[0], HASH)
+            with open(path) as f:
+                self.assertEqual(f.read(), DATA)
+
+    def testReceiveAndUnpack(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / 'a.gcode'
+            DATA = "hello"
+            with open(p, 'w') as f:
+                f.write(DATA)
+            m = dict(sets=[dict(path='a.gcode')])
+            HASH = 'ASDF'
+            packed = Path(td) / f'{HASH}.gjob'
+            pack_job(m, {'a.gcode': p}, packed)
+            self.fs[0].postJob(HASH, packed)
+            dest = self.fs[1].getJob(self.addr[0], HASH, unpack=True)
+            self.assertEqual(Path(dest).is_dir(), True)
+            self.assertEqual((Path(dest) / 'a.gcode').exists(), True)
+            with open(Path(dest) / 'a.gcode', 'r') as f:
+                self.assertEqual(f.read(), DATA)
 

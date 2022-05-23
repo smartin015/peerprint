@@ -59,7 +59,7 @@ class TestLanQueueOperations(unittest.TestCase):
         self.q.destroy()
 
     def test_job_operations(self):
-        self.q.q.createJob("hash", self.manifest)
+        self.q.q.setJob("hash", self.manifest)
         self.assertEqual(self.q.q.jobs["hash"], (self.addr, self.manifest))
         self.q.q.acquireJob("hash")
         self.q.q.locks.tryAcquire.assert_called_with("hash", sync=True, timeout=ANY)

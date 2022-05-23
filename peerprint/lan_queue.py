@@ -13,10 +13,18 @@ from .discovery import P2PDiscovery
 from .filesharing import pack_job
 from .sync_objects import CPReplDict, CPReplLockManager
 
+
+# Peer dict is keyed by the peer addr. Value is tuple(last_update_ts, state)
+# where state is an opaque dict.
+# TODO discard old updates when they are replayed
 class PeerDict(CPReplDict):
     def _items_equal(self, a, b):
-        return a['status'] == b['status'] and a['run'] == b['run']
+        if type(a) != dict or type(b) != dict:
+            return False
+        return a.get('status') == b.get('status') and a.get('run') == b.get('run')
 
+# Job dict is keyed by the hash of the .gjob file. Value is tuple(submitting_peer_addr, manifest)
+# where manifest is an opaque dict.
 class JobDict(CPReplDict):
     def _items_equal(self, a, b):
         return False # assume always not equal insertion
@@ -47,12 +55,16 @@ class LANPrintQueueBase(SyncObj):
                 onReady=self.update_cb, 
                 dynamicMembershipChange=True,
             )
-      self.peers = PeerDict(self.update_cb)
-      self.jobs = JobDict(self.update_cb)
-      self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
 
       if not self.testing:
-        super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
+          self.peers = PeerDict(self.update_cb)
+          self.jobs = JobDict(self.update_cb)
+          self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
+          super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
+      else:
+          self.peers = {}
+          self.jobs = {}
+          self.locks = {}
 
     # ==== Network methods ====
 
@@ -63,7 +75,7 @@ class LANPrintQueueBase(SyncObj):
     def addPeer(self, addr):
       self._logger.info(f"{self.ns}: Adding peer {addr}")
       self.addNodeToCluster(addr, callback=self.queueMemberChangeCallback)
-      self.syncPeer("UNKNOWN", None, addr)
+      self.syncPeer({}, addr)
 
     def removePeer(self, addr):
       self._logger.info(f"{self.ns}: Removing peer {addr}")
@@ -76,26 +88,23 @@ class LANPrintQueueBase(SyncObj):
 
     # ==== Mutation methods ====
 
-    def syncPeer(self, status: str, run: dict, addr=None):
+    def syncPeer(self, state: dict, addr=None):
       if addr is None:
           addr = self.addr
-      print("syncPeer", addr, status, run, time.time())
-      self.peers[addr] = dict(status=status, run=run, ts=time.time())
-      print("peers[addr]=", self.peers.get(addr))
+      self.peers[addr] = (time.time(), state)
       for (addr, val) in self.peers.items():
-          if val.get('ts', 0) < time.time() - self.PEER_TIMEOUT:
+          if val[0] < time.time() - self.PEER_TIMEOUT:
               self.peers.pop(addr, None)
     
     def getPeers(self):
       result = {}
       peerlocks = self.locks.getPeerLocks()
-      print("Peerlocks", peerlocks)
       for k, v in self.peers.items():
-          result[k] = dict(**v, acquired=peerlocks.get(k, []))
+          result[k] = dict(**v[1], acquired=peerlocks.get(k, []))
           print(result[k])
       return result
 
-    def createJob(self, hash_, manifest: dict):
+    def setJob(self, hash_, manifest: dict):
       self.jobs[hash_] = (self.addr, manifest)
 
     def getJobs(self):
@@ -107,6 +116,7 @@ class LANPrintQueueBase(SyncObj):
         for (hash_, v) in self.jobs.items():
             (peer, manifest) = v
             jobs.append(dict(**manifest, peer_=peer, hash_=hash_, acquired_by_=joblocks.get(hash_)))
+        # Note that jobs are returned unordered; caller can sort it after the fact.
         return jobs
 
     def removeJob(self, hash_: str):
@@ -120,19 +130,6 @@ class LANPrintQueueBase(SyncObj):
 
     def releaseJob(self, hash_: str):
       self.locks.release(hash_)
-
-    def submitJob(self, manifest: dict, filepaths: dict):
-        dest = self.basedir / f"{manifest['name']}.gjob"
-        hash_ = pack_job(manifest, filepaths, dest)
-        self.createJob(hash_, manifest)
-
-    def resolveFile(self, hash_: str) -> str:
-      peer = self.jobs[hash_][0]
-      raise NotImplementedError
-      #for url in self._pqs[queue].q.lookupFileURLByHash(hash_):
-      #    if self._fs.downloadFile(url):
-      #      break
-      #  return self._fs.resolveHash(hash_)
 
 
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
@@ -153,9 +150,13 @@ class LANPrintQueue(P2PDiscovery):
     self.update_cb = update_cb
     self.q = None
     self._testing = testing
-    if not self._testing:
+    if self._testing:
+        self._logger.info(f"TESTING: triggering _on_startup_complete")
+        self._on_startup_complete({})
+    else:
         self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
         self.spin_async()
+
 
   def destroy(self):
     self._logger.info(f"Destroying discovery and SyncObj")

@@ -30,7 +30,7 @@ class Shell(cmd.Cmd):
 
     def do_create(self, arg):
       'Create a job: hash manifest '
-      self.lan.q.createJob(*(arg.split(maxsplit=1)))
+      self.lan.q.setJob(*(arg.split(maxsplit=1)))
       self.log(f"Added job")
 
     def do_acquire(self, arg):
