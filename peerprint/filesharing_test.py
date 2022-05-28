@@ -2,7 +2,7 @@ import unittest
 import logging
 import tempfile
 from pathlib import Path
-from filesharing import pack_job, unpack_job, packed_name, Fileshare
+from .filesharing import pack_job, unpack_job, packed_name, Fileshare
 
 class TestPackJob(unittest.TestCase):
     def setUp(self):
@@ -72,28 +72,14 @@ class TestFileshare(unittest.TestCase):
             td.cleanup()
 
     def testPostReceive(self):
-        DATA = "hello"
-        HASH = "hash123"
-        with tempfile.NamedTemporaryFile(suffix=".gjob", mode='w') as tf:
-            tf.write(DATA)
-            tf.flush()
-            self.fs[0].postJob(HASH, tf.name)
-            path = self.fs[1].getJob(self.addr[0], HASH)
-            with open(path) as f:
-                self.assertEqual(f.read(), DATA)
-
-    def testReceiveAndUnpack(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / 'a.gcode'
             DATA = "hello"
             with open(p, 'w') as f:
                 f.write(DATA)
             m = dict(sets=[dict(path='a.gcode')])
-            HASH = 'ASDF'
-            packed = Path(td) / f'{HASH}.gjob'
-            pack_job(m, {'a.gcode': p}, packed)
-            self.fs[0].postJob(HASH, packed)
-            dest = self.fs[1].getJob(self.addr[0], HASH, unpack=True)
+            HASH = self.fs[0].post(m, {'a.gcode': p})
+            dest = self.fs[1].fetch(self.addr[0], HASH, unpack=True)
             self.assertEqual(Path(dest).is_dir(), True)
             self.assertEqual((Path(dest) / 'a.gcode').exists(), True)
             with open(Path(dest) / 'a.gcode', 'r') as f:

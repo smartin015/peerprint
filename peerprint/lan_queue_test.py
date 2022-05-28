@@ -5,53 +5,57 @@ from .lan_queue import LANPrintQueue
 
 logging.basicConfig(level=logging.DEBUG)
 
+class MockJobList(dict):
+    def set(self, k, v, **kwargs):
+        self[k] = v
+
 class TestLANQueueInit(unittest.TestCase):
     def test_init_privileged_port(self):
         with self.assertRaises(ValueError):
-            LANPrintQueue("ns", "locahost:80", None, None, logging.getLogger(), testing=True)
+            LANPrintQueue("ns", "locahost:80", None, logging.getLogger())
 
     def test_init_bad_addr(self):
         with self.assertRaises(ValueError):
-            LANPrintQueue("ns", "hi", None, None, logging.getLogger(), testing=True)
+            LANPrintQueue("ns", "hi", None, logging.getLogger())
 
 class TestLANQueuePeers(unittest.TestCase):
     def setUp(self):
-        self.q = LANPrintQueue("ns", "localhost:6789", "basedir", MagicMock(), logging.getLogger(), testing=True)
+        self.q = LANPrintQueue("ns", "localhost:6789", MagicMock(), logging.getLogger())
 
     def tearDown(self):
         self.q.destroy()
 
     def test_startup_with_no_peers(self):
-        self.q._on_startup_complete({})
+        self.q._init_base({}) # Don't call on_startup_complete as it actually does networking
         self.assertNotEqual(self.q.q, None)
 
     def test_startup_with_discovered_peers(self):
         self.q._on_host_added("doesnothing") # Verifies no errors due to queue not initialized
-        self.q._on_startup_complete({"peer1": True, "peer2": True})
+        self.q._init_base({"peer1": True, "peer2": True})
         self.assertNotEqual(self.q.q, None)
 
     def test_peer_added_after_startup(self):
-        self.q._on_startup_complete({})
+        self.q._init_base({})
         self.q.q.peers = {}
-        self.q.q.addNodeToCluster = MagicMock()
+        self.q.q._syncobj = MagicMock()
         self.q._on_host_added("peer1")
-        self.q.q.addNodeToCluster.assert_called_with("peer1", callback=ANY)
+        self.q.q._syncobj.addNodeToCluster.assert_called_with("peer1", callback=ANY)
         
     def test_peer_removed_after_startup(self):
-        self.q._on_startup_complete({"peer1": True})
+        self.q._init_base({"peer1": True})
         self.q.q.peers = {}
-        self.q.q.removeNodeFromCluster = MagicMock()
+        self.q.q._syncobj = MagicMock()
         self.q._on_host_removed("peer1")
-        self.q.q.removeNodeFromCluster.assert_called_with("peer1", callback=ANY)
-    
+        self.q.q._syncobj.removeNodeFromCluster.assert_called_with("peer1", callback=ANY)
+
 class TestLanQueueOperations(unittest.TestCase):
     def setUp(self):
         self.addr = "localhost:6789"
         self.manifest = {"man": "ifest"}
-        self.q = LANPrintQueue("ns", self.addr, "basedir", MagicMock(), logging.getLogger(), testing=True)
-        self.q._on_startup_complete({})
+        self.q = LANPrintQueue("ns", self.addr, MagicMock(), logging.getLogger())
+        self.q._init_base({})
         # Replace pysyncobj objects with non-network equivalents
-        self.q.q.jobs = {}
+        self.q.q.jobs = MockJobList()
         self.q.q.peers = {}
         self.q.q.locks = MagicMock()
 

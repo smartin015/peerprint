@@ -34,23 +34,24 @@ class JobDict(CPReplDict):
 class LANPrintQueueBase():
     PEER_TIMEOUT = 60
 
-    def __init__(self, ns, addr, peers, update_cb, logger):
+    def __init__(self, ns, addr, update_cb, logger):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
       self.ns = ns
       self.acquire_timeout = 5
       self.addr = addr
       self.update_cb = update_cb 
-      conf = SyncObjConf(
-            onReady=self.on_ready, 
-            dynamicMembershipChange=True,
-      )
+      self._syncobj = None
 
-    def connect(self):
+    def connect(self, peers):
         self.peers = PeerDict(self.update_cb)
         self.jobs = JobDict(self.update_cb)
         self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
-        self._syncobj = SyncObj(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
+        conf = SyncObjConf(
+                onReady=self.on_ready, 
+                dynamicMembershipChange=True,
+          )
+        self._syncobj = SyncObj(self.addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
 
     def is_ready(self):
         return self._syncobj.isReady()
@@ -64,7 +65,7 @@ class LANPrintQueueBase():
     # ==== Network methods ====
 
     def destroy(self):
-        if hasattr(self, '_syncobj'):
+        if self._syncobj is not None:
             self._syncobj.destroy()
 
     def addPeer(self, addr: str):
@@ -153,7 +154,7 @@ class LANPrintQueue(P2PDiscovery):
     self.q = None
 
   def connect(self):
-    self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
+    self._logger.info(f"Starting discovery for {self.ns} ({self.addr})")
     self.spin_async()
 
   def destroy(self):
@@ -171,8 +172,11 @@ class LANPrintQueue(P2PDiscovery):
       self._logger.info(f"Host removed: {host}")
       self.q.removePeer(host)
 
+  def _init_base(self, results):
+    self.q = LANPrintQueueBase(self.ns, self.addr, self.update_cb, self._logger)
+
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.update_cb, self._logger)
-    self.q.connect()
+    self._init_base(results)
+    self.q.connect(results.keys())
 
