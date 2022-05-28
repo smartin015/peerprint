@@ -50,7 +50,6 @@ def pack_job(manifest: dict, filepaths: dict, dest: str):
 
     # Strip off paths in manifest (paths are stripped in zip file as well)
     # and remove unnecessary state/identity fields.
-    # We do this on a deep copy of the original manifest so it can be reused elsewhere
     for s in manifest["sets"]:
         s["path"] = s["path"].split("/")[-1]
         if filepaths.get(s["path"]) is None:

@@ -10,30 +10,37 @@ import os
 # ReplDict implementation.
 class CPReplDict(SyncObjConsumer):
     def __init__(self, cb):
-        super().__init__()
         self.cb = cb
+        # All non-synced attributes must occur BEFORE call to super()
+        super().__init__()
         self.__data = {}
 
-    def _items_equal(a, b):
+    def _item_changed(self, prev, nxt):
         raise NotImplementedError
 
     @replicated
     def __setitem__(self, key, value):
-        changed = self.__data.get(key) is None or (not self._items_equal(self.__data[key], value))
+        changed = self._item_changed(self.__data.get(key, None), value)
+        # print(f"__setitem__[{key}]={value} (changed={changed})")
         self.__data[key] = value
         if changed:
             self.cb()
 
     @replicated
     def pop(self, key, default=None):
-        return self.__data.pop(key, default)
+        val = self.__data.pop(key, default)
         self.cb()
+        return val
 
     def __getitem__(self, key):
         return self.__data[key]
 
     def get(self, key, default=None):
         return self.__data.get(key, default)
+
+    def set(self, key, value, **kwargs):
+        # Duplicated from __setitem__ to allow for passing decorator args (sync, timeout, callback)
+        self.__setitem__(key, value, **kwargs)
 
     def __len__(self):
         return len(self.__data)
@@ -52,10 +59,11 @@ class CPReplDict(SyncObjConsumer):
 
 class _ReplLockManagerImpl(SyncObjConsumer):
     def __init__(self, autoUnlockTime, cb):
+        self.cb = cb
+        # All non-synced attributes must occur BEFORE call to super()
         super(_ReplLockManagerImpl, self).__init__()
         self.__locks = {}
         self.__autoUnlockTime = autoUnlockTime
-        self.cb = cb
 
     @replicated
     def acquire(self, lockID, clientID, currentTime):

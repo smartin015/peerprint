@@ -2,11 +2,9 @@ from pysyncobj import SyncObj, SyncObjConf, FAIL_REASON, SyncObjException
 from typing import Optional
 from collections import defaultdict
 from dataclasses import dataclass
-import threading
 import logging
 import random
 import time
-from pathlib import Path
 from collections import defaultdict
 
 from .discovery import P2PDiscovery
@@ -16,70 +14,67 @@ from .sync_objects import CPReplDict, CPReplLockManager
 
 # Peer dict is keyed by the peer addr. Value is tuple(last_update_ts, state)
 # where state is an opaque dict.
-# TODO discard old updates when they are replayed
 class PeerDict(CPReplDict):
-    def _items_equal(self, a, b):
-        if type(a) != dict or type(b) != dict:
-            return False
-        return a.get('status') == b.get('status') and a.get('run') == b.get('run')
+    def _item_changed(self, prev, nxt):
+        if prev is None:
+            return True
+        for k in ('status', 'run'):
+            if prev[1].get(k) != nxt[1].get(k):
+                return True
+        return False
 
 # Job dict is keyed by the hash of the .gjob file. Value is tuple(submitting_peer_addr, manifest)
 # where manifest is an opaque dict.
 class JobDict(CPReplDict):
-    def _items_equal(self, a, b):
-        return False # assume always not equal insertion
+    def _item_changed(self, prev, nxt):
+        return True # always trigger callback 
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
-class LANPrintQueueBase(SyncObj):
+class LANPrintQueueBase():
     PEER_TIMEOUT = 60
 
-    def __init__(self, ns, addr, peers, basedir, update_cb, logger, testing=False):
+    def __init__(self, ns, addr, peers, update_cb, logger):
       self._logger = logger
       self._logger.debug("LANPrintQueueBase init")
-      self.testing = testing # Skips SyncObj creation
       self.ns = ns
       self.acquire_timeout = 5
       self.addr = addr
       self.update_cb = update_cb 
-      if basedir is not None:
-          self.basedir = Path(basedir)
-          conf = SyncObjConf(
-                onReady=self.update_cb, 
-                dynamicMembershipChange=True,
-                journalFile=str(self.basedir / "journal"),
-                fullDumpFile=str(self.basedir / "dump"),
-          )
-      else: 
-          conf = SyncObjConf(
-                onReady=self.update_cb, 
-                dynamicMembershipChange=True,
-            )
+      conf = SyncObjConf(
+            onReady=self.on_ready, 
+            dynamicMembershipChange=True,
+      )
 
-      if not self.testing:
-          self.peers = PeerDict(self.update_cb)
-          self.jobs = JobDict(self.update_cb)
-          self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
-          super(LANPrintQueueBase, self).__init__(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
-      else:
-          self.peers = {}
-          self.jobs = {}
-          self.locks = {}
+    def connect(self):
+        self.peers = PeerDict(self.update_cb)
+        self.jobs = JobDict(self.update_cb)
+        self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
+        self._syncobj = SyncObj(addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
+
+    def is_ready(self):
+        return self._syncobj.isReady()
+
+    def on_ready(self):
+        # Set ready state on all objects, enabling callbacks now
+        # that they've been fast-forwarded
+        self._logger.info("LANPrintQueueBase.on_ready")
+        self.update_cb()
 
     # ==== Network methods ====
 
     def destroy(self):
-        if not self.testing:
-            super().destroy()
+        if hasattr(self, '_syncobj'):
+            self._syncobj.destroy()
 
-    def addPeer(self, addr):
+    def addPeer(self, addr: str):
       self._logger.info(f"{self.ns}: Adding peer {addr}")
-      self.addNodeToCluster(addr, callback=self.queueMemberChangeCallback)
+      self._syncobj.addNodeToCluster(addr, callback=self.queueMemberChangeCallback)
       self.syncPeer({}, addr)
 
-    def removePeer(self, addr):
+    def removePeer(self, addr: str):
       self._logger.info(f"{self.ns}: Removing peer {addr}")
-      self.removeNodeFromCluster(addr, callback=self.queueMemberChangeCallback)
+      self._syncobj.removeNodeFromCluster(addr, callback=self.queueMemberChangeCallback)
       self.peers.pop(addr, None)
 
     def queueMemberChangeCallback(self, result, error):
@@ -101,11 +96,14 @@ class LANPrintQueueBase(SyncObj):
       peerlocks = self.locks.getPeerLocks()
       for k, v in self.peers.items():
           result[k] = dict(**v[1], acquired=peerlocks.get(k, []))
-          print(result[k])
       return result
 
-    def setJob(self, hash_, manifest: dict):
-      self.jobs[hash_] = (self.addr, manifest)
+    def setJob(self, hash_, manifest: dict, addr=None):
+      # performed synchronously to prevent race conditions when quickly
+      # writing, then reading job information
+      if addr == None:
+          addr = self.addr
+      self.jobs.set(hash_, (addr, manifest), sync=True, timeout=5.0)
 
     def getJobs(self):
         jobs = []
@@ -115,7 +113,12 @@ class LANPrintQueueBase(SyncObj):
                 joblocks[lock] = peer
         for (hash_, v) in self.jobs.items():
             (peer, manifest) = v
-            jobs.append(dict(**manifest, peer_=peer, hash_=hash_, acquired_by_=joblocks.get(hash_)))
+            job = dict(**manifest, peer_=peer, acquired_by_=joblocks.get(hash_))
+            # Ensure IDs are up to date
+            job['id'] = hash_
+            for i, s in enumerate(job['sets']):
+                s['id'] = f"{hash_}_{i}"
+            jobs.append(job)
         # Note that jobs are returned unordered; caller can sort it after the fact.
         return jobs
 
@@ -135,7 +138,7 @@ class LANPrintQueueBase(SyncObj):
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
 # on a namespace instead of using a list of specific peers.
 class LANPrintQueue(P2PDiscovery):
-  def __init__(self, ns, addr, basedir, update_cb, logger, testing=False):
+  def __init__(self, ns, addr, update_cb, logger):
     super().__init__(ns, addr)
 
     (host, port) = addr.rsplit(':', 1)
@@ -143,20 +146,15 @@ class LANPrintQueue(P2PDiscovery):
     if port < 1024:
         raise ValueError(f"Queue {ns} must use a non-privileged port (want >1023, have {port})")
 
-    self.basedir = basedir
     self._logger = logger
     self.addr = addr
     self.ns = ns
     self.update_cb = update_cb
     self.q = None
-    self._testing = testing
-    if self._testing:
-        self._logger.info(f"TESTING: triggering _on_startup_complete")
-        self._on_startup_complete({})
-    else:
-        self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
-        self.spin_async()
 
+  def connect(self):
+    self._logger.info(f"Starting discovery for {ns} ({host}, {port})")
+    self.spin_async()
 
   def destroy(self):
     self._logger.info(f"Destroying discovery and SyncObj")
@@ -175,5 +173,6 @@ class LANPrintQueue(P2PDiscovery):
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.basedir, self.update_cb, self._logger, self._testing)
+    self.q = LANPrintQueueBase(self.ns, self.addr, results.keys(), self.update_cb, self._logger)
+    self.q.connect()
 
