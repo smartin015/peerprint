@@ -4,4 +4,4 @@ python:
 install:
   - pip install -e .[tests,dev]
 script:
-  - python -m unittest discover -s peerprint -p "*_test.py"
+  - cd peerprint && python -m unittest discover -s peerprint -p "*_test.py"

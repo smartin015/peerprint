@@ -51,12 +51,29 @@ class TestPackedName(unittest.TestCase):
     def testPacking(self):
         ts = 123
         for tc, want in [
-            ("", "cpq_untitled_123.gjob"),
-            ("hi", "cpq_hi_123.gjob"),
-            ("!!**$$..", "cpq__123.gjob"),
-            ("space is cool", "cpq_space_is_cool_123.gjob"),
-                ]:
-            self.assertEqual(packed_name(tc, ts), want)
+            ("", "untitled.gjob"),
+            ("hi", "hi.gjob"),
+            ("!!**$$..", "xxxxxxxx.gjob"),
+            ("space is cool", "space_is_cool.gjob"),
+        ]:
+            self.assertEqual(packed_name(tc, ''), want)
+
+    def testPackingSuffix(self):
+        class P:
+            def __init__(self, path):
+                self.base = path
+                self.path = ''
+                self.i = 0
+            def __truediv__(self, other):
+                self.path = self.base + other
+                return self
+            def __str__(self):
+                return self.path
+            def exists(self):
+                self.i += 1
+                if self.i < 5:
+                    return True
+        self.assertEqual(packed_name("test", P('/base/')), '/base/test (4).gjob') 
 
 class TestFileshare(unittest.TestCase):
     def setUp(self):

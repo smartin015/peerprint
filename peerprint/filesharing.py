@@ -29,16 +29,24 @@ def _content_hash(path) -> str:
 
 
 # Inspired by https://stackoverflow.com/a/1007615
-def packed_name(s, ts=time.time()):
+def packed_name(s, basedir):
+    if isinstance(basedir, str):
+        basedir = Path(basedir)
     if s.strip() == "":
         s = "untitled"
 
-    # Remove all non-word characters (everything except numbers and letters)
-    s = re.sub(r"[^\w\s]", '', s)
+    # Replace all non-word characters (everything except numbers and letters)
+    s = re.sub(r"[^\w\s]", 'x', s)
     # Replace all runs of whitespace with underscore
     s = re.sub(r"\s+", '_', s)
-
-    return f"cpq_{s}_{int(ts)}.gjob"
+    
+    # Name suffix inspired by https://stackoverflow.com/a/57896232
+    path = basedir / f"{s}.gjob" 
+    counter = 1
+    while path.exists():
+        path = basedir / f"{s} ({counter}).gjob"
+        counter += 1
+    return str(path)
 
 
 def pack_job(manifest: dict, filepaths: dict, dest: str):
