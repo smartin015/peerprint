@@ -1,5 +1,7 @@
 # PeerPrint
 
+![build status](https://img.shields.io/travis/smartin015/peerprint/main?style=plastic)
+
 PeerPrint is a framework for sharing 3D printing tasks across a peer-to-peer network of 3D printers.
 
 # Integration
