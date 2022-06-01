@@ -46,7 +46,7 @@ class LANPrintQueueBase():
     def connect(self, peers):
         self.peers = PeerDict(self.update_cb)
         self.jobs = JobDict(self.update_cb)
-        self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=600, cb=self.update_cb)
+        self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=60, cb=self.update_cb)
         conf = SyncObjConf(
                 onReady=self.on_ready, 
                 dynamicMembershipChange=True,
