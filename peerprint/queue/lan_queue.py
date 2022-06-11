@@ -7,6 +7,7 @@ import random
 import time
 from collections import defaultdict
 
+from .abstract_queue import AbstractPrintQueue
 from .discovery import P2PDiscovery
 from .filesharing import pack_job
 from .sync_objects import CPReplDict, CPReplLockManager
@@ -31,7 +32,7 @@ class JobDict(CPReplDict):
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
-class LANPrintQueueBase():
+class LANPrintQueueBase(AbstractPrintQueue):
     PEER_TIMEOUT = 60
 
     def __init__(self, ns, addr, update_cb, logger):

@@ -1,7 +1,18 @@
-FROM python:3.9
+FROM python:3.7
 
-RUN apt-get update && apt-get -y install --no-install-recommends libzmq3-dev && rm -rf /var/lib/apt/lists/*
+ENV NODE_VERSION=16.13.0
+ENV NVM_DIR=/root/.nvm
+ENV PATH="${NVM_DIR}/versions/node/v${NODE_VERSION}/bin/:${PATH}"
 
+RUN apt install -y curl && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+RUN . "$NVM_DIR/nvm.sh" && nvm install ${NODE_VERSION} && nvm use v${NODE_VERSION} && nvm alias default v${NODE_VERSION}
+
+# Brownie used for etherium testing/building (has ganache as dependency)
+RUN pip install eth-brownie && npm install -g ganache-cli
+
+# Install peerprint dependencies
 ADD . /peerprint
-
 RUN cd /peerprint && python3 -m pip install .
+
+WORKDIR /code
+
