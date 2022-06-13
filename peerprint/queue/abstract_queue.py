@@ -1,48 +1,48 @@
 from typing import Optional
-from collections.abc import ABC, abstract
+from abc import ABC, abstractmethod
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
 class AbstractPrintQueue(ABC):
-    @abstract
+    @abstractmethod
     def connect(self, peers):
         pass
 
-    @abstract
+    @abstractmethod
     def is_ready(self):
         pass
 
-    @abstract
+    @abstractmethod
     def destroy(self):
         pass
 
     # ==== Mutation methods ====
 
-    @abstract
+    @abstractmethod
     def syncPeer(self, state: dict, addr=None):
         pass
 
-    @abstract
+    @abstractmethod
     def getPeers(self):
         pass
 
-    @abstract
+    @abstractmethod
     def setJob(self, hash_, manifest: dict, addr=None):
         pass
 
-    @abstract
+    @abstractmethod
     def getJobs(self):
         pass
 
-    @abstract
+    @abstractmethod
     def removeJob(self, hash_: str):
         pass
 
-    @abstract
+    @abstractmethod
     def acquireJob(self, hash_: str):
         pass
 
-    @abstract
+    @abstractmethod
     def releaseJob(self, hash_: str):
         pass
 

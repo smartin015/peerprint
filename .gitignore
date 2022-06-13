@@ -130,3 +130,6 @@ dmypy.json
 
 # CUSTOM - sqlite3 DBs
 *.sqlite3
+
+# CUSTOM - private etherium keys
+eth.txt.asc

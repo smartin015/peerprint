@@ -3,7 +3,7 @@
 # A smart contract implementation of a network 3D printing queue
 # Implemented with Vyper(https://vyper.readthedocs.io/)
 
-MAX_WORK: constant(int128) = 2048
+MAX_WORK: constant(int128) = 1024
 MAX_USER_JOBS: constant(uint8) = 100
 MAX_DELIVERY_TIME: constant(uint256) = 7*24*60*60
 JOB_TTL: constant(uint256) = 30*24*60*60
@@ -11,6 +11,7 @@ JOB_TTL: constant(uint256) = 30*24*60*60
 struct Job:
   creator: address
   created: uint256
+  content_uri: String[128] # Locator of .gjob file (e.g. an IPFS content ID)
   compat: bytes32 # Compatibility bytefield
   user_idx: uint16 # Index of job in user_jobs
   work_idx: uint16 # Index of job in work
@@ -23,7 +24,7 @@ struct Job:
 
 # Header and content are both hosted on IPFS - fetch the header to read all details (e.g. number of prints, material)
 # the header includes a hash of the content
-jobs: public(HashMap[bytes32, Job]) # key is the header hash
+jobs: public(HashMap[bytes32, Job]) # key is the CID of the IPFS file
 
 # Keep a private list of jobs owned by the user
 user_jobs: HashMap[address, bytes32[MAX_USER_JOBS]]
@@ -69,15 +70,16 @@ def getWork(compat: bytes32) -> bytes32[MAX_WORK]:
 
 @external
 @payable
-def postJob(jid: bytes32, user_idx: uint16, work_idx: uint16, compat: bytes32):
+def postJob(jid: bytes32, user_idx: uint16, work_idx: uint16, compat: bytes32, content_uri: String[128]):
   assert self.num_work[compat] < MAX_WORK, "work queue is full"
-  assert not self._job_exists(jid), "job already exists"
   assert not self._work_exists(compat, work_idx), "work slot already occupied"
   assert not self._user_job_exists(msg.sender, user_idx), "user job slot already occupied"
+  assert not self._job_exists(jid), "job already exists"
 
   self.jobs[jid] = Job({
     creator: msg.sender,
     created: block.timestamp,
+    content_uri: content_uri,
     compat: compat,
     user_idx: user_idx,
     work_idx: work_idx,

@@ -7,9 +7,9 @@ class IPFS:
     @classmethod
     def add(self, path):
         # Invoke ipfs CLI, add file, and return its hash
-        result = subprocess.run(["ipfs", "add", "-q", path], capture_output=True)
+        result = subprocess.run(["ipfs", "add", "--cid-version=1", "-q", path], capture_output=True)
         if result.returncode != 0:
-            raise Exception("add_file result " + result.returncode)
+            raise Exception(f"add_file result {result.returncode}: {result.stderr}")
         return result.stdout.strip()
 
     @classmethod
@@ -26,6 +26,13 @@ class IPFS:
     def fetch(self, hash_, dest):
         result = subprocess.run(["ipfs", "get", f"--output={dest}", hash_])
         return result.returncode == 0
+
+    @classmethod
+    def fetchStr(self, hash_) -> str:
+        result = subprocess.run(["ipfs", "cat", hash_], capture_output=True)
+        if result.returncode != 0:
+            raise Exception(f"fetchStr result {result.returncode}: {result.stderr}")
+        return result.stdout.strip()
 
 
 if __name__ == '__main__':
