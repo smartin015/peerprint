@@ -1,20 +1,19 @@
 eth_queue:
-  # Address on Goerli test network                                                
-  # See https://goerli.etherscan.io/address/0xa02368deb11516d04ec48ddf28b9d181483c4f09
-  # For deployment, see https://www.quicknode.com/guides/vyper/how-to-write-an-ethereum-smart-contract-using-vyper
-  contract: 0x6e850ec7d907742cfc9b9ab75b22c86d1ca136ad 
+  user: 
+    # Wallet address for payment / user recognition
+    account: '0x15736104F071b1dCac74a55548b299f3fD78BF27'
 
-  # Wallet address for payment / user recognition
-  account: 0x15736104F071b1dCac74a55548b299f3fD78BF27
+    # Encrypted with gpg -ac --no-symkey-cache eth.txt
+    keyfile: 'eth.txt.asc'
 
-  # Encrypted with gpg -ac --no-symkey-cache eth.txt
-  keyfile: eth.txt.asc
+  service:
+    # Address on Goerli test network                                                
+    # See https://goerli.etherscan.io/address/0xa02368deb11516d04ec48ddf28b9d181483c4f09
+    # For deployment, see https://www.quicknode.com/guides/vyper/how-to-write-an-ethereum-smart-contract-using-vyper
+    contract: '0xbc19b66a61c81735bf43c17e13e10c5b7634ba90'
 
-  # Amount of gas to supply to power a transaction
-  gas_per_txn: 500000
+    # Include your API key here - copy from https://dashboard.alchemyapi.io/ > View Key > HTTPS
+    provider: "https://eth-goerli.alchemyapi.io/v2/3lKws79pxrssRHoPzIza3UU9ygQwqPgI"
 
-  # Include your API key here - copy from https://dashboard.alchemyapi.io/ > View Key > HTTPS
-  provider: "https://eth-goerli.alchemyapi.io/v2/3lKws79pxrssRHoPzIza3UU9ygQwqPgI"
-
-  # ABI of the EthQueue contract
-  abi: '[{"stateMutability": "nonpayable", "type": "constructor", "inputs": [], "outputs": []}, {"stateMutability": "view", "type": "function", "name": "getWork", "inputs": [{"name": "compat", "type": "bytes32"}], "outputs": [{"name": "", "type": "bytes32[1024]"}]}, {"stateMutability": "payable", "type": "function", "name": "postJob", "inputs": [{"name": "jid", "type": "bytes32"}, {"name": "user_idx", "type": "uint16"}, {"name": "work_idx", "type": "uint16"}, {"name": "compat", "type": "bytes32"}, {"name": "content_uri", "type": "string"}], "outputs": []}, {"stateMutability": "view", "type": "function", "name": "getOwnJobs", "inputs": [], "outputs": [{"name": "", "type": "bytes32[100]"}]}, {"stateMutability": "nonpayable", "type": "function", "name": "revokeJob", "inputs": [{"name": "idx", "type": "uint16"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "acquireJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "releaseJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "completeJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "view", "type": "function", "name": "jobs", "inputs": [{"name": "arg0", "type": "bytes32"}], "outputs": [{"name": "", "type": "tuple", "components": [{"name": "creator", "type": "address"}, {"name": "created", "type": "uint256"}, {"name": "content_uri", "type": "string"}, {"name": "compat", "type": "bytes32"}, {"name": "user_idx", "type": "uint16"}, {"name": "work_idx", "type": "uint16"}, {"name": "value", "type": "uint256"}, {"name": "worker", "type": "address"}, {"name": "deliver_by", "type": "uint256"}]}]}, {"stateMutability": "view", "type": "function", "name": "work", "inputs": [{"name": "arg0", "type": "bytes32"}, {"name": "arg1", "type": "uint256"}], "outputs": [{"name": "", "type": "bytes32"}]}, {"stateMutability": "view", "type": "function", "name": "num_work", "inputs": [{"name": "arg0", "type": "bytes32"}], "outputs": [{"name": "", "type": "int128"}]}]' 
+    # ABI of the EthQueue contract
+    abi: '[{"name": "Job", "inputs": [], "anonymous": false, "type": "event"}, {"stateMutability": "nonpayable", "type": "constructor", "inputs": [], "outputs": []}, {"stateMutability": "payable", "type": "function", "name": "postJob", "inputs": [{"name": "compat", "type": "bytes32"}, {"name": "content_uri", "type": "string"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "revokeJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "acquireJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "releaseJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}, {"stateMutability": "nonpayable", "type": "function", "name": "completeJob", "inputs": [{"name": "jid", "type": "bytes32"}], "outputs": []}]' 

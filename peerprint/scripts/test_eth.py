@@ -1,12 +1,19 @@
 from ..queue.eth_queue import EthereumQueue
+import json
+import tempfile
 from ..storage.ipfs import IPFS
 
 input("Testing EthQueue - this will cost some testing Eth. Press Enter to continue.")
 
-mf = dict(profiles=[], materials=[])
-
+manifest = {
+    "name": "Sample Cube Compat", 
+    "count": 1, 
+    "sets": [{"path": "sample-cube-belt.gcode", "count": 1, "materials": [], "profiles": ["Creality CR30"]}, {"path": "sample-cube-delta.gcode", "count": 1, "materials": [], "profiles": ["Monoprice Mini Delta V2"]}], 
+    "created": 1654090860, 
+    "version": "0.0.8",
+}
 eq = EthereumQueue()
-eq.set_compat(mf['profiles'], mf['materials'])
+eq.set_compat([], [])
 eq.connect()
 print("Connected")
 
@@ -28,7 +35,15 @@ hash_ = IPFS.add(path)
 # TODO pin if needed?
 print("pushed file to IPFS, hash is", hash_)
 
-eq.setJob(hash_, mf) 
+with tempfile.NamedTemporaryFile(suffix=".json") as f:
+    manifest['content'] = hash_.decode('utf-8')
+    print(manifest)
+    f.write(json.dumps(manifest).encode("utf-8"))
+    manifest_hash = IPFS.add(f.name)
+    print("Pushed file manifest to IPFS, hash is", manifest_hash)
+
+
+eq.setJob(manifest_hash, manifest) 
 print("pushed job to eth queue - it may take a little bit to actually show up.")
 
 jobs = eq.getJobs()
