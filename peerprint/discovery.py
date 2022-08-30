@@ -4,7 +4,7 @@ import select
 import time
 import threading
 
-from peerprint import __version__ as version
+from peerprint.peerprint import __version__ as version
 
 DISCOVERY_PORT = 37020
 

@@ -9,12 +9,12 @@ from collections import defaultdict
 
 from .discovery import P2PDiscovery
 from .filesharing import pack_job
-from .sync_objects import CPReplDict, CPReplLockManager
+from .sync_objects import CPOrderedReplDict, CPReplLockManager
 
 
 # Peer dict is keyed by the peer addr. Value is tuple(last_update_ts, state)
 # where state is an opaque dict.
-class PeerDict(CPReplDict):
+class PeerDict(CPOrderedReplDict):
     def _item_changed(self, prev, nxt):
         if prev is None:
             return True
@@ -23,9 +23,9 @@ class PeerDict(CPReplDict):
                 return True
         return False
 
-# Job dict is keyed by the hash of the .gjob file. Value is tuple(submitting_peer_addr, manifest)
+# Job dict is keyed by the ID of the job. Value is tuple(submitting_peer_addr, manifest)
 # where manifest is an opaque dict.
-class JobDict(CPReplDict):
+class JobDict(CPOrderedReplDict):
     def _item_changed(self, prev, nxt):
         return True # always trigger callback 
 
@@ -99,12 +99,15 @@ class LANPrintQueueBase():
           result[k] = dict(**v[1], acquired=peerlocks.get(k, []))
       return result
 
-    def setJob(self, hash_, manifest: dict, addr=None):
+    def hasJob(self, jid) -> bool:
+        return (jid in self.jobs)
+
+    def setJob(self, jid, manifest: dict, addr=None):
       # performed synchronously to prevent race conditions when quickly
       # writing, then reading job information
       if addr == None:
           addr = self.addr
-      self.jobs.set(hash_, (addr, manifest), sync=True, timeout=5.0)
+      self.jobs.set(jid, (addr, manifest), sync=True, timeout=5.0)
 
     def getJobs(self):
         jobs = []
@@ -112,28 +115,23 @@ class LANPrintQueueBase():
         for (peer, locks) in self.locks.getPeerLocks().items():
             for lock in locks:
                 joblocks[lock] = peer
-        for (hash_, v) in self.jobs.items():
+        for (jid, v) in self.jobs.ordered_items():
             (peer, manifest) = v
-            job = dict(**manifest, peer_=peer, acquired_by_=joblocks.get(hash_))
-            # Ensure IDs are up to date
-            job['id'] = hash_
-            for i, s in enumerate(job['sets']):
-                s['id'] = f"{hash_}_{i}"
-            jobs.append(job)
+            jobs.append(dict(**manifest, peer_=peer, acquired_by_=joblocks.get(jid)))
         # Note that jobs are returned unordered; caller can sort it after the fact.
         return jobs
 
-    def removeJob(self, hash_: str):
-      self.jobs.pop(hash_, None)
+    def removeJob(self, jid: str):
+      self.jobs.pop(jid, None)
 
-    def acquireJob(self, hash_: str):
+    def acquireJob(self, jid: str):
       try:
-        return self.locks.tryAcquire(hash_, sync=True, timeout=self.acquire_timeout)
+        return self.locks.tryAcquire(jid, sync=True, timeout=self.acquire_timeout)
       except SyncObjException: # timeout
         return False
 
-    def releaseJob(self, hash_: str):
-      self.locks.release(hash_)
+    def releaseJob(self, jid: str):
+      self.locks.release(jid)
 
 
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 

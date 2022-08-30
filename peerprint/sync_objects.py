@@ -8,29 +8,103 @@ import os
 
 # See https://github.com/bakwc/PySyncObj/blob/master/pysyncobj/batteries.py for original
 # ReplDict implementation.
-class CPReplDict(SyncObjConsumer):
+# This dict also maintains an ordered index of objects
+class CPOrderedReplDict(SyncObjConsumer):
     def __init__(self, cb):
         self.cb = cb
         # All non-synced attributes must occur BEFORE call to super()
         super().__init__()
         self.__data = {}
 
+        # Indices for ordering queue items
+        self.__before = {}
+        self.__after = {}
+        self.__first = None
+        self.__last = None
+
     def _item_changed(self, prev, nxt):
         raise NotImplementedError
 
-    @replicated
-    def __setitem__(self, key, value):
-        changed = self._item_changed(self.__data.get(key, None), value)
+    def _setitem_impl(self, key, value):
+        prev = self.__data.get(key, None)
+        changed = self._item_changed(prev, value)
         # print(f"__setitem__[{key}]={value} (changed={changed})")
         self.__data[key] = value
+        if prev is None: # Insert into order index
+            self._link(key, self.__last)
         if changed:
             self.cb()
 
     @replicated
-    def pop(self, key, default=None):
+    def __setitem__(self, key, value):
+        return self._setitem_impl(key, value)
+
+    def _pop_impl(self, key, default=None):
+        if key not in self.__data:
+            return None
         val = self.__data.pop(key, default)
+        self._unlink(key)
         self.cb()
         return val
+
+    @replicated
+    def pop(self, key, default=None):
+        return self._pop_impl(key, default)
+
+    @replicated
+    def mv(self, key, after):
+        return self._mv_impl(key, after)
+
+    def _unlink(self, key):
+        # Unlink from current position
+        prev = self.__before[key]
+        nxt = self.__after[key]
+
+        # Point prev to nxt
+        if nxt is not None:
+            self.__before[nxt] = prev
+        if prev is not None:
+            self.__after[prev] = nxt
+
+        # Update first & last 
+        if self.__before[key] is None:
+            self.__first = self.__after[key]
+        if self.__after[key] is None:
+            self.__last = self.__before[key]
+
+        # Remove unused keys
+        del self.__before[key]
+        del self.__after[key]
+
+    def _link(self, key, after):
+        # Invariant: key does not exist in the linked list
+        assert key not in self.__before
+        if after is None: # Send to front
+            self.__after[key] = self.__first
+            self.__before[key] = None
+            self.__first = key
+            if self.__last is None: # We are front and end of queue
+                self.__last = key
+        else: # Add to middle/end
+            anxt = self.__after[after]
+
+            # Make links pre-key
+            self.__before[key] = after
+            self.__after[after] = key
+
+            # Make links post-key
+            self.__before[anxt] = key
+            self.__after[key] = anxt
+
+            # Update end if needed
+            if anxt is None:
+                self.__last = key
+    
+    def _mv_impl(self, key, after):
+        if after is not None and after not in self.__before:
+            raise KeyError(after)
+        self._unlink(key)
+        self._link(key, after)
 
     def __getitem__(self, key):
         return self.__data[key]
@@ -56,6 +130,12 @@ class CPReplDict(SyncObjConsumer):
 
     def items(self):
         return self.__data.items()
+
+    def ordered_items(self):
+        nxt = self.__first
+        while nxt is not None:
+            yield (nxt, self.__data.get(nxt))
+            nxt = self.__after.get(nxt)
 
 class _ReplLockManagerImpl(SyncObjConsumer):
     def __init__(self, autoUnlockTime, cb):
