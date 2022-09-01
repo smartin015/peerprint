@@ -147,10 +147,12 @@ class _ReplLockManagerImpl(SyncObjConsumer):
         if existingLock is not None:
             if currentTime - existingLock[1] > self.__autoUnlockTime:
                 existingLock = None
+            else:
+                existingLock = existingLock[0] # Unwrap to get client ID
         # Acquire lock if possible
-        if existingLock is None or existingLock[0] == clientID:
+        if existingLock is None or existingLock == clientID:
             self.__locks[lockID] = (clientID, currentTime)
-            self.cb((lockID, existingLock[0]), (lockID, clientID))
+            self.cb((lockID, existingLock), (lockID, clientID))
             return True
         # Lock already acquired by someone else
         return False
