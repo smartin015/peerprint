@@ -12,6 +12,7 @@ import os
 class CPOrderedReplDict(SyncObjConsumer):
     def __init__(self, cb):
         self.cb = cb
+
         # All non-synced attributes must occur BEFORE call to super()
         super().__init__()
         self.__data = {}
@@ -22,18 +23,12 @@ class CPOrderedReplDict(SyncObjConsumer):
         self.__first = None
         self.__last = None
 
-    def _item_changed(self, prev, nxt):
-        raise NotImplementedError
-
     def _setitem_impl(self, key, value):
         prev = self.__data.get(key, None)
-        changed = self._item_changed(prev, value)
-        # print(f"__setitem__[{key}]={value} (changed={changed})")
         self.__data[key] = value
         if prev is None: # Insert into order index
             self._link(key, self.__last)
-        if changed:
-            self.cb()
+        self.cb(prev, value)
 
     @replicated
     def __setitem__(self, key, value):
@@ -44,7 +39,7 @@ class CPOrderedReplDict(SyncObjConsumer):
             return None
         val = self.__data.pop(key, default)
         self._unlink(key)
-        self.cb()
+        self.cb(val, None)
         return val
 
     @replicated
@@ -155,33 +150,30 @@ class _ReplLockManagerImpl(SyncObjConsumer):
         # Acquire lock if possible
         if existingLock is None or existingLock[0] == clientID:
             self.__locks[lockID] = (clientID, currentTime)
-            self.cb()
+            self.cb((lockID, existingLock[0]), (lockID, clientID))
             return True
         # Lock already acquired by someone else
         return False
 
     @replicated
     def prolongate(self, clientID, currentTime):
-        locks_cleared = False
         for lockID in list(self.__locks):
             lockClientID, lockTime = self.__locks[lockID]
 
             if currentTime - lockTime > self.__autoUnlockTime:
                 del self.__locks[lockID]
-                locks_cleared = True
+                self.cb((lockID, lockClientID), None)
                 continue
 
             if lockClientID == clientID:
                 self.__locks[lockID] = (clientID, currentTime)
-        if locks_cleared:
-            self.cb()
 
     @replicated
     def release(self, lockID, clientID):
         existingLock = self.__locks.get(lockID, None)
         if existingLock is not None and existingLock[0] == clientID:
             del self.__locks[lockID]
-            self.cb()
+            self.cb((lockID, clientID), None)
 
     def isAcquired(self, lockID, clientID, currentTime):
         existingLock = self.__locks.get(lockID, None)

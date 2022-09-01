@@ -5,32 +5,22 @@ from dataclasses import dataclass
 import logging
 import random
 import time
+from enum import Enum
 from collections import defaultdict
 
 from .discovery import P2PDiscovery
 from .filesharing import pack_job
 from .sync_objects import CPOrderedReplDict, CPReplLockManager
 
-
-# Peer dict is keyed by the peer addr. Value is tuple(last_update_ts, state)
-# where state is an opaque dict.
-class PeerDict(CPOrderedReplDict):
-    def _item_changed(self, prev, nxt):
-        if prev is None:
-            return True
-        for k in ('status', 'run'):
-            if prev[1].get(k) != nxt[1].get(k):
-                return True
-        return False
-
-# Job dict is keyed by the ID of the job. Value is tuple(submitting_peer_addr, manifest)
-# where manifest is an opaque dict.
-class JobDict(CPOrderedReplDict):
-    def _item_changed(self, prev, nxt):
-        return True # always trigger callback 
+class ChangeType(Enum):
+    PEER = "peer"
+    JOB = "job"
+    LOCK = "lock"
+    QUEUE = "queue"
 
 # This queue is shared with other printers on the local network which are configured with the same namespace.
 # Actual scheduling and printing is done by the object owner.
+# Job data should be considered opaque at this level - 
 class LANPrintQueueBase():
     PEER_TIMEOUT = 60
 
@@ -43,10 +33,26 @@ class LANPrintQueueBase():
       self.update_cb = update_cb 
       self._syncobj = None
 
+    def _tagged_cb(self, changetype):
+        def tagcb(prev, nxt):
+            # Unwrap metadata tuples and return end value (user provided)
+            if prev is not None and type(prev) is tuple:
+                prev = prev[-1]
+            if nxt is not None and type(nxt) is tuple:
+                nxt = nxt[-1]
+            self.update_cb(changetype, prev, nxt)
+        return tagcb
+
     def connect(self, peers):
-        self.peers = PeerDict(self.update_cb)
-        self.jobs = JobDict(self.update_cb)
-        self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=60, cb=self.update_cb)
+        # Peer dict is keyed by the peer addr. Value is tuple(last_update_ts, state)
+        # where state is an opaque dict.
+        self.peers = CPOrderedReplDict(self._tagged_cb(ChangeType.PEER))
+
+        # Job dict is keyed by the ID of the job. Value is tuple(submitting_peer_addr, manifest)
+        # where manifest is an opaque dict.
+        self.jobs = CPOrderedReplDict(self._tagged_cb(ChangeType.JOB))
+
+        self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=60, cb=self._tagged_cb(ChangeType.LOCK))
         conf = SyncObjConf(
                 onReady=self.on_ready, 
                 dynamicMembershipChange=True,
@@ -60,7 +66,7 @@ class LANPrintQueueBase():
         # Set ready state on all objects, enabling callbacks now
         # that they've been fast-forwarded
         self._logger.info("LANPrintQueueBase.on_ready")
-        self.update_cb()
+        self.update_cb(ChangeType.QUEUE, False, True)
 
     # ==== Network methods ====
 
@@ -96,8 +102,13 @@ class LANPrintQueueBase():
       result = {}
       peerlocks = self.locks.getPeerLocks()
       for k, v in self.peers.items():
-          result[k] = dict(**v[1], acquired=peerlocks.get(k, []))
+          result[k] = dict(**v[1]) # Exclude peer update timestamp
       return result
+
+    def getPeer(self, peer):
+        p = self.peers.get(peer)
+        if p is not None:
+            return dict(**p[-1])
 
     def hasJob(self, jid) -> bool:
         return (jid in self.jobs)
@@ -109,29 +120,30 @@ class LANPrintQueueBase():
           addr = self.addr
       self.jobs.set(jid, (addr, manifest), sync=True, timeout=5.0)
 
-    def getJobs(self):
-        jobs = []
+    def getLocks(self):
         joblocks = {}
         for (peer, locks) in self.locks.getPeerLocks().items():
             for lock in locks:
                 joblocks[lock] = peer
-        for (jid, v) in self.jobs.ordered_items():
-            (peer, manifest) = v
-            jobs.append(dict(**manifest, peer_=peer, acquired_by_=joblocks.get(jid)))
-        # Note that jobs are returned unordered; caller can sort it after the fact.
-        return jobs
+        return joblocks
+
+    def getJobs(self):
+        return self.jobs.ordered_items()
+
+    def getJob(self, jid):
+        return self.jobs.get(jid)
 
     def removeJob(self, jid: str):
-      self.jobs.pop(jid, None)
+        return self.jobs.pop(jid, None)
 
     def acquireJob(self, jid: str):
-      try:
-        return self.locks.tryAcquire(jid, sync=True, timeout=self.acquire_timeout)
-      except SyncObjException: # timeout
-        return False
+        try:
+            return self.locks.tryAcquire(jid, sync=True, timeout=self.acquire_timeout)
+        except SyncObjException: # timeout
+            return False
 
     def releaseJob(self, jid: str):
-      self.locks.release(jid)
+        self.locks.release(jid)
 
 
 # Wrap LANPrintQueueBase in a discovery class, allowing for dynamic membership based 
@@ -170,11 +182,11 @@ class LANPrintQueue(P2PDiscovery):
       self._logger.info(f"Host removed: {host}")
       self.q.removePeer(host)
 
-  def _init_base(self, results):
+  def _init_base(self):
     self.q = LANPrintQueueBase(self.ns, self.addr, self.update_cb, self._logger)
 
   def _on_startup_complete(self, results):
     self._logger.info(f"Discover end: {results}; initializing queue")
-    self._init_base(results)
+    self._init_base()
     self.q.connect(results.keys())
 

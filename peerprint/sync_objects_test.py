@@ -11,14 +11,14 @@ class TestReplDict(CPOrderedReplDict):
     def _item_changed(self, prev, nxt):
         return prev != nxt
 
-    def __setitem__(self, k,v):
-        self._setitem_impl(k,v)
+    def __setitem__(self, k, v, **kwargs):
+        return self._setitem_impl(k,v)
 
     def pop(self, k,d=None):
-        self._pop_impl(k,d)
+        return self._pop_impl(k,d)
 
     def mv(self, key, after):
-        self._mv_impl(key, after)
+        return self._mv_impl(key, after)
 
 class TestCPOrderedReplDictEmpty(unittest.TestCase):
     def setUp(self):
