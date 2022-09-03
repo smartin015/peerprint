@@ -8,7 +8,7 @@ import time
 import re
 import tempfile
 from pathlib import Path
-from peerprint.peerprint import __version__ as version
+from .version import __version__ as version
 import http.server
 import socketserver
 import threading
