@@ -8,7 +8,7 @@ import time
 import re
 import tempfile
 from pathlib import Path
-from peerprint import __version__ as version
+from .version import __version__ as version
 import http.server
 import socketserver
 import threading
@@ -62,9 +62,11 @@ def pack_job(manifest: dict, filepaths: dict, dest: str):
         s["path"] = s["path"].split("/")[-1]
         if filepaths.get(s["path"]) is None:
             raise ValueError(f"Job contains set with path={s['path']}, but filepaths has no matching short name")
-        for k in ("id", "remaining", "rank", "sd"):
+        for k in ("sd"):
+            # Note: we leave ID and rank around here as it's useful for ordering/referral to set items
+            # Also leave "remaining" so that dragging between local and LAN queues is consistent.
             s.pop(k, None)
-    for k in ("acquired", "draft", "id", "remaining"):
+    for k in ("acquired", "id", "queue"):
         manifest.pop(k, None)
 
 
