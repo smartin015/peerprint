@@ -18,8 +18,8 @@ class MockLockManager():
         return True
 
     def release(self, lockid):
-        if lockid in self.locks:
-            del self.locks[lockid]
+        for peer, locks in self.locks.items():
+            locks.remove(lockid)
 
     def getPeerLocks(self):
         return self.locks
@@ -35,6 +35,10 @@ class LANQueueLocalTest():
         self.q.q.peers = TestReplDict(cb)
         self.q.q.jobs = TestReplDict(cb)
         self.q.q.locks = MockLockManager(self.addr)
+    
+    def tearDown(self):
+        self.q.destroy()
+
 
 
 class TestLanQueueInitExceptions(unittest.TestCase):
@@ -62,20 +66,7 @@ class TestLanQueuePreStartup(unittest.TestCase):
         self.q._init_base()
         self.assertNotEqual(self.q.q, None)
 
-class TestLanQueueOperations(unittest.TestCase):
-    def setUp(self):
-        self.addr = "localhost:6789"
-        self.manifest = {"man": "ifest"}
-        self.q = LANPrintQueue("ns", self.addr, MagicMock(), logging.getLogger())
-        self.q._init_base()
-        self.q.q._syncobj = MagicMock()
-        self.q.q.peers = MockOrderedReplDict()
-        self.q.q.jobs = MockOrderedReplDict()
-        self.q.q.locks = MagicMock()
-
-    def tearDown(self):
-        self.q.destroy()
-
+class TestLanQueueOperations(LANQueueLocalTest, unittest.TestCase):
     def test_peer_added_after_startup(self):
         self.q._on_host_added("peer1")
         self.q.q._syncobj.addNodeToCluster.assert_called_with("peer1", callback=ANY)
@@ -88,11 +79,11 @@ class TestLanQueueOperations(unittest.TestCase):
         self.q.q.setJob("hash", self.manifest)
         self.assertEqual(self.q.q.jobs["hash"], (self.addr, self.manifest))
         self.q.q.acquireJob("hash")
-        self.q.q.locks.tryAcquire.assert_called_with("hash", sync=True, timeout=ANY)
+        self.assertEqual(self.q.q.locks.getPeerLocks()[self.addr][0], 'hash')
         self.q.q.releaseJob("hash")
-        self.q.q.locks.release.assert_called_with("hash")
+        self.assertEqual(len(self.q.q.locks.getPeerLocks()[self.addr]), 0)
         self.q.q.removeJob("hash")
-        self.assertEqual(self.q.q.jobs, {})
+        self.assertEqual(len(self.q.q.jobs), 0)
 
     def testPeerGettersHideTimestamp(self):
         self.q.q.syncPeer(dict(a=1), "addr1")
@@ -101,5 +92,5 @@ class TestLanQueueOperations(unittest.TestCase):
 
     def testJobGettersIncludePeer(self):
         self.q.q.setJob("job1", dict(a=1), addr="1.2.3.4")
-        self.assertEqual(self.q.q.getJobs(), [("job1", ("1.2.3.4", {"a": 1}))])
+        self.assertEqual(list(self.q.q.getJobs()), [("job1", ("1.2.3.4", {"a": 1}))])
         self.assertEqual(self.q.q.getJob("job1"), ("1.2.3.4", {"a": 1}))
