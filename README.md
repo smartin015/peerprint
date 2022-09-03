@@ -41,3 +41,10 @@ Type `help` to see a list of all commands, or see how they're implemented in `pe
 See `.travis.yml` for CI testing configuration
 
 All tests can also be run manually via `docker-compose run test`
+
+## Deploying
+
+```
+python3 -m build
+python3 -m twine upload --repository testpypi dist/*
+```
