@@ -79,7 +79,12 @@ func (p *PRPC) Publish(ctx context.Context, topic string, req interface{}) error
   if err != nil {
     return fmt.Errorf("prpc.Publish() marshal error:", err)
   }
-  if err = p.topics[topic].Publish(ctx, msg, ); err != nil {
+	t, ok := p.topics[topic]
+	if !ok {
+		return fmt.Errorf("attempted to publish to topic %s without first calling JoinTopic()", topic)
+	}
+
+  if err = t.Publish(ctx, msg); err != nil {
     return fmt.Errorf("prpc.Publish() publish error:", err)
   }
   return nil

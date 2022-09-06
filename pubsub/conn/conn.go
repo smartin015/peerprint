@@ -1,14 +1,17 @@
 package conn
 
 import (
+	"time"
 	"context"
 	"flag"
   "log"
 	"os"
 	"sync"
 
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -28,10 +31,11 @@ type Conn struct {
   h host.Host
   ps *pubsub.PubSub
   onReady chan bool
+	anyConnected bool
 }
 
-func New(ctx context.Context, addr string, rendezvous string) *Conn {
-	h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+func New(ctx context.Context, local bool, addr string, rendezvous string, pkey crypto.PrivKey) *Conn {
+	h, err := libp2p.New(libp2p.ListenAddrStrings(addr), libp2p.Identity(pkey))
 	if err != nil {
 		panic(err)
 	}
@@ -48,8 +52,14 @@ func New(ctx context.Context, addr string, rendezvous string) *Conn {
     h: h,
     ps: ps,
     onReady: make(chan bool),
+		anyConnected: false,
   }
-	go c.discoverPeers(rendezvous)
+
+	if local {
+		go c.discoverPeersMDNS(rendezvous)
+	} else {
+		go c.discoverPeersDHT(rendezvous)
+	}
   return c
 }
 
@@ -84,30 +94,49 @@ func (c *Conn) initDHT() *dht.IpfsDHT {
 	return kademliaDHT
 }
 
-func (c *Conn) discoverPeers(rendezvous string) {
+// interface to be called when new  peer is found
+func (c *Conn) HandlePeerFound(peer peer.AddrInfo) {
+	if peer.ID == c.h.ID() {
+		return // No self connection
+	}
+	err := c.h.Connect(c.ctx, peer)
+	if err != nil {
+		stderr.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+	} else {
+		stderr.Println("Connected to:", peer.ID.Pretty())
+		c.anyConnected = true
+	}
+}
+
+
+func (c *Conn) discoverPeersMDNS(rendezvous string) {
+	// srv calls HandlePeerFound()
+	srv := mdns.NewMdnsService(c.h, rendezvous, c)
+	if err := srv.Start(); err != nil {
+		panic(err)
+	}
+	// TODO timeout
+	for !c.anyConnected {
+		stderr.Println("Searching for peers")
+		time.Sleep(10*time.Second)
+	}
+	c.onReady <- true
+}
+
+func (c *Conn) discoverPeersDHT(rendezvous string) {
 	kademliaDHT := c.initDHT()
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(c.ctx, routingDiscovery, rendezvous)
 
 	// Look for others who have announced and attempt to connect to them
-	anyConnected := false
-	for !anyConnected {
+	for !c.anyConnected {
 		stderr.Println("Searching for peers...")
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
 			panic(err)
 		}
 		for peer := range peerChan {
-      if peer.ID == c.h.ID() {
-				continue // No self connection
-			}
-			err := c.h.Connect(c.ctx, peer)
-			if err != nil {
-				stderr.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
-			} else {
-				stderr.Println("Connected to:", peer.ID.Pretty())
-				anyConnected = true
-			}
+			c.HandlePeerFound(peer)
 		}
 	}
 	stderr.Println("Peer discovery complete")

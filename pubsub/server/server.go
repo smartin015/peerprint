@@ -120,6 +120,7 @@ func (t *PeerPrint) Loop() {
 }
 
 func (t *PeerPrint) requestAssignment() {
+	t.p.JoinTopic(t.ctx, AssignmentTopic)
   t.p.Publish(t.ctx, AssignmentTopic, &pb.AssignmentRequest{})
 }
 
