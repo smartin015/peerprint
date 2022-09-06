@@ -6,10 +6,11 @@ package rpc;
 
 enum PeerType {
   UNKNOWN_PEER_TYPE = 0;
-  LEADER = 1;
-  CANDIDATE = 2;
-  FOLLOWER = 3;
-  LISTENER = 4; // Not involved in consensus
+  TRUSTED = 1; // This peer is trusted to tell the truth (set in the manifest, used for bootstrapping new peers)
+  LEADER = 2;
+  CANDIDATE = 3;
+  FOLLOWER = 4;
+  LISTENER = 5; // Not involved in consensus
 }
 
 enum PeerState {
@@ -17,6 +18,20 @@ enum PeerState {
   BUSY = 1; // Peer is doing work
   IDLE = 2; // Peer is ready to work
   PAUSED = 3; // Peer is awaiting human touch
+}
+
+message Queue {
+  string name = 1;
+  string desc = 2;
+  string url = 3;
+  string rendezvous = 4;
+  repeated string trustedPeers = 5;
+}
+
+message Registry {
+  uint64 created = 1; // unix timestamp
+  string url = 2;
+  repeated Queue queues = 3;
 }
 
 message PeerStatus {

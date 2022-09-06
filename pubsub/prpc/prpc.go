@@ -9,28 +9,11 @@ import (
   "google.golang.org/protobuf/proto"
 )
 
-type Callbacks interface {
-  OnPollPeersRequest(string, *pb.PollPeersRequest)
-  OnPollPeersResponse(string, *pb.PollPeersResponse)
-  OnAssignmentRequest(string, *pb.AssignmentRequest)
-  OnAssignmentResponse(string, *pb.AssignmentResponse)
-
-  OnSetJobRequest(string, *pb.SetJobRequest)
-  OnDeleteJobRequest(string, *pb.DeleteJobRequest)
-  OnAcquireJobRequest(string, *pb.AcquireJobRequest)
-  OnReleaseJobRequest(string, *pb.ReleaseJobRequest)
-  OnJobMutationResponse(string, *pb.JobMutationResponse)
-  OnGetJobsRequest(string, *pb.GetJobsRequest)
-  OnGetJobsResponse(string, *pb.GetJobsResponse)
-}
-
 type PRPC struct {
   ID string
   ps *pubsub.PubSub
   topics map[string]*pubsub.Topic
   cbs Callbacks
-  topicLeaders map[string]string
-  polling bool
 }
 
 func New(id string, ps *pubsub.PubSub) *PRPC {
@@ -38,24 +21,15 @@ func New(id string, ps *pubsub.PubSub) *PRPC {
     ID: id,
     ps: ps,
     topics: make(map[string]*pubsub.Topic),
-    topicLeaders: make(map[string]string),
     cbs: nil,
-    polling: false,
   }
-}
-
-func (p *PRPC) SetLeader(topic string, id string) {
-  p.topicLeaders[topic] = id
-}
-func (p *PRPC) SetPolling(polling bool) {
-  p.polling = polling
 }
 
 func (p *PRPC) RegisterCallbacks(c Callbacks) {
   p.cbs = c
 }
 
-func (p *PRPC) HandleSub(ctx context.Context, sub *pubsub.Subscription) {
+func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
 	for {
 		m, err := sub.Next(ctx)
 		if err != nil {
@@ -73,7 +47,7 @@ func (p *PRPC) HandleSub(ctx context.Context, sub *pubsub.Subscription) {
 	}
 }
 
-func (p *PRPC) JoinTopic(ctx context.Context, topic string, requiredPeer string) error {
+func (p *PRPC) JoinTopic(ctx context.Context, topic string) error {
   if _, ok := p.topics[topic]; ok {
     return fmt.Errorf("Already subscribed to topic %v", topic)
   }
@@ -86,7 +60,7 @@ func (p *PRPC) JoinTopic(ctx context.Context, topic string, requiredPeer string)
     panic(err)
   }
   p.topics[topic] = t
-  go p.HandleSub(ctx, sub)
+  go p.handleSub(ctx, sub)
   return nil
 }
 
@@ -111,64 +85,52 @@ func (p *PRPC) Publish(ctx context.Context, topic string, req interface{}) error
   return nil
 }
 
+
+// Callbacks contains callback functions for handling various incoming pubsub messages. It's up to the callee to determine whether they should handle the message.
+type Callbacks interface {
+  OnPollPeersRequest(string, string, *pb.PollPeersRequest)
+  OnPollPeersResponse(string, string, *pb.PollPeersResponse)
+  OnAssignmentRequest(string, string, *pb.AssignmentRequest)
+  OnAssignmentResponse(string, string, *pb.AssignmentResponse)
+  OnSetJobRequest(string, string, *pb.SetJobRequest)
+  OnDeleteJobRequest(string, string, *pb.DeleteJobRequest)
+  OnAcquireJobRequest(string, string, *pb.AcquireJobRequest)
+  OnReleaseJobRequest(string, string, *pb.ReleaseJobRequest)
+  OnJobMutationResponse(string, string, *pb.JobMutationResponse)
+  OnGetJobsRequest(string, string, *pb.GetJobsRequest)
+  OnGetJobsResponse(string, string, *pb.GetJobsResponse)
+}
+
 func (p *PRPC) Recv(ctx context.Context, topic string, peer string, resp interface{}) error {
-  leader := p.topicLeaders[topic]
   switch v := resp.(type) {
     // proto/peers.proto
     case *pb.AssignmentRequest:
-      if leader == p.ID {
-        p.cbs.OnAssignmentRequest(topic, v)
-      }
+      p.cbs.OnAssignmentRequest(topic, peer, v)
     case *pb.AssignmentResponse:
-      if peer == leader && v.Id == p.ID {
-        p.cbs.OnAssignmentResponse(topic, v)
-      }
+      p.cbs.OnAssignmentResponse(topic, peer, v)
     case *pb.PollPeersRequest:
-      p.cbs.OnPollPeersRequest(topic, v)
+      p.cbs.OnPollPeersRequest(topic, peer, v)
     case *pb.PollPeersResponse:
-      if p.polling {
-        p.cbs.OnPollPeersResponse(topic, v)
-      }
+      p.cbs.OnPollPeersResponse(topic, peer, v)
 
     // proto/jobs.proto
     case *pb.SetJobRequest:
-      if leader == p.ID {
-        p.cbs.OnSetJobRequest(topic, v)
-      }
+      p.cbs.OnSetJobRequest(topic, peer, v)
     case *pb.DeleteJobRequest:
-      if leader == p.ID {
-        p.cbs.OnDeleteJobRequest(topic, v)
-      }
+      p.cbs.OnDeleteJobRequest(topic, peer, v)
     case *pb.AcquireJobRequest:
-      if leader == p.ID {
-        p.cbs.OnAcquireJobRequest(topic, v)
-      }
+      p.cbs.OnAcquireJobRequest(topic, peer, v)
     case *pb.ReleaseJobRequest:
-      if leader == p.ID {
-        p.cbs.OnReleaseJobRequest(topic, v)
-      }
+      p.cbs.OnReleaseJobRequest(topic, peer, v)
     case *pb.JobMutationResponse:
-      if leader == peer {
-        p.cbs.OnJobMutationResponse(topic, v)
-      }
+      p.cbs.OnJobMutationResponse(topic, peer, v)
     case *pb.GetJobsRequest:
-      if leader == p.ID {
-        p.cbs.OnGetJobsRequest(topic, v)
-      }
+      p.cbs.OnGetJobsRequest(topic, peer, v)
     case *pb.GetJobsResponse:
-      if leader == peer {
-        p.cbs.OnGetJobsResponse(topic, v)
-      }
+      p.cbs.OnGetJobsResponse(topic, peer, v)
 
     default:
       return fmt.Errorf("Received unknown type response on topic")
   }
-  return nil
-}
-
-func (p *PRPC) Call(req *proto.Message) *proto.Message {
-  // TODO reflect to get topic
-
-  // TODO if call is leader election, perform RAFT consensus and return result
   return nil
 }

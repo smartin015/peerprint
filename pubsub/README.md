@@ -7,9 +7,25 @@ Peers are discovered using a DHT, so no prior information (other than the rendez
 ## Install
 
 ```
-sudo apt install golang-goprotobuf-dev protobuf-compiler
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 protoc --go_out=. --go_opt=paths=source_relative proto/*.proto
 go build .
+```
+
+## Demo
+
+In a separate console, run 
+
+```
+ipfs init
+ipfs add example_registry.yaml
+ipfs daemon
+```
+
+Make a note of the CID of the published registry.
+
+```
+./pubsub -registry $IPFS_REGISTRY_CID
 ```
 
 

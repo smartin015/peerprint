@@ -1,0 +1,9 @@
+created: 1662490415
+url: https://continuousprint.net
+queues:
+  - name: "Test queue"
+    desc: "A testing queue"
+    url: https://continuousprint.net
+    rendezvous: "cpq_testqueue_rendezvous"
+    trustedPeers: []
+  

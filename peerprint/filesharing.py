@@ -7,6 +7,8 @@ import json
 import time
 import re
 import tempfile
+from .ipfs import IPFS
+from abc import ABC, abstractmethod
 from pathlib import Path
 from .version import __version__ as version
 import http.server
@@ -87,74 +89,32 @@ def unpack_job(path, outdir):
             manifest = json.loads(f.read())
         return manifest, [n for n in zf.namelist() if Path(n).name != 'manifest.json']
 
-
-class FileshareServer(socketserver.TCPServer):
-    allow_reuse_address = True
-
-class Fileshare:
-    def __init__(self, addr, basedir, logger):
-        (host, port) = addr.split(":")
-        self.host = host
-        self.port = int(port)
+class IPFSFileshare():
+    def __init__(self, basedir, logger):
         self.basedir = basedir
-        self.t = None
         self._logger = logger
         os.makedirs(basedir, exist_ok=True)
-
-    def connect(self, testing=False):
-        if testing:
-            return
-        basedir = self.basedir
-        class FileshareRequestHandler(http.server.SimpleHTTPRequestHandler):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, directory=basedir, **kwargs)
-        self.httpd = FileshareServer((self.host, self.port), FileshareRequestHandler)
-        self.httpd.allow_reuse_address = True
-        self.t = threading.Thread(target=self.httpd.serve_forever, daemon=True)
-        self.t.start()
-
-        # Re-assign host & port since some formats (e.g. *:0) auto-assign
-        (self.host, self.port) = self.httpd.socket.getsockname()
-
-        self._logger.info(f"Fileshare listening on {self.host}:{self.port}")
-
-    def destroy(self):
-        if self.httpd is not None:
-            self._logger.info("Fileshare shutting down")
-            self.httpd.shutdown()
-            self.httpd.server_close()
-            self._logger.info("Server shut down")
+        self.proc = IPFS.start_daemon()
 
     def post(self, manifest: dict, filepaths: dict) -> str:
-        # We must first write to a temp file so we can calculate the hash and use it
-        # as the destination file name
-        # Note that basedir must be used when creating the file, as it otherwise defaults to /tmp
-        # which is in-memory and causes os.rename to fail due to cross-device linking.
         with tempfile.NamedTemporaryFile(suffix='.gjob', dir=self.basedir, delete=False) as tf:
             hash_ = pack_job(manifest, filepaths, tf.name)
-            dest = Path(self.basedir) / f"{hash_}.gjob"
+            ipfs_cid = IPFS.add(tf.name).decode('utf8')
+            dest = Path(self.basedir) / f"{ipfs_cid}.gjob"
             os.rename(tf.name, dest)
-            self._logger.info(f"Packed and posted job to {dest}")
-            return hash_
+            self._logger.info(f"Packed and posted job to {dest} - IPFS id {ipfs_cid}")
+            return ipfs_cid
+        pass
 
-    def fetch(self, peer:str, hash_:str, unpack=False, overwrite=False) -> str:
+    def fetch(self, hash_:str, unpack=False, overwrite=False) -> str:
         # Get the equivalent path on disk
-        written = 0
         name = f"{hash_}.gjob"
-        url = f"http://{peer}/{name}"
         dest = Path(self.basedir) / name
-        self._logger.debug(f"HTTP GET {url} -> {dest}")
-
         if dest.exists() and not overwrite:
             self._logger.debug("File already exists - using that one")
         else:
-            with requests.get(url, stream=True) as r:
-              r.raise_for_status()
-              with open(dest, 'wb') as f:
-                  for chunk in r.iter_content(chunk_size=8192):
-                      f.write(chunk)
-                      written += len(chunk)
-            self._logger.debug(f"Wrote {written}B to {dest}")
+            if not IPFS.fetch(hash_, dest):
+                raise Exception("Failed to fetch file {hash_}")
 
         if unpack:
             dest_dir = Path(self.basedir) / hash_
@@ -163,23 +123,4 @@ class Fileshare:
             return dest_dir
         else:
             return dest
-
-
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    with tempfile.TemporaryDirectory() as basedir:
-        fs = Fileshare("0.0.0.0:5000", basedir, logging.getLogger('fileshare'))
-        fs.connect()
-
-        name = 'test.gjob'
-        fpath = (Path(basedir) / name)
-
-        with open(fpath, 'w') as f:
-            f.write('hello world')
-        fs.post('ABCDEF', str(fpath))
-        fs.fetch('localhost:5000', 'ABCDEF', overwrite=False)
-        fs.getJob('localhost:5000', 'ABCDEF', overwrite=True)
-        fs.destroy()
-        print("Done")
-
+        pass
