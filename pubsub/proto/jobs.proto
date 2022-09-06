@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package jobs;
+
+message Job {
+  string id = 1;
+  string protocol = 3;
+  bytes data = 2;
+}
+
+message SetJobRequest {
+  Job job = 1;
+}
+message DeleteJobRequest {
+  string job_id = 1;
+}
+message AcquireJobRequest {
+  string job_id = 1;
+}
+message ReleaseJobRequest {
+  string job_id = 1;
+}
+// JobMutationResponse is published as a status update when any mutating
+// request causes a job to change
+message JobMutationResponse {
+  Job job = 1;
+}
+
+message GetJobsRequest {}
+message GetJobsResponse {
+  repeated Job jobs = 1;
+}

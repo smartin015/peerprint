@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package rpc;
+
+enum PeerType {
+  UNKNOWN_PEER_TYPE = 0;
+  LEADER = 1;
+  CANDIDATE = 2;
+  FOLLOWER = 3;
+  LISTENER = 4; // Not involved in consensus
+}
+
+enum PeerState {
+  UNKNOWN_PEER_STATE = 0;
+  BUSY = 1; // Peer is doing work
+  IDLE = 2; // Peer is ready to work
+  PAUSED = 3; // Peer is awaiting human touch
+}
+
+message PeerStatus {
+  string id = 1;
+  string topic = 2; // On which topic of queue items is this peer operating?
+  PeerType type = 3;
+  PeerState state = 4;
+}
+
+// Probabilistically poll all peers on a topic for census-taking and reporting
+message PollPeersRequest {
+  string topic = 1;
+  double probability = 2;
+}
+
+// PollPeersResponse is published by peers with probability given in PollPeersRequest
+message PollPeersResponse {
+  PeerStatus status = 1;
+}
+
+// Peer requesting assignment to a particular role. This is typically
+// sent to the "assignment" topic
+message AssignmentRequest {}
+// A response sent by the leader of the topic to assign a peer to some work
+message AssignmentResponse {
+  string topic = 1;
+  string id = 2;
+  string leader_id = 3;
+  PeerType type = 4;
+}

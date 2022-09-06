@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package raft;
+
+message GetConsensusStatusRequest {}
+message GetConsensusStatusResponse {
+  string leader = 2;
+  repeated string followers = 3;
+  uint64 last_election_timestamp = 4;
+  uint64 log_size = 5;
+}
