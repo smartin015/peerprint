@@ -5,6 +5,7 @@ import (
   "fmt"
   "context"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+  "google.golang.org/protobuf/types/known/anypb"
   pb "github.com/smartin015/peerprint/pubsub/proto"
   "google.golang.org/protobuf/proto"
 )
@@ -39,8 +40,12 @@ func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
     if peer == p.ID {
       continue // Ignore messages coming from ourselves
     }
-    var msg proto.Message
-    if err := proto.Unmarshal(m.Message.Data, msg); err != nil {
+    any := anypb.Any{}
+    if err := proto.Unmarshal(m.Message.Data, &any); err != nil {
+      panic(err)
+    }
+    msg, err := any.UnmarshalNew()
+    if err != nil {
       panic(err)
     }
     p.Recv(ctx, sub.Topic(), peer, msg)
@@ -70,15 +75,16 @@ func (p *PRPC) LeaveTopic(topic string) error {
 
 func (p *PRPC) Close() error {return nil}
 
-func (p *PRPC) Publish(ctx context.Context, topic string, req interface{}) error {
-  reqp, ok := req.(proto.Message)
-  if !ok {
-    return fmt.Errorf("prpc.Publish() type assertion failed")
+func (p *PRPC) Publish(ctx context.Context, topic string, req proto.Message) error {
+  any, err := anypb.New(req)
+  if err != nil {
+    return fmt.Errorf("prpc.Publish() any-cast failed")
   }
-  msg, err := proto.Marshal(reqp)
+  msg, err := proto.Marshal(any)
   if err != nil {
     return fmt.Errorf("prpc.Publish() marshal error:", err)
   }
+
 	t, ok := p.topics[topic]
 	if !ok {
 		return fmt.Errorf("attempted to publish to topic %s without first calling JoinTopic()", topic)

@@ -4,10 +4,16 @@ option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 
 package jobs;
 
+message Lock {
+  string peer = 1;
+  uint64 created = 2;
+}
+
 message Job {
   string id = 1;
-  string protocol = 3;
-  bytes data = 2;
+  string protocol = 2;
+  bytes data = 3;
+  Lock lock = 4;
 }
 
 message SetJobRequest {

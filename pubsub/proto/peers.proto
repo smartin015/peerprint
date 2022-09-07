@@ -7,10 +7,8 @@ package rpc;
 enum PeerType {
   UNKNOWN_PEER_TYPE = 0;
   TRUSTED = 1; // This peer is trusted to tell the truth (set in the manifest, used for bootstrapping new peers)
-  LEADER = 2;
-  CANDIDATE = 3;
-  FOLLOWER = 4;
-  LISTENER = 5; // Not involved in consensus
+  ELECTABLE = 2; // This peer is involved in RAFT consensus and log replication
+  LISTENER = 3; // Not involved in consensus
 }
 
 enum PeerState {
@@ -61,4 +59,11 @@ message AssignmentResponse {
   string id = 2;
   string leader_id = 3;
   PeerType type = 4;
+  repeated string consensus_group = 5;
 }
+
+
+message NewLeaderResponse {
+  string id = 1;
+}
+
