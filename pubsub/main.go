@@ -20,8 +20,10 @@ import (
 )
 
 var (
-  addrFlag = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to join")
-	registryFlag = flag.String("registry", "QmRztyRjsMCsC3vMx7NFo85fCV5i4zVtbFeSJwSRQhNTxP", "IPFS content ID of the queue (required)")
+  pubsubAddrFlag = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to join for pubsub")
+  raftAddrFlag = flag.String("raftAddr", "/ip4/0.0.0.0/tcp/0", "Address to join for RAFT consensus")
+  raftPathFlag = flag.String("raftPath", "./state.raft", "Path to raft state snapshot")
+	registryFlag = flag.String("registry", "QmZQ4bLHRCrcmJUnTbY7updR6chfvumbaEx6cCya3chz9n", "IPFS content ID of the queue (required)")
 	queueFlag = flag.String("queue", "Test queue", "Name of the registered queue  (required)")
   ipfsServerFlag = flag.String("ipfs_server", "localhost:5001", "Route to the IPFS daemon / server")
 	localFlag = flag.Bool("local", false, "Use local MDNS (instead of global DHT) for discovery")
@@ -31,7 +33,7 @@ var (
   stderr = log.New(os.Stderr, "", 0)
 )
 
-func getRegistry(cid string) (*pb.Registry, error) {
+func getFileAsJSON(cid string) ([]byte, error) {
   // TODO this assumes the daemon is running - should probably
   // guard this
   sh := ipfs.NewShell(*ipfsServerFlag)
@@ -46,15 +48,18 @@ func getRegistry(cid string) (*pb.Registry, error) {
   if err != nil && err != io.EOF {
     return nil, fmt.Errorf("ipfs Read() error: %w", err)
   }
-  j, err := yaml.YAMLToJSON(y[:n])
-  if err != nil {
-    return nil, fmt.Errorf("ipfs JSON convert error: %w", err)
-  }
+  return yaml.YAMLToJSON(y[:n])
+}
 
+func getRegistry(cid string) (*pb.Registry, error) {
+  j, err := getFileAsJSON(cid)
+  if err != nil {
+    return nil, err
+  }
   m := &pb.Registry{}
   err = protojson.Unmarshal(j, m)
   if err != nil {
-    return nil, fmt.Errorf("ipfs Unmarshal() error: %w", err)
+    return nil, fmt.Errorf("Registry unmarshal error: %w", err)
   }
   return m, nil
 }
@@ -151,18 +156,18 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
 	}
-  c := conn.New(ctx, *localFlag, *addrFlag, queue.Rendezvous, kpriv)
-  log.Printf("Connecting (ID %v)\n", c.GetID())
+  c := conn.New(ctx, *localFlag, *pubsubAddrFlag, queue.Rendezvous, kpriv)
+  log.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", c.GetID(), *connectTimeoutFlag)
   connectCtx, _ := context.WithTimeout(ctx, *connectTimeoutFlag)
   if err := c.AwaitReady(connectCtx); err != nil {
     panic(fmt.Errorf("Error connecting to peers: %w", err))
   } else {
-    log.Println("Peers found; ending search")
+    log.Println("Peers found; discovery complete")
   }
   p := prpc.New(c.GetID(), c.GetPubSub())
 
-  log.Println("PRPC interface established, self ID")
-  s := server.New(ctx, p, queue.TrustedPeers, stderr)
+  log.Println("PRPC interface established")
+  s := server.New(ctx, p, queue.TrustedPeers, *raftAddrFlag, *raftPathFlag, kpriv, stderr)
   log.Println("Entering main loop")
   s.Loop()
 }

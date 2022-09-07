@@ -5,5 +5,7 @@ queues:
     desc: "A testing queue"
     url: https://continuousprint.net
     rendezvous: "cpq_testqueue_rendezvous"
-    trustedPeers: ["12D3KooWNgjdBgmgRyY42Eo2Jg3rGyvaepU4QDkEMjy4WtF3Ad9V"]
+    trustedPeers: 
+     - "12D3KooWNgjdBgmgRyY42Eo2Jg3rGyvaepU4QDkEMjy4WtF3Ad9V"
+     - "12D3KooWMWWvLa8NMdfEqVbfWm8VnufrjRhzFWcVA13gqoagUDKh"
   

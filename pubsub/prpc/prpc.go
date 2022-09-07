@@ -62,7 +62,7 @@ func (p *PRPC) JoinTopic(ctx context.Context, topic string) error {
   }
   sub, err := t.Subscribe()
   if err != nil {
-    panic(err)
+    return fmt.Errorf("pubsub Subscribe() failure: %w", err)
   }
   p.topics[topic] = t
   go p.handleSub(ctx, sub)
@@ -108,8 +108,8 @@ type Callbacks interface {
   OnAcquireJobRequest(string, string, *pb.AcquireJobRequest)
   OnReleaseJobRequest(string, string, *pb.ReleaseJobRequest)
   OnJobMutationResponse(string, string, *pb.JobMutationResponse)
-  OnGetJobsRequest(string, string, *pb.GetJobsRequest)
-  OnGetJobsResponse(string, string, *pb.GetJobsResponse)
+  OnRaftAddrsRequest(string, string, *pb.RaftAddrsRequest)
+  OnRaftAddrsResponse(string, string, *pb.RaftAddrsResponse)
 }
 
 func (p *PRPC) Recv(ctx context.Context, topic string, peer string, resp interface{}) error {
@@ -123,6 +123,10 @@ func (p *PRPC) Recv(ctx context.Context, topic string, peer string, resp interfa
       p.cbs.OnPollPeersRequest(topic, peer, v)
     case *pb.PollPeersResponse:
       p.cbs.OnPollPeersResponse(topic, peer, v)
+    case *pb.RaftAddrsRequest:
+      p.cbs.OnRaftAddrsRequest(topic, peer, v)
+    case *pb.RaftAddrsResponse:
+      p.cbs.OnRaftAddrsResponse(topic, peer, v)
 
     // proto/jobs.proto
     case *pb.SetJobRequest:
@@ -135,10 +139,6 @@ func (p *PRPC) Recv(ctx context.Context, topic string, peer string, resp interfa
       p.cbs.OnReleaseJobRequest(topic, peer, v)
     case *pb.JobMutationResponse:
       p.cbs.OnJobMutationResponse(topic, peer, v)
-    case *pb.GetJobsRequest:
-      p.cbs.OnGetJobsRequest(topic, peer, v)
-    case *pb.GetJobsResponse:
-      p.cbs.OnGetJobsResponse(topic, peer, v)
 
     default:
       return fmt.Errorf("Received unknown type response on topic")

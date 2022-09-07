@@ -6,7 +6,6 @@ package rpc;
 
 enum PeerType {
   UNKNOWN_PEER_TYPE = 0;
-  TRUSTED = 1; // This peer is trusted to tell the truth (set in the manifest, used for bootstrapping new peers)
   ELECTABLE = 2; // This peer is involved in RAFT consensus and log replication
   LISTENER = 3; // Not involved in consensus
 }
@@ -53,13 +52,23 @@ message PollPeersResponse {
 // Peer requesting assignment to a particular role. This is typically
 // sent to the "assignment" topic
 message AssignmentRequest {}
+
+message RaftAddrsRequest {
+  string raft_id = 1;
+  repeated string raft_addrs = 2;
+}
+
+message RaftAddrsResponse {
+  string raft_id = 1;
+  repeated string raft_addrs = 2;
+}
+
 // A response sent by the leader of the topic to assign a peer to some work
 message AssignmentResponse {
   string topic = 1;
   string id = 2;
   string leader_id = 3;
   PeerType type = 4;
-  repeated string consensus_group = 5;
 }
 
 

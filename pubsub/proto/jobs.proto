@@ -31,10 +31,6 @@ message ReleaseJobRequest {
 // JobMutationResponse is published as a status update when any mutating
 // request causes a job to change
 message JobMutationResponse {
-  Job job = 1;
-}
-
-message GetJobsRequest {}
-message GetJobsResponse {
   repeated Job jobs = 1;
 }
+
