@@ -1,36 +1,36 @@
 package conn
 
 import (
-	"time"
 	"context"
 	"flag"
-  "log"
+	"log"
 	"os"
 	"sync"
+	"time"
 
-	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 )
 
 var (
 	topicNameFlag = flag.String("topicName", "applesauce", "name of topic to join")
-  stderr = log.New(os.Stderr, "", 0)
+	stderr        = log.New(os.Stderr, "", 0)
 )
 
 type Conn struct {
-  ctx context.Context
-  addr string
-  rendezvous string
-  h host.Host
-  ps *pubsub.PubSub
-  onReady chan bool
+	ctx          context.Context
+	addr         string
+	rendezvous   string
+	h            host.Host
+	ps           *pubsub.PubSub
+	onReady      chan bool
 	anyConnected bool
 }
 
@@ -45,26 +45,26 @@ func New(ctx context.Context, local bool, addr string, rendezvous string, pkey c
 		panic(err)
 	}
 
-  c := &Conn {
-    ctx: ctx,
-    addr: addr,
-    rendezvous: rendezvous,
-    h: h,
-    ps: ps,
-    onReady: make(chan bool),
+	c := &Conn{
+		ctx:          ctx,
+		addr:         addr,
+		rendezvous:   rendezvous,
+		h:            h,
+		ps:           ps,
+		onReady:      make(chan bool),
 		anyConnected: false,
-  }
+	}
 
 	if local {
 		go c.discoverPeersMDNS(rendezvous)
 	} else {
 		go c.discoverPeersDHT(rendezvous)
 	}
-  return c
+	return c
 }
 
 func (c *Conn) GetID() string {
-  return c.h.ID().String()
+	return c.h.ID().String()
 }
 
 func (c *Conn) initDHT() *dht.IpfsDHT {
@@ -108,7 +108,6 @@ func (c *Conn) HandlePeerFound(peer peer.AddrInfo) {
 	}
 }
 
-
 func (c *Conn) discoverPeersMDNS(rendezvous string) {
 	// srv calls HandlePeerFound()
 	srv := mdns.NewMdnsService(c.h, rendezvous, c)
@@ -118,7 +117,7 @@ func (c *Conn) discoverPeersMDNS(rendezvous string) {
 	// TODO timeout
 	for !c.anyConnected {
 		stderr.Println("Searching for peers")
-		time.Sleep(10*time.Second)
+		time.Sleep(10 * time.Second)
 	}
 	c.onReady <- true
 }
@@ -140,18 +139,18 @@ func (c *Conn) discoverPeersDHT(rendezvous string) {
 		}
 	}
 	stderr.Println("Peer discovery complete")
-  c.onReady <- true
+	c.onReady <- true
 }
 
 func (c *Conn) GetPubSub() *pubsub.PubSub {
-  return c.ps
+	return c.ps
 }
 
 func (c *Conn) AwaitReady(ctx context.Context) error {
-  select {
-  case <-c.onReady:
-    return nil
-  case <-ctx.Done():
-    return ctx.Err()
-  }
+	select {
+	case <-c.onReady:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

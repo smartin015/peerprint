@@ -7,6 +7,10 @@ Peers are discovered using a DHT, so no prior information (other than the rendez
 ## Install
 
 ```
+virtualenv venv
+source venv/bin/activate
+pip3 install --upgrade protobuf pyzmq libczmq-dev
+sudo apt-get install libczmq-dev libzmq5
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 protoc --go_out=. --go_opt=paths=source_relative proto/*.proto
 go build .

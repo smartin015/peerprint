@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+import "proto/jobs.proto";
+
+package state;
+
+message State {
+  map<string, jobs.Job> jobs = 1;
+}
