@@ -16,6 +16,8 @@ message Job {
   Lock lock = 4;
 }
 
+
+message GetJobsRequest {}
 message SetJobRequest {
   Job job = 1;
 }

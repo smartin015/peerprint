@@ -146,6 +146,44 @@ func (x *Job) GetLock() *Lock {
 	return nil
 }
 
+type GetJobsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *GetJobsRequest) Reset() {
+	*x = GetJobsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_jobs_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetJobsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobsRequest) ProtoMessage() {}
+
+func (x *GetJobsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_jobs_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobsRequest.ProtoReflect.Descriptor instead.
+func (*GetJobsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_jobs_proto_rawDescGZIP(), []int{2}
+}
+
 type SetJobRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -157,7 +195,7 @@ type SetJobRequest struct {
 func (x *SetJobRequest) Reset() {
 	*x = SetJobRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_jobs_proto_msgTypes[2]
+		mi := &file_proto_jobs_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -170,7 +208,7 @@ func (x *SetJobRequest) String() string {
 func (*SetJobRequest) ProtoMessage() {}
 
 func (x *SetJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_jobs_proto_msgTypes[2]
+	mi := &file_proto_jobs_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -183,7 +221,7 @@ func (x *SetJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetJobRequest.ProtoReflect.Descriptor instead.
 func (*SetJobRequest) Descriptor() ([]byte, []int) {
-	return file_proto_jobs_proto_rawDescGZIP(), []int{2}
+	return file_proto_jobs_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SetJobRequest) GetJob() *Job {
@@ -204,7 +242,7 @@ type DeleteJobRequest struct {
 func (x *DeleteJobRequest) Reset() {
 	*x = DeleteJobRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_jobs_proto_msgTypes[3]
+		mi := &file_proto_jobs_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -217,7 +255,7 @@ func (x *DeleteJobRequest) String() string {
 func (*DeleteJobRequest) ProtoMessage() {}
 
 func (x *DeleteJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_jobs_proto_msgTypes[3]
+	mi := &file_proto_jobs_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +268,7 @@ func (x *DeleteJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteJobRequest.ProtoReflect.Descriptor instead.
 func (*DeleteJobRequest) Descriptor() ([]byte, []int) {
-	return file_proto_jobs_proto_rawDescGZIP(), []int{3}
+	return file_proto_jobs_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeleteJobRequest) GetJobId() string {
@@ -251,7 +289,7 @@ type AcquireJobRequest struct {
 func (x *AcquireJobRequest) Reset() {
 	*x = AcquireJobRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_jobs_proto_msgTypes[4]
+		mi := &file_proto_jobs_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -264,7 +302,7 @@ func (x *AcquireJobRequest) String() string {
 func (*AcquireJobRequest) ProtoMessage() {}
 
 func (x *AcquireJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_jobs_proto_msgTypes[4]
+	mi := &file_proto_jobs_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -277,7 +315,7 @@ func (x *AcquireJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcquireJobRequest.ProtoReflect.Descriptor instead.
 func (*AcquireJobRequest) Descriptor() ([]byte, []int) {
-	return file_proto_jobs_proto_rawDescGZIP(), []int{4}
+	return file_proto_jobs_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AcquireJobRequest) GetJobId() string {
@@ -298,7 +336,7 @@ type ReleaseJobRequest struct {
 func (x *ReleaseJobRequest) Reset() {
 	*x = ReleaseJobRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_jobs_proto_msgTypes[5]
+		mi := &file_proto_jobs_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -311,7 +349,7 @@ func (x *ReleaseJobRequest) String() string {
 func (*ReleaseJobRequest) ProtoMessage() {}
 
 func (x *ReleaseJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_jobs_proto_msgTypes[5]
+	mi := &file_proto_jobs_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +362,7 @@ func (x *ReleaseJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseJobRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseJobRequest) Descriptor() ([]byte, []int) {
-	return file_proto_jobs_proto_rawDescGZIP(), []int{5}
+	return file_proto_jobs_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ReleaseJobRequest) GetJobId() string {
@@ -347,7 +385,7 @@ type JobMutationResponse struct {
 func (x *JobMutationResponse) Reset() {
 	*x = JobMutationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_jobs_proto_msgTypes[6]
+		mi := &file_proto_jobs_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -360,7 +398,7 @@ func (x *JobMutationResponse) String() string {
 func (*JobMutationResponse) ProtoMessage() {}
 
 func (x *JobMutationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_jobs_proto_msgTypes[6]
+	mi := &file_proto_jobs_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +411,7 @@ func (x *JobMutationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobMutationResponse.ProtoReflect.Descriptor instead.
 func (*JobMutationResponse) Descriptor() ([]byte, []int) {
-	return file_proto_jobs_proto_rawDescGZIP(), []int{6}
+	return file_proto_jobs_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *JobMutationResponse) GetJobs() []*Job {
@@ -397,25 +435,26 @@ var file_proto_jobs_proto_rawDesc = []byte{
 	0x6c, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52,
 	0x04, 0x64, 0x61, 0x74, 0x61, 0x12, 0x1e, 0x0a, 0x04, 0x6c, 0x6f, 0x63, 0x6b, 0x18, 0x04, 0x20,
 	0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x6a, 0x6f, 0x62, 0x73, 0x2e, 0x4c, 0x6f, 0x63, 0x6b, 0x52,
-	0x04, 0x6c, 0x6f, 0x63, 0x6b, 0x22, 0x2c, 0x0a, 0x0d, 0x53, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x6a, 0x6f, 0x62, 0x73, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03,
-	0x6a, 0x6f, 0x62, 0x22, 0x29, 0x0a, 0x10, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x4a, 0x6f, 0x62,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62, 0x5f, 0x69,
-	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x22, 0x2a,
-	0x0a, 0x11, 0x41, 0x63, 0x71, 0x75, 0x69, 0x72, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x22, 0x2a, 0x0a, 0x11, 0x52, 0x65,
-	0x6c, 0x65, 0x61, 0x73, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
-	0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x22, 0x34, 0x0a, 0x13, 0x4a, 0x6f, 0x62, 0x4d, 0x75, 0x74,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1d, 0x0a,
-	0x04, 0x6a, 0x6f, 0x62, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x6a, 0x6f,
-	0x62, 0x73, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x42, 0x2e, 0x5a, 0x2c,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74,
-	0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f,
-	0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x04, 0x6c, 0x6f, 0x63, 0x6b, 0x22, 0x10, 0x0a, 0x0e, 0x47, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2c, 0x0a, 0x0d, 0x53, 0x65, 0x74, 0x4a, 0x6f,
+	0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x6a, 0x6f, 0x62, 0x73, 0x2e, 0x4a, 0x6f, 0x62,
+	0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x29, 0x0a, 0x10, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x4a,
+	0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62,
+	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64,
+	0x22, 0x2a, 0x0a, 0x11, 0x41, 0x63, 0x71, 0x75, 0x69, 0x72, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x22, 0x2a, 0x0a, 0x11,
+	0x52, 0x65, 0x6c, 0x65, 0x61, 0x73, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x15, 0x0a, 0x06, 0x6a, 0x6f, 0x62, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x49, 0x64, 0x22, 0x34, 0x0a, 0x13, 0x4a, 0x6f, 0x62, 0x4d,
+	0x75, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x1d, 0x0a, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x09, 0x2e,
+	0x6a, 0x6f, 0x62, 0x73, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x04, 0x6a, 0x6f, 0x62, 0x73, 0x42, 0x2e,
+	0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61,
+	0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e,
+	0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -430,15 +469,16 @@ func file_proto_jobs_proto_rawDescGZIP() []byte {
 	return file_proto_jobs_proto_rawDescData
 }
 
-var file_proto_jobs_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_jobs_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_jobs_proto_goTypes = []interface{}{
 	(*Lock)(nil),                // 0: jobs.Lock
 	(*Job)(nil),                 // 1: jobs.Job
-	(*SetJobRequest)(nil),       // 2: jobs.SetJobRequest
-	(*DeleteJobRequest)(nil),    // 3: jobs.DeleteJobRequest
-	(*AcquireJobRequest)(nil),   // 4: jobs.AcquireJobRequest
-	(*ReleaseJobRequest)(nil),   // 5: jobs.ReleaseJobRequest
-	(*JobMutationResponse)(nil), // 6: jobs.JobMutationResponse
+	(*GetJobsRequest)(nil),      // 2: jobs.GetJobsRequest
+	(*SetJobRequest)(nil),       // 3: jobs.SetJobRequest
+	(*DeleteJobRequest)(nil),    // 4: jobs.DeleteJobRequest
+	(*AcquireJobRequest)(nil),   // 5: jobs.AcquireJobRequest
+	(*ReleaseJobRequest)(nil),   // 6: jobs.ReleaseJobRequest
+	(*JobMutationResponse)(nil), // 7: jobs.JobMutationResponse
 }
 var file_proto_jobs_proto_depIdxs = []int32{
 	0, // 0: jobs.Job.lock:type_name -> jobs.Lock
@@ -482,7 +522,7 @@ func file_proto_jobs_proto_init() {
 			}
 		}
 		file_proto_jobs_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetJobRequest); i {
+			switch v := v.(*GetJobsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -494,7 +534,7 @@ func file_proto_jobs_proto_init() {
 			}
 		}
 		file_proto_jobs_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DeleteJobRequest); i {
+			switch v := v.(*SetJobRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -506,7 +546,7 @@ func file_proto_jobs_proto_init() {
 			}
 		}
 		file_proto_jobs_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AcquireJobRequest); i {
+			switch v := v.(*DeleteJobRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -518,7 +558,7 @@ func file_proto_jobs_proto_init() {
 			}
 		}
 		file_proto_jobs_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReleaseJobRequest); i {
+			switch v := v.(*AcquireJobRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -530,6 +570,18 @@ func file_proto_jobs_proto_init() {
 			}
 		}
 		file_proto_jobs_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ReleaseJobRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_jobs_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*JobMutationResponse); i {
 			case 0:
 				return &v.state
@@ -548,7 +600,7 @@ func file_proto_jobs_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_jobs_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

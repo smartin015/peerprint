@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"google.golang.org/protobuf/proto"
 	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/smartin015/peerprint/pubsub/proto"
 	"github.com/smartin015/peerprint/pubsub/prpc"
@@ -117,29 +118,37 @@ func (t *PeerPrint) connectToRaftPeer(id string, addrs []string) error {
 	return nil
 }
 
-func (t *PeerPrint) handleZMQ(req interface{}, typeurl string) {
-  cmd, ok := req.(*pb.Command)
-  if !ok {
-    fmt.Printf("Failed to typecast ZMQ message (type is %s)", typeurl)
+func (t *PeerPrint) sendErr(e error) {
+  t.cmd.Send(&pb.Error{Status: e.Error()})
+}
+
+func (t *PeerPrint) sendWithLoopback(req proto.Message) error {
+  if t.getLeader() == t.p.ID {
+    return t.Recv(t.topic, t.p.ID, req)
+  } else {
+    return t.p.Publish(t.ctx, t.topic, req)
   }
-  switch cmd.Cmd {
-    case pb.CommandType_COMMAND_GET_STATE:
-      s, err := t.state.Get()
-      if err != nil {
-        fmt.Println(fmt.Errorf("Failed to get state %w", err))
-      } else {
-        t.cmd.Send(s)
-      }
-  default:
-    fmt.Println("Unimplemented command enum value", cmd.Cmd)
+}
+
+func (t *PeerPrint) onCmd(req proto.Message) {
+  err := t.sendWithLoopback(req)
+  if err != nil {
+    t.sendErr(err)
+  } else {
+    s, err := t.state.Get()
+    if err != nil {
+      t.sendErr(fmt.Errorf("Failed to get state: %w", err))
+    } else {
+      t.cmd.Send(s)
+    }
   }
 }
 
 func (t *PeerPrint) Loop() {
-	t.p.RegisterCallbacks(t)
+	t.p.RegisterCallback(t.Recv)
 
   if t.cmd != nil {
-    go t.cmd.Loop(t.handleZMQ)
+    go t.cmd.Loop(t.onCmd)
   }
 
 	// Whether or not we're a trusted peer, we need to join the assignment topic.

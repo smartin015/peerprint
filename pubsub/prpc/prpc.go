@@ -5,16 +5,17 @@ import (
 	"context"
 	"fmt"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/smartin015/peerprint/pubsub/proto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type Callback func(string, string, interface{}) error
 
 type PRPC struct {
 	ID     string
 	ps     *pubsub.PubSub
 	topics map[string]*pubsub.Topic
-	cbs    Callbacks
+	cb    Callback
 }
 
 func New(id string, ps *pubsub.PubSub) *PRPC {
@@ -22,12 +23,12 @@ func New(id string, ps *pubsub.PubSub) *PRPC {
 		ID:     id,
 		ps:     ps,
 		topics: make(map[string]*pubsub.Topic),
-		cbs:    nil,
+		cb:    nil,
 	}
 }
 
-func (p *PRPC) RegisterCallbacks(c Callbacks) {
-	p.cbs = c
+func (p *PRPC) RegisterCallback(c Callback) {
+	p.cb = c
 }
 
 func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
@@ -48,7 +49,10 @@ func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
 		if err != nil {
 			panic(err)
 		}
-		p.Recv(ctx, sub.Topic(), peer, msg)
+    err = p.cb(sub.Topic(), peer, msg)
+    if err != nil {
+      fmt.Println(err.Error())
+    }
 	}
 }
 
@@ -96,51 +100,3 @@ func (p *PRPC) Publish(ctx context.Context, topic string, req proto.Message) err
 	return nil
 }
 
-// Callbacks contains callback functions for handling various incoming pubsub messages. It's up to the callee to determine whether they should handle the message.
-type Callbacks interface {
-	OnPollPeersRequest(string, string, *pb.PollPeersRequest)
-	OnPollPeersResponse(string, string, *pb.PollPeersResponse)
-	OnAssignmentRequest(string, string, *pb.AssignmentRequest)
-	OnAssignmentResponse(string, string, *pb.AssignmentResponse)
-	OnSetJobRequest(string, string, *pb.SetJobRequest)
-	OnDeleteJobRequest(string, string, *pb.DeleteJobRequest)
-	OnAcquireJobRequest(string, string, *pb.AcquireJobRequest)
-	OnReleaseJobRequest(string, string, *pb.ReleaseJobRequest)
-	OnState(string, string, *pb.State)
-	OnRaftAddrsRequest(string, string, *pb.RaftAddrsRequest)
-	OnRaftAddrsResponse(string, string, *pb.RaftAddrsResponse)
-}
-
-func (p *PRPC) Recv(ctx context.Context, topic string, peer string, resp interface{}) error {
-	switch v := resp.(type) {
-	// proto/peers.proto
-	case *pb.AssignmentRequest:
-		p.cbs.OnAssignmentRequest(topic, peer, v)
-	case *pb.AssignmentResponse:
-		p.cbs.OnAssignmentResponse(topic, peer, v)
-	case *pb.PollPeersRequest:
-		p.cbs.OnPollPeersRequest(topic, peer, v)
-	case *pb.PollPeersResponse:
-		p.cbs.OnPollPeersResponse(topic, peer, v)
-	case *pb.RaftAddrsRequest:
-		p.cbs.OnRaftAddrsRequest(topic, peer, v)
-	case *pb.RaftAddrsResponse:
-		p.cbs.OnRaftAddrsResponse(topic, peer, v)
-
-	// proto/jobs.proto
-	case *pb.SetJobRequest:
-		p.cbs.OnSetJobRequest(topic, peer, v)
-	case *pb.DeleteJobRequest:
-		p.cbs.OnDeleteJobRequest(topic, peer, v)
-	case *pb.AcquireJobRequest:
-		p.cbs.OnAcquireJobRequest(topic, peer, v)
-	case *pb.ReleaseJobRequest:
-		p.cbs.OnReleaseJobRequest(topic, peer, v)
-	case *pb.State:
-		p.cbs.OnState(topic, peer, v)
-
-	default:
-		return fmt.Errorf("Received unknown type response on topic")
-	}
-	return nil
-}

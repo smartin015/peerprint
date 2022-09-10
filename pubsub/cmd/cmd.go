@@ -18,7 +18,7 @@ func New(addr string) *Zmq {
   }
 }
 
-func (z *Zmq) Loop(cb func(interface{}, string)) {
+func (z *Zmq) Loop(cb func(proto.Message)) {
   for {
     select {
       case mm := <-z.c.RecvChan:
@@ -31,7 +31,7 @@ func (z *Zmq) Loop(cb func(interface{}, string)) {
           if err != nil {
             panic(fmt.Errorf("Failed to unmarshal ZMQ message from Any() to final type: %w", err))
           }
-          cb(msg, string(any.MessageName()))
+          cb(msg)
       }
     }
   }

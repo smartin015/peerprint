@@ -8,4 +8,12 @@ package state;
 
 message State {
   map<string, jobs.Job> jobs = 1;
+  //repeated jobs.Job jobs = 1;
+}
+
+/// Used in response to ZMQ socket commands if those commands fail.
+// This lets us forward error messages to other processes which can
+// then display them.
+message Error {
+  string status = 2;
 }

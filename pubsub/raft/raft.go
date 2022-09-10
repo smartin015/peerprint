@@ -1,6 +1,7 @@
 package raft
 
 import (
+  "io"
 	"context"
 	"fmt"
 	"time"
@@ -10,7 +11,34 @@ import (
 	p2praft "github.com/libp2p/go-libp2p-raft"
 	"github.com/libp2p/go-libp2p/core/host"
 	pb "github.com/smartin015/peerprint/pubsub/proto"
+  "google.golang.org/protobuf/proto"
 )
+
+// MarshableState implements the interface given at 
+// https://github.com/libp2p/go-libp2p-raft/blob/8c69d1ffe0db4c78b7f15129ed433280d8347f4f/consensus.go
+// Rather than using the default "Msgpack" library for serialiation, we rely on 
+// the go protobuf marshal/unmarshal methods. This works around weird serialization errors
+// that seem to occur when protobuf objects contain maps.
+type MarshableState struct {
+  State *pb.State
+}
+
+func (rs *MarshableState) Marshal(out io.Writer) error {
+  m, err := proto.Marshal(rs.State)
+  if err != nil {
+    return err
+  }
+  _, err = out.Write(m)
+  return err
+}
+
+func (rs *MarshableState) Unmarshal(in io.Reader) error {
+  b, err := io.ReadAll(in)
+  if err != nil {
+    return err
+  }
+  return proto.Unmarshal(b, rs.State)
+}
 
 type RaftImpl struct {
 	host      host.Host
@@ -71,7 +99,9 @@ func New(ctx context.Context, h host.Host, filestorePath string, peers []string,
 	if err != nil {
 		return nil, err
 	}
-	consensus := p2praft.NewConsensus(&pb.State{Jobs: nil})
+	consensus := p2praft.NewConsensus(&MarshableState{
+    State: &pb.State{Jobs: nil},
+  })
 	servers := make([]raft.Server, len(peers))
 	for i, peer := range peers {
 		servers[i] = raft.Server{
@@ -97,7 +127,7 @@ func New(ctx context.Context, h host.Host, filestorePath string, peers []string,
 	if !bootstrapped {
 		raft.BootstrapCluster(config, logStore, logStore, snapshots, transport, raft.Configuration{Servers: servers})
 	} else {
-		fmt.Println("Already initialized!!")
+		fmt.Println("Cluster already initialized")
 	}
 
 	r, err := raft.NewRaft(config, consensus.FSM(), logStore, logStore, snapshots, transport)
@@ -147,7 +177,7 @@ func (ri *RaftImpl) Leader() string {
 
 func (ri *RaftImpl) Commit(s *pb.State) error {
 	if ri.actor.IsLeader() {
-		agreedState, err := ri.consensus.CommitState(s) // Blocking
+    agreedState, err := ri.consensus.CommitState(&MarshableState{State: s}) // Blocking
 		if err != nil {
 			return err
 		}
@@ -161,9 +191,13 @@ func (ri *RaftImpl) Commit(s *pb.State) error {
 }
 
 func (ri *RaftImpl) BootstrapState() (*pb.State, error) {
-  if err := ri.Commit(&pb.State{
+  s := &pb.State{
     Jobs: make(map[string]*pb.Job),
-  }); err != nil {
+  }
+  j := &pb.Job{Id: "testid", Protocol: "testing", Data: []byte{1,2,3}}
+  s.Jobs[j.GetId()] = j
+
+  if err := ri.Commit(s); err != nil {
     return nil, err
   }
   return ri.GetState()
@@ -176,9 +210,9 @@ func (ri *RaftImpl) GetState() (*pb.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	rs, ok := s.(*pb.State)
+	rs, ok := s.(*MarshableState)
 	if !ok {
 		return nil, fmt.Errorf("State type assertion failed")
 	}
-	return rs, nil
+	return rs.State, nil
 }
