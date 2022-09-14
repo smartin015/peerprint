@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -21,7 +20,6 @@ import (
 
 var (
 	topicNameFlag = flag.String("topicName", "applesauce", "name of topic to join")
-	stderr        = log.New(os.Stderr, "", 0)
 )
 
 type Conn struct {
@@ -32,9 +30,10 @@ type Conn struct {
 	ps           *pubsub.PubSub
 	onReady      chan bool
 	anyConnected bool
+  l *log.Logger
 }
 
-func New(ctx context.Context, local bool, addr string, rendezvous string, pkey crypto.PrivKey) *Conn {
+func New(ctx context.Context, local bool, addr string, rendezvous string, pkey crypto.PrivKey, logger *log.Logger) *Conn {
 	h, err := libp2p.New(libp2p.ListenAddrStrings(addr), libp2p.Identity(pkey))
 	if err != nil {
 		panic(err)
@@ -53,6 +52,7 @@ func New(ctx context.Context, local bool, addr string, rendezvous string, pkey c
 		ps:           ps,
 		onReady:      make(chan bool),
 		anyConnected: false,
+    l: logger,
 	}
 
 	if local {
@@ -86,7 +86,7 @@ func (c *Conn) initDHT() *dht.IpfsDHT {
 		go func() {
 			defer wg.Done()
 			if err := c.h.Connect(c.ctx, *peerinfo); err != nil {
-				stderr.Println("Bootstrap warning: %s", err)
+				c.l.Println("Bootstrap warning: %s", err)
 			}
 		}()
 	}
@@ -101,9 +101,9 @@ func (c *Conn) HandlePeerFound(peer peer.AddrInfo) {
 	}
 	err := c.h.Connect(c.ctx, peer)
 	if err != nil {
-		stderr.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+		c.l.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
 	} else {
-		stderr.Println("Connected to:", peer.ID.Pretty())
+		c.l.Println("Connected to:", peer.ID.Pretty())
 		c.anyConnected = true
 	}
 }
@@ -116,7 +116,7 @@ func (c *Conn) discoverPeersMDNS(rendezvous string) {
 	}
 	// TODO timeout
 	for !c.anyConnected {
-		stderr.Println("Searching for peers")
+		c.l.Println("Searching for peers")
 		time.Sleep(10 * time.Second)
 	}
 	c.onReady <- true
@@ -129,7 +129,7 @@ func (c *Conn) discoverPeersDHT(rendezvous string) {
 
 	// Look for others who have announced and attempt to connect to them
 	for !c.anyConnected {
-		stderr.Println("Searching for peers...")
+		c.l.Println("Searching for peers...")
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
 			panic(err)
@@ -138,7 +138,7 @@ func (c *Conn) discoverPeersDHT(rendezvous string) {
 			c.HandlePeerFound(peer)
 		}
 	}
-	stderr.Println("Peer discovery complete")
+	c.l.Println("Peer discovery complete")
 	c.onReady <- true
 }
 

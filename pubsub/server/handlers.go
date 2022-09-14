@@ -83,7 +83,7 @@ func (t *PeerPrint) OnAssignmentResponse(topic string, from string, resp *pb.Ass
 	}
 	if resp.Id == t.p.ID { // This is our assignment
 		t.topic = resp.GetTopic()
-		t.p.JoinTopic(t.ctx, t.topic)
+		t.p.JoinTopic(t.ctx, t.topic, t.l)
 		t.typ = resp.GetType()
 		if t.typ == pb.PeerType_ELECTABLE {
 			if t.raft != nil {
@@ -95,7 +95,7 @@ func (t *PeerPrint) OnAssignmentResponse(topic string, from string, resp *pb.Ass
 			t.l.Println("Sent connection request; waiting for raft addresses to propagate")
 			time.Sleep(10 * time.Second)
 
-			ri, err := raft.New(t.ctx, t.raftHost, t.raftPath, maps.Keys(t.trustedPeers), &t.leadershipChange)
+			ri, err := raft.New(t.ctx, t.raftHost, t.raftPath, maps.Keys(t.trustedPeers), &t.leadershipChange, t.l)
 			if err != nil {
 				return err
 			}
@@ -107,7 +107,7 @@ func (t *PeerPrint) OnAssignmentResponse(topic string, from string, resp *pb.Ass
 	// on our topic
 	if resp.GetTopic() == t.topic {
 		t.leader = resp.GetLeaderId()
-		fmt.Printf("New leader:", t.leader)
+		t.l.Printf("New leader:", t.leader)
 	}
 
   return nil
@@ -155,12 +155,13 @@ func (t *PeerPrint) OnSetJobRequest(topic string, from string, req *pb.SetJobReq
 	if err != nil {
 		return fmt.Errorf("state.Get(): %w\n", err)
 	}
-  //j := s.Jobs[req.GetJob().GetId()]
-  //ln := j.GetLock().GetPeer()
-  //if ln != "" && ln != req.GetJob().GetLock().GetPeer() {
-  //  return fmt.Errorf("Rejecting SetJob request: lock data was tampered with")
-  //}
-  // s.Jobs[req.GetJob().GetId()] = req.GetJob()
+  j := s.Jobs[req.GetJob().GetId()]
+  ln := j.GetLock().GetPeer()
+  if ln != "" && ln != req.GetJob().GetLock().GetPeer() {
+    return fmt.Errorf("Rejecting SetJob request: lock data was tampered with")
+  }
+
+  s.Jobs[req.GetJob().GetId()] = req.GetJob()
 	return t.commitAndPublish(s)
 }
 

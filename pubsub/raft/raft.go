@@ -3,6 +3,7 @@ package raft
 import (
   "io"
 	"context"
+  "log"
 	"fmt"
 	"time"
 
@@ -90,7 +91,7 @@ func (ri *RaftImpl) Shutdown() {
 // New creates a libp2p host and transport layer, a new consensus, FSM, actor, config, logstore, snapshot method, and
 // basically all other moving parts needed to elect a leader and synchronize a log across the leader peers.
 // The result has an .Observer field channel which provides updates
-func New(ctx context.Context, h host.Host, filestorePath string, peers []string, newLeader *chan struct{}) (*RaftImpl, error) {
+func New(ctx context.Context, h host.Host, filestorePath string, peers []string, newLeader *chan struct{}, l *log.Logger) (*RaftImpl, error) {
 	if len(peers) == 0 {
 		return nil, fmt.Errorf("No peers in raft group - cannot create")
 	}
@@ -113,6 +114,7 @@ func New(ctx context.Context, h host.Host, filestorePath string, peers []string,
 
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(h.ID().Pretty())
+  config.LogOutput = l.Writer()
 	snapshots, err := raft.NewFileSnapshotStore(filestorePath, 3, nil)
 	if err != nil {
 		return nil, err
@@ -126,8 +128,6 @@ func New(ctx context.Context, h host.Host, filestorePath string, peers []string,
 	}
 	if !bootstrapped {
 		raft.BootstrapCluster(config, logStore, logStore, snapshots, transport, raft.Configuration{Servers: servers})
-	} else {
-		fmt.Println("Cluster already initialized")
 	}
 
 	r, err := raft.NewRaft(config, consensus.FSM(), logStore, logStore, snapshots, transport)
@@ -194,8 +194,8 @@ func (ri *RaftImpl) BootstrapState() (*pb.State, error) {
   s := &pb.State{
     Jobs: make(map[string]*pb.Job),
   }
-  j := &pb.Job{Id: "testid", Protocol: "testing", Data: []byte{1,2,3}}
-  s.Jobs[j.GetId()] = j
+  // j := &pb.Job{Id: "testid", Protocol: "testing", Data: []byte{1,2,3}}
+  // s.Jobs[j.GetId()] = j
 
   if err := ri.Commit(s); err != nil {
     return nil, err
@@ -214,5 +214,12 @@ func (ri *RaftImpl) GetState() (*pb.State, error) {
 	if !ok {
 		return nil, fmt.Errorf("State type assertion failed")
 	}
+  if rs.State == nil {
+    return nil, fmt.Errorf("nil raft state")
+  }
+  if rs.State.Jobs == nil {
+    // For some reason we sometimes deserialize "empty map" as a nil map.
+    rs.State.Jobs = make(map[string]*pb.Job)
+  }
 	return rs.State, nil
 }

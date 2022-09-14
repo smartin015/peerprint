@@ -63,9 +63,9 @@ func New(ctx context.Context, p *prpc.PRPC, trustedPeers []string, raftAddr stri
   var z *cmd.Zmq
   if zmqServerAddr != "" {
     z = cmd.New(zmqServerAddr)
-    fmt.Println("ZMQ server at ", zmqServerAddr)
+    l.Println("ZMQ server at ", zmqServerAddr)
   } else {
-    fmt.Println("No zmq addr given, skipping zmq init")
+    l.Println("No zmq addr given, skipping zmq init")
   }
 
   return &PeerPrint{
@@ -114,7 +114,7 @@ func (t *PeerPrint) connectToRaftPeer(id string, addrs []string) error {
 	if err := t.raftHost.Connect(t.ctx, p); err != nil {
 		return fmt.Errorf("RAFT peer connection error: %w", err)
 	}
-	fmt.Println("Connected to RAFT peer", id)
+	t.l.Println("Connected to RAFT peer", id)
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (t *PeerPrint) Loop() {
 
 	// Whether or not we're a trusted peer, we need to join the assignment topic.
 	// Leader election is also broadcast here.
-	if err := t.p.JoinTopic(t.ctx, AssignmentTopic); err != nil {
+	if err := t.p.JoinTopic(t.ctx, AssignmentTopic, t.l); err != nil {
 		panic(err)
 	}
 

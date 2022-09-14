@@ -13,6 +13,7 @@ import (
 	pb "github.com/smartin015/peerprint/pubsub/proto"
 	"github.com/smartin015/peerprint/pubsub/prpc"
 	"github.com/smartin015/peerprint/pubsub/server"
+	"github.com/smartin015/peerprint/pubsub/cmd"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	"log"
@@ -32,8 +33,9 @@ var (
 	pubkeyfileFlag     = flag.String("pubkeyfile", "./pub.key", "Path to serialized public key (if not present, one will be created at that location)")
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
   zmqAddrFlag        = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+  zmqLogAddrFlag        = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
   bootstrapFlag      = flag.Bool("bootstrap", false, "Bootstrap storage (run this once for a new queue")
-	stderr             = log.New(os.Stderr, "", 0)
+	logger = log.New(os.Stderr, "", 0)
 )
 
 func getFileAsJSON(cid string) ([]byte, error) {
@@ -150,34 +152,37 @@ func main() {
 	if *queueFlag == "" {
 		panic("-queue must be specified!")
 	}
+  if *zmqLogAddrFlag != "" {
+    logger = cmd.NewLog(*zmqLogAddrFlag)
+  }
 
-	stderr.Printf("Fetching queue %v details from registry %v", *queueFlag, *registryFlag)
+	logger.Printf("Fetching queue %v details from registry %v", *queueFlag, *registryFlag)
 	queue, err := getQueueFromRegistry(*registryFlag, *queueFlag)
 	if err != nil {
 		panic(fmt.Errorf("Error fetching queue: %w", err))
 	}
 
-	log.Printf("Queue:\n- Name: %v\n- Description: %v\n- URL: %v\n- Trusted Peers: %d\n\n", queue.Name, queue.Desc, queue.Url, len(queue.TrustedPeers))
+	logger.Printf("Queue:\n- Name: %v\n- Description: %v\n- URL: %v\n- Trusted Peers: %d\n\n", queue.Name, queue.Desc, queue.Url, len(queue.TrustedPeers))
 
 	ctx := context.Background()
-	log.Printf("Loading keys...")
+	logger.Printf("Loading keys...")
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
 	}
-	c := conn.New(ctx, *localFlag, *pubsubAddrFlag, queue.Rendezvous, kpriv)
-	log.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", c.GetID(), *connectTimeoutFlag)
+	c := conn.New(ctx, *localFlag, *pubsubAddrFlag, queue.Rendezvous, kpriv, logger)
+	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", c.GetID(), *connectTimeoutFlag)
 	connectCtx, _ := context.WithTimeout(ctx, *connectTimeoutFlag)
 	if err := c.AwaitReady(connectCtx); err != nil {
 		panic(fmt.Errorf("Error connecting to peers: %w", err))
 	} else {
-		log.Println("Peers found; discovery complete")
+		logger.Println("Peers found; discovery complete")
 	}
 	p := prpc.New(c.GetID(), c.GetPubSub())
 
-	log.Println("PRPC interface established")
-	s := server.New(ctx, p, queue.TrustedPeers, *raftAddrFlag, *raftPathFlag, *zmqAddrFlag, *bootstrapFlag, kpriv, stderr)
+	logger.Println("PRPC interface established")
+	s := server.New(ctx, p, queue.TrustedPeers, *raftAddrFlag, *raftPathFlag, *zmqAddrFlag, *bootstrapFlag, kpriv, logger)
 
-	log.Println("Entering main loop")
+	logger.Println("Entering main loop")
 	s.Loop()
 }

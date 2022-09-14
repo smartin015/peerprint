@@ -3,6 +3,7 @@ package cmd
 
 import (
   "fmt"
+  "log"
   "gopkg.in/zeromq/goczmq.v4"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -12,10 +13,24 @@ type Zmq struct {
   c *goczmq.Channeler
 }
 
+
+
 func New(addr string) *Zmq {
   return &Zmq {
     c: goczmq.NewRepChanneler(addr), // will Bind() by default
   }
+}
+
+func NewLog(addr string) *log.Logger {
+  s, err := goczmq.NewPush(addr)
+  if err != nil {
+    panic(err)
+  }
+  rw, err := goczmq.NewReadWriter(s)
+  if err != nil {
+    panic(err)
+  }
+  return log.New(rw, "PeerPrint:", 0)
 }
 
 func (z *Zmq) Loop(cb func(proto.Message)) {

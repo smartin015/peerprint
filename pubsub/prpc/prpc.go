@@ -4,6 +4,7 @@ package prpc
 import (
 	"context"
 	"fmt"
+  "log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -31,7 +32,7 @@ func (p *PRPC) RegisterCallback(c Callback) {
 	p.cb = c
 }
 
-func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
+func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription, l *log.Logger) {
 	for {
 		m, err := sub.Next(ctx)
 		if err != nil {
@@ -51,12 +52,12 @@ func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription) {
 		}
     err = p.cb(sub.Topic(), peer, msg)
     if err != nil {
-      fmt.Println(err.Error())
+      l.Println(err.Error())
     }
 	}
 }
 
-func (p *PRPC) JoinTopic(ctx context.Context, topic string) error {
+func (p *PRPC) JoinTopic(ctx context.Context, topic string, l *log.Logger) error {
 	if _, ok := p.topics[topic]; ok {
 		return fmt.Errorf("Already subscribed to topic %v", topic)
 	}
@@ -69,7 +70,7 @@ func (p *PRPC) JoinTopic(ctx context.Context, topic string) error {
 		return fmt.Errorf("pubsub Subscribe() failure: %w", err)
 	}
 	p.topics[topic] = t
-	go p.handleSub(ctx, sub)
+	go p.handleSub(ctx, sub, l)
 	return nil
 }
 
