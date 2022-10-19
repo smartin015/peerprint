@@ -59,15 +59,30 @@ message PeerStatus {
   // because pubsub is the backing implementation.
   string topic = 2;
   
+  // Who this peer thinks is the leader. This is used
+  // to inspect queue coherency and peer readiness
+  string leader = 3;
+
   // The role of the peer
-  PeerType type = 3;
+  PeerType type = 4;
 
   // What the peer is up to right now
-  PeerState state = 4;
+  PeerState state = 5;
 }
 
-// Command sent by wrapper to server to get the server's current state
-message SelfStatusRequest {}
+// Published after polling to update all clients on state of peers
+message PeersSummary {
+  // Estimate may not be fully accurate unless variance indicates such
+  int64 peer_estimate = 1;
+
+  // Statistical variance of the peer estimate - 0 for exact population count.
+  // Note that census taking (choosing k from N) is a binomial distribution
+  // https://en.wikipedia.org/wiki/Binomial_distribution
+  double variance = 2; 
+  
+  // A sample of peers - this is bounded and not necessarily the whole population
+  repeated PeerStatus sample = 3;
+}
 
 // Probabilistically poll all peers on a topic for census-taking and reporting
 message PollPeersRequest {

@@ -17,6 +17,7 @@ class ServerProcessOpts():
     pubkeyfile: str = None
     connectTimeout: str = None
     zmq: str = None
+    zmqpush: str = None
     zmqlog: str = None
     bootstrap: bool = None
 

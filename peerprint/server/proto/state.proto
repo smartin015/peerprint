@@ -19,3 +19,7 @@ message State {
 message Error {
   string status = 2;
 }
+
+// Used in response to ZMQ socket commands that succeed, but have no
+// output.
+message Ok {}

@@ -1,4 +1,5 @@
 import sys
+import time
 import json
 from .comms import ZMQLogSink, ZMQClient
 from .proc import ServerProcess
@@ -14,17 +15,42 @@ class PeerPrintQueue():
       self._opts = opts
       self._proc = None
       self._ready = False
+      # These are cached from updates
+      self._jobs = dict()
+      self._locks = dict()
+      self._peers = ppb.PeersSummary(peer_estimate=0, variance=float('inf'), sample=[])
     
     def connect(self):
         self._zmqlogger = ZMQLogSink(self._opts.zmqlog, self._logger)
         self._proc = ServerProcess(self._opts, self._logger)
-        self._zmqclient = ZMQClient(self._opts.zmq, self._logger)
+        self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqpush, self._update, self._logger)
+
+    def _parse(self, job):
+        if job.protocol == "json":
+            try:
+                return json.loads(job.data)
+            except json.JSONDecodeError as e:
+                self._logger.error(f"JSON decode error for job {job.id}: {str(e)}")
+        else:
+            self._logger.error(f"No decoder for job {job.id} with protocol '{job.protocol}'")
+
+    def _update(self, msg):
+        expiry_ts = time.time() - 1*60*60
+        if isinstance(msg, spb.State):
+            newjobs = dict()
+            newlocks = dict()
+            for k,v in msg.jobs.items():
+                newjobs[k] = self._parse(v)
+                if v.lock is not None and v.lock.created > expiry_ts:
+                    newlocks[k] = v.lock
+            self._jobs = newjobs
+            self._locks = newlocks
+        elif isinstance(msg, ppb.PeersSummary):
+            self._peers = msg
+        self._ready = True
 
     def is_ready(self):
-        print("Sending self status request")
-        rep = self._zmqclient.call(ppb.SelfStatusRequest())
-        print(rep)
-        return rep.topic != ""
+        return self._ready
 
     # ==== Mutation methods ====
 
@@ -32,13 +58,14 @@ class PeerPrintQueue():
         self._zmqclient.call(ppb.PeerStatus()) #state=state, addr=addr))
     
     def getPeers(self):
-        return self._zmqclient.call(ppb.GetPeers())
+        return self._peers
 
     def getPeer(self, peer):
-        return self._zmqclient.call(ppb.GetPeers(peerFilter=peer))
+        raise NotImplementedError()
+        # return self._zmqclient.call(ppb.GetPeersRequest(peerFilter=peer))
 
     def hasJob(self, jid) -> bool:
-        return self.getJob(jid) is not None
+        return self._jobs.get(jid) is not None
 
     def setJob(self, jid, manifest: dict):
         self._zmqclient.call(jpb.SetJobRequest(
@@ -50,40 +77,20 @@ class PeerPrintQueue():
         ))
 
     def getLocks(self):
-        rep = self._zmqclient.call(jpb.GetJobsRequest())
-        print("GetJobs reply:", rep)
-        result = []
-        for j in rep.jobs.values():
-            print(j.lock)
+        return self._locks
 
     def getJobs(self):
-        rep = self._zmqclient.call(jpb.GetJobsRequest())
-        print("GetJobs reply:", rep)
-        result = []
-        for j in rep.jobs.values():
-            if j.protocol == "json":
-                try:
-                    result.append(json.loads(j.data))
-                except json.JSONDecodeError as e:
-                    self._logger.error(f"JSON decode error for job {j.id}: {str(e)}")
-            else:
-                self._logger.error(f"No decoder for job {j.id} with protocol '{j.protocol}'")
-
-        return result
+        return self._jobs
 
     def getJob(self, jid):
-        rep = self._zmqclient.call(jpb.GetJobsRequest())
-        # TODO add lock data?
-        for j in rep.jobs:
-            if j.id == jid:
-                return json.loads(j.data)
+        return self._jobs.get(jid)
 
     def removeJob(self, jid: str):
-        self._zmqclient.call(jqb.DeleteJobsRequest(id=[jid]))
+        self._zmqclient.call(jpb.DeleteJobRequest(id=jid))
 
     def acquireJob(self, jid: str):
         self._zmqclient.call(jpb.AcquireJobRequest(id=jid))
 
     def releaseJob(self, jid: str):
-        self._zmqclient.call(jqb.ReleaseJobRequest(id=jid))
+        self._zmqclient.call(jpb.ReleaseJobRequest(id=jid))
 

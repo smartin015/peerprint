@@ -16,9 +16,11 @@ def make_queue(ns, idx):
             registry=sys.argv[1],
             privkeyfile=os.path.join(sys.argv[2], f"peer{idx+1}/priv.key"),
             pubkeyfile=os.path.join(sys.argv[2], f"peer{idx+1}/pub.key"),
-            zmq=f"ipc:///tmp/continuousprint_{ns}_{idx}.ipc",
+            zmq=f"ipc:///tmp/continuousprint_{ns}_{idx}_reqrep.ipc",
+            zmqpush=f"ipc:///tmp/continuousprint_{ns}_{idx}_pushpull.ipc",
             zmqlog=f"ipc:///tmp/continuousprint_{ns}_{idx}_log.ipc",
             local=True,
+            bootstrap=True,
     ), logger=logging.getLogger(f"q{idx}"))
     logging.info(f"Starting connection ({idx})")
     ppq.connect()
@@ -31,8 +33,37 @@ while not q0.is_ready() or not q1.is_ready():
     logging.info("Waiting for queues to be ready...")
     time.sleep(5)
 
-input("Ready - press enter to query for state")
+input("ready - press enter to query for jobs, locks, peers")
 
-print(ppq.getPeers())
-print(ppq.getJobs())
-print(ppq.getLocks())
+rep = q0.getPeers()
+print(f"q0 {rep.peer_estimate} peers (variance {rep.variance} from a sample of {len(rep.sample)}")
+rep = q0.getJobs()
+print(f"q0: {len(rep)} jobs: {rep}")
+rep = q0.getLocks()
+print(f"q0: {len(rep)} locks: {rep}")
+
+input("Press any key to upload a dummy job")
+
+q0.setJob("asdfghjk", dict(man="ifest"))
+print("Uploaded")
+
+time.sleep(2)
+
+rep = q0.getJobs()
+print(f"q0: {len(rep)} jobs: {rep}")
+
+input("Press enter to acquire the job")
+
+q0.acquireJob("asdfghjk")
+
+input ("Press enter to release the job")
+
+q0.releaseJob("asdfghjk")
+
+input("Press enter to remove the job")
+
+q0.removeJob("asdfghjk")
+
+input("Press enter to exit")
+
+

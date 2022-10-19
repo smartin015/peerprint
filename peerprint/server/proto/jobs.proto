@@ -39,9 +39,9 @@ message SetJobRequest {
   Job job = 1;
 }
 
-// DeleteJobRequest deletes the job(s) with the given id. Fails silently if no job(s) exist matching id(s).
-message DeleteJobsRequest {
-  repeated string id = 1;
+// DeleteJobRequest deletes the job with the given id. Fails silently if no job exist matching id.
+message DeleteJobRequest {
+  string id = 1;
 }
 // AcquireJobRequest acquires a lock on the job with the given id.
 message AcquireJobRequest {

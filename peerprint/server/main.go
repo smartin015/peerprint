@@ -32,7 +32,8 @@ var (
 	privkeyfileFlag    = flag.String("privkeyfile", "./priv.key", "Path to serialized private key (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubkeyfile", "./pub.key", "Path to serialized public key (if not present, one will be created at that location)")
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
-  zmqAddrFlag        = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+  zmqRepFlag        = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+  zmqPushFlag        = flag.String("zmqpush", "", "zmq server PUSH address (can be IPC, socket, etc.) defaults to none")
   zmqLogAddrFlag        = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
   bootstrapFlag      = flag.Bool("bootstrap", false, "Bootstrap storage (run this once for a new queue")
 	logger = log.New(os.Stderr, "", 0)
@@ -166,10 +167,9 @@ func main() {
   for _, tp := range(queue.TrustedPeers) {
     tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
   }
-	logger.Printf("Queue:\n- Name: %v\n- Description: %v\n- URL: %v\n- Trusted Peers:\n%s\n", queue.Name, queue.Desc, queue.Url, tpstr)
+	logger.Printf("%s (%s) %s\n%s\n", queue.Name, queue.Url, queue.Desc, tpstr)
 
 	ctx := context.Background()
-	logger.Printf("Loading keys...")
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
@@ -183,10 +183,17 @@ func main() {
 		logger.Println("Peers found; discovery complete")
 	}
 	p := prpc.New(c.GetID(), c.GetPubSub())
-
-	logger.Println("PRPC interface established")
-	s := server.New(ctx, p, queue.TrustedPeers, *raftAddrFlag, *raftPathFlag, *zmqAddrFlag, *bootstrapFlag, kpriv, logger)
-
-	logger.Println("Entering main loop")
+	s := server.New(server.PeerPrintOptions {
+    Ctx: ctx, 
+    Prpc: p, 
+    TrustedPeers: queue.TrustedPeers,
+    RaftAddr: *raftAddrFlag, 
+    RaftPath: *raftPathFlag, 
+    ZmqServerAddr: *zmqRepFlag,
+    ZmqPushAddr: *zmqPushFlag,
+    Bootstrap: *bootstrapFlag, 
+    PKey: kpriv, 
+    Logger: logger,
+  })
 	s.Loop()
 }

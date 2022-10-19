@@ -30,25 +30,28 @@ class ZMQLogSink():
 
 
 class ZMQClient():
-    def __init__(self, addr, logger):
+    def __init__(self, req_addr, pull_addr, cb, logger):
         self._logger = logger
+        self._cb = cb
         self._context = zmq.Context()
         self._sock = self._context.socket(zmq.REQ)
-        self._sock.connect(addr) # connect to bound REP socket in golang code
-        self._logger.debug(f"ZMQClient connect to {addr}")
+        self._pull = self._context.socket(zmq.PULL)
+        self._sock.connect(req_addr) # connect to bound REP socket in golang code
+        self._pull.bind(pull_addr) # bind for connecting PUSH socket in golang code
+        self._logger.debug(f"ZMQClient connect to REQ {req_addr}")
+
         self._msgclss = []
         for k,p in [kp for m in (spb, jpb, ppb) for kp in m.__dict__.items()]:
             if inspect.isclass(p) and issubclass(p, Message):
                 self._msgclss.append(p)
         self._logger.debug(f"Loaded {len(self._msgclss)} message classes")
-    
-    def call(self, p):
-        amsg = Any()
-        amsg.Pack(p)
-        self._sock.send(amsg.SerializeToString())
 
+        self._pull_thread = threading.Thread(target=self._listen, daemon=True)
+        self._pull_thread.start()
+        self._logger.debug(f"ZMQClient listener thread started (bound to {pull_addr})")
+    
+    def _unpack(self, data):
         apb = Any()
-        data = self._sock.recv()
         apb.ParseFromString(data)
         for p in self._msgclss:
             if apb.Is(p.DESCRIPTOR):
@@ -58,3 +61,15 @@ class ZMQClient():
                     raise ZMQCallError(m.status)
                 return m
         raise MessageUnpackError(f"Could not unpack message: {apb}")
+
+    def _listen(self):
+        while True:
+            data = self._pull.recv()
+            self._cb(self._unpack(data))
+
+    def call(self, p):
+        amsg = Any()
+        amsg.Pack(p)
+        self._sock.send(amsg.SerializeToString())
+        data = self._sock.recv()
+        return self._unpack(data)

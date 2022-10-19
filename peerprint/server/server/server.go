@@ -23,6 +23,8 @@ const (
 	AssignmentTopic = "ASSIGN"
 	DefaultTopic    = "0"
 	MaxPoll         = 100
+  LockTimeoutSeconds = 2*60*60
+  PollTimeout = 60 * time.Second
 )
 
 type PeerPrint struct {
@@ -40,47 +42,61 @@ type PeerPrint struct {
 	polling          *sync.Cond
   bootstrap        bool
 	pollResult       []*pb.PeerStatus
+  peersSummary      *pb.PeersSummary
 	trustedPeers     map[string]struct{}
 	leadershipChange chan struct{}
 }
 
-func New(ctx context.Context, p *prpc.PRPC, trustedPeers []string, raftAddr string, raftPath string, zmqServerAddr string, bootstrap bool, pkey crypto.PrivKey, l *log.Logger) *PeerPrint {
-	if len(trustedPeers) == 0 {
-		panic("server.New(): want len(trustedPeers) > 0: required for bootstrapping")
+type PeerPrintOptions struct {
+  Ctx context.Context
+  Prpc *prpc.PRPC
+  TrustedPeers []string
+  RaftAddr string
+  RaftPath string
+  ZmqServerAddr string
+  ZmqPushAddr string
+  Bootstrap bool
+  PKey crypto.PrivKey
+  Logger *log.Logger
+}
+
+func New(opts PeerPrintOptions) *PeerPrint {
+	if len(opts.TrustedPeers) == 0 {
+		panic("server.New(): want len(opts.TrustedPeers) > 0: required for bootstrapping")
 	}
 
 	tp := make(map[string]struct{})
-	for _, p := range trustedPeers {
+	for _, p := range opts.TrustedPeers {
 		tp[p] = struct{}{}
 	}
 
 	// Init raft host early so we can broadcast its resolved multiaddr
-	h, err := libp2p.New(libp2p.ListenAddrStrings(raftAddr), libp2p.Identity(pkey))
+	h, err := libp2p.New(libp2p.ListenAddrStrings(opts.RaftAddr), libp2p.Identity(opts.PKey))
 	if err != nil {
 		panic(err)
 	}
 
   var z *cmd.Zmq
-  if zmqServerAddr != "" {
-    z = cmd.New(zmqServerAddr)
-    l.Println("ZMQ server at ", zmqServerAddr)
+  if opts.ZmqServerAddr != "" {
+    z = cmd.New(opts.ZmqServerAddr, opts.ZmqPushAddr)
+    opts.Logger.Println("ZMQ server at ", opts.ZmqServerAddr)
   } else {
-    l.Println("No zmq addr given, skipping zmq init")
+    opts.Logger.Println("No zmq addr given, skipping zmq init")
   }
 
   return &PeerPrint{
-		p:                p,
-		l:                l,
+		p:                opts.Prpc,
+		l:                opts.Logger,
 		raftHost:         h,
 		raft:             nil,
-		raftPath:         raftPath,
+		raftPath:         opts.RaftPath,
     cmd:              z,
 		state:            NewServerState(),
 		typ:              pb.PeerType_UNKNOWN_PEER_TYPE,
-		ctx:              ctx,
+		ctx:              opts.Ctx,
 		topic:            "",
 		leader:           "",
-    bootstrap:        bootstrap,
+    bootstrap:        opts.Bootstrap,
 		polling:          nil,
 		pollResult:       nil,
 		trustedPeers:     tp,
@@ -119,25 +135,23 @@ func (t *PeerPrint) connectToRaftPeer(id string, addrs []string) error {
 }
 
 func (t *PeerPrint) onCmd(req proto.Message) {
-  // Some commands are sent directly to this server instance - in that case,
-  // we return the reply directly.
-  // Otherwise we publish the command as-is and return the current state.
   var err error
   var rep proto.Message
-  switch req.(type) {
-  case *pb.SelfStatusRequest:
+  // Skip pubsub if we're wrapping the leader, which is authoritative
+  if t.p.ID == t.getLeader() {
     rep, err = t.Handle(t.topic, t.p.ID, req)
-  default:
-    err = t.p.Publish(t.ctx, t.topic, req)
-    if err != nil {
-      rep, err = t.state.Get()
+    if rep != nil {
+      err = t.p.Publish(t.ctx, t.topic, rep)
     }
+  } else {
+    // Otherwise we publish the command as-is, return OK
+    err = t.p.Publish(t.ctx, t.topic, req)
   }
 
   if err != nil {
     t.cmd.Send(&pb.Error{Status: err.Error()})
   } else {
-    t.cmd.Send(rep)
+    t.cmd.Send(&pb.Ok{})
   }
 }
 
@@ -161,12 +175,15 @@ func (t *PeerPrint) Loop() {
 			Id:       t.p.ID,
 			Topic:    DefaultTopic,
 			Type:     pb.PeerType_ELECTABLE,
-			LeaderId: t.p.ID,
+			LeaderId: "",
 		})
 
 	} else if err := t.requestAssignment(!amTrusted); err != nil {
 		panic(err)
 	}
+
+  pollTicker := time.NewTicker(PollTimeout)
+  pollTicker.Stop()
 
 	for {
 		select {
@@ -185,7 +202,19 @@ func (t *PeerPrint) Loop() {
         if err := t.p.Publish(t.ctx, t.topic, s); err != nil {
           t.l.Println(err)
         }
+        if err := t.cmd.Push(s); err != nil {
+          t.l.Println(err)
+        }
+        pollTicker.Reset(5 * time.Second)
 			}
+    case <-pollTicker.C:
+      if t.polling != nil {
+        t.l.Println("Already polling, skipping poll")
+      } else {
+        ctx2, _ := context.WithTimeout(t.ctx, 5 * time.Second)
+        go t.pollPeersSync(ctx2, t.topic)
+        pollTicker.Reset(PollTimeout)
+      }
 		case <-t.ctx.Done():
 			return
 		}
@@ -211,7 +240,7 @@ func (t *PeerPrint) resolveState() (*pb.State, error) {
         return nil, fmt.Errorf("bootstrap error: %w", err)
       }
     } else {
-		  return nil, fmt.Errorf("state.Get() error: %w\n", err)
+		  return nil, fmt.Errorf("state.Get() error: %w (did you bootstrap?)\n", err)
     }
 	}
   t.bootstrap = false
@@ -246,6 +275,33 @@ func (t *PeerPrint) raftAddrsResponse() *pb.RaftAddrsResponse {
 	}
 }
 
+func (t *PeerPrint) getMutableJob(jid string, peer string) (*pb.State, *pb.Job, error) {
+	s, err := t.state.Get()
+	if err != nil {
+		return nil, nil, fmt.Errorf("state.Get(): %w", err)
+	}
+	j, ok := s.Jobs[jid]
+	if !ok {
+		return nil, nil, fmt.Errorf("Job %s not found", jid)
+	}
+	expiry := uint64(time.Now().Unix() - LockTimeoutSeconds)
+  p := j.Lock.GetPeer()
+	if !(p == "" || p == peer || j.Lock.Created < expiry) {
+    return nil, nil, fmt.Errorf("Cannot modify job %s; acquired by %s", jid, j.Lock.GetPeer())
+  }
+  return s, j, nil
+}
+
+func (t *PeerPrint) peerStatus() *pb.PeerStatus {
+  return &pb.PeerStatus{
+    Id:    t.p.ID,
+    Topic: t.topic,
+    Type:  t.typ,
+    Leader: t.getLeader(),
+    State: pb.PeerState_UNKNOWN_PEER_STATE,
+  }
+}
+
 func (t *PeerPrint) requestAssignment(repeat bool) error {
 	for t.topic == "" {
 		if err := t.p.Publish(t.ctx, AssignmentTopic, &pb.AssignmentRequest{}); err != nil {
@@ -256,9 +312,14 @@ func (t *PeerPrint) requestAssignment(repeat bool) error {
 	return nil
 }
 
-func (t *PeerPrint) pollPeersSync(ctx context.Context, topic string, prob float64) error {
+func (t *PeerPrint) pollPeersSync(ctx context.Context, topic string) error {
+  prob := 0.9 // TODO adjust dynamically based on last poll performance
+  t.l.Println("Doing periodic peer poll - probability", prob)
 	t.pollResult = nil
-	t.polling = sync.NewCond(&sync.Mutex{})
+  l := &sync.Mutex{}
+  l.Lock()
+	t.polling = sync.NewCond(l)
+  defer func() { t.polling = nil }()
 	if err := t.p.Publish(t.ctx, topic, &pb.PollPeersRequest{
 		Probability: prob,
 	}); err != nil {
@@ -274,6 +335,18 @@ func (t *PeerPrint) pollPeersSync(ctx context.Context, topic string, prob float6
 	case <-await:
 	case <-ctx.Done():
 	}
-	t.polling = nil
+
+  // Assuming the received number of peers is the mode - most commonly occurring value,
+  // len(pollResult) = floor((pop + 1)*prob)
+  pop := int64(float64(len(t.pollResult)) / prob)
+  t.peersSummary = &pb.PeersSummary{
+    PeerEstimate: pop,
+    Variance: float64(pop) * prob * (1 - prob),
+  }
+  t.l.Println("Poll summary:", t.peersSummary)
+  t.p.Publish(t.ctx, topic, t.peersSummary)
+  if err := t.cmd.Push(t.peersSummary); err != nil {
+    t.l.Println(err)
+  }
 	return nil
 }

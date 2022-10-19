@@ -52,10 +52,11 @@ func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription, l *log.L
 		}
     rep, err := p.cb(sub.Topic(), peer, msg)
     if rep != nil && err == nil {
+      l.Println("Sending response")
       err = p.Publish(ctx, sub.Topic(), rep.(proto.Message))
     }
     if err != nil {
-      l.Println(err.Error())
+      l.Println(fmt.Errorf("handleSub callback / publish error: %w", err).Error())
     }
 	}
 }
