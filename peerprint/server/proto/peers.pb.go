@@ -121,15 +121,22 @@ func (PeerState) EnumDescriptor() ([]byte, []int) {
 	return file_proto_peers_proto_rawDescGZIP(), []int{1}
 }
 
+// Queue is an entry in the Registry describing a distributed queue.
 type Queue struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name         string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Desc         string   `protobuf:"bytes,2,opt,name=desc,proto3" json:"desc,omitempty"`
-	Url          string   `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
-	Rendezvous   string   `protobuf:"bytes,4,opt,name=rendezvous,proto3" json:"rendezvous,omitempty"`
+	// User-readable name for the queue
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// A user-readable description of the queue's purpose
+	Desc string `protobuf:"bytes,2,opt,name=desc,proto3" json:"desc,omitempty"`
+	// A web URL (or IPFS CID) for more information on the queue
+	Url string `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	// String used for MDNS or DHT rendezvous between peers
+	Rendezvous string `protobuf:"bytes,4,opt,name=rendezvous,proto3" json:"rendezvous,omitempty"`
+	// List of peers which participate in RAFT leadership and
+	// peer assignment (i.e. PeerType.ELECTABLE)
 	TrustedPeers []string `protobuf:"bytes,5,rep,name=trustedPeers,proto3" json:"trustedPeers,omitempty"`
 }
 
@@ -200,14 +207,19 @@ func (x *Queue) GetTrustedPeers() []string {
 	return nil
 }
 
+// Registry is a listing Queues with some information on
+// the list maintainers.
 type Registry struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Created uint64   `protobuf:"varint,1,opt,name=created,proto3" json:"created,omitempty"` // unix timestamp
-	Url     string   `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	Queues  []*Queue `protobuf:"bytes,3,rep,name=queues,proto3" json:"queues,omitempty"`
+	// Unix timestamp of when the registry was written
+	Created uint64 `protobuf:"varint,1,opt,name=created,proto3" json:"created,omitempty"`
+	// A web URL (or IPFS CID) for more information about the registry
+	Url string `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	// List of joinable queues.
+	Queues []*Queue `protobuf:"bytes,3,rep,name=queues,proto3" json:"queues,omitempty"`
 }
 
 func (x *Registry) Reset() {
@@ -263,14 +275,21 @@ func (x *Registry) GetQueues() []*Queue {
 	return nil
 }
 
+// PeerStatus is sent by a peer to indicate its role and what it's doing.
 type PeerStatus struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id    string    `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Topic string    `protobuf:"bytes,2,opt,name=topic,proto3" json:"topic,omitempty"` // On which topic of queue items is this peer operating?
-	Type  PeerType  `protobuf:"varint,3,opt,name=type,proto3,enum=rpc.PeerType" json:"type,omitempty"`
+	// Public key ID of the peer
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// The topic of queue items on which this peer operates
+	// Analgous to a "shard" in other distributed systems, but named so
+	// because pubsub is the backing implementation.
+	Topic string `protobuf:"bytes,2,opt,name=topic,proto3" json:"topic,omitempty"`
+	// The role of the peer
+	Type PeerType `protobuf:"varint,3,opt,name=type,proto3,enum=rpc.PeerType" json:"type,omitempty"`
+	// What the peer is up to right now
 	State PeerState `protobuf:"varint,4,opt,name=state,proto3,enum=rpc.PeerState" json:"state,omitempty"`
 }
 
@@ -334,6 +353,45 @@ func (x *PeerStatus) GetState() PeerState {
 	return PeerState_UNKNOWN_PEER_STATE
 }
 
+// Command sent by wrapper to server to get the server's current state
+type SelfStatusRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *SelfStatusRequest) Reset() {
+	*x = SelfStatusRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_peers_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SelfStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfStatusRequest) ProtoMessage() {}
+
+func (x *SelfStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_peers_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfStatusRequest.ProtoReflect.Descriptor instead.
+func (*SelfStatusRequest) Descriptor() ([]byte, []int) {
+	return file_proto_peers_proto_rawDescGZIP(), []int{3}
+}
+
 // Probabilistically poll all peers on a topic for census-taking and reporting
 type PollPeersRequest struct {
 	state         protoimpl.MessageState
@@ -347,7 +405,7 @@ type PollPeersRequest struct {
 func (x *PollPeersRequest) Reset() {
 	*x = PollPeersRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[3]
+		mi := &file_proto_peers_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -360,7 +418,7 @@ func (x *PollPeersRequest) String() string {
 func (*PollPeersRequest) ProtoMessage() {}
 
 func (x *PollPeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[3]
+	mi := &file_proto_peers_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +431,7 @@ func (x *PollPeersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollPeersRequest.ProtoReflect.Descriptor instead.
 func (*PollPeersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{3}
+	return file_proto_peers_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PollPeersRequest) GetTopic() string {
@@ -402,7 +460,7 @@ type PollPeersResponse struct {
 func (x *PollPeersResponse) Reset() {
 	*x = PollPeersResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[4]
+		mi := &file_proto_peers_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -415,7 +473,7 @@ func (x *PollPeersResponse) String() string {
 func (*PollPeersResponse) ProtoMessage() {}
 
 func (x *PollPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[4]
+	mi := &file_proto_peers_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +486,7 @@ func (x *PollPeersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollPeersResponse.ProtoReflect.Descriptor instead.
 func (*PollPeersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{4}
+	return file_proto_peers_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PollPeersResponse) GetStatus() *PeerStatus {
@@ -449,7 +507,7 @@ type AssignmentRequest struct {
 func (x *AssignmentRequest) Reset() {
 	*x = AssignmentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[5]
+		mi := &file_proto_peers_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -462,7 +520,7 @@ func (x *AssignmentRequest) String() string {
 func (*AssignmentRequest) ProtoMessage() {}
 
 func (x *AssignmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[5]
+	mi := &file_proto_peers_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,22 +533,25 @@ func (x *AssignmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignmentRequest.ProtoReflect.Descriptor instead.
 func (*AssignmentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{5}
+	return file_proto_peers_proto_rawDescGZIP(), []int{6}
 }
 
+// Get address(es) of raft peers on the network
 type RaftAddrsRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	RaftId    string   `protobuf:"bytes,1,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
+	// Public key of the RAFT peer
+	RaftId string `protobuf:"bytes,1,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
+	// List of joinable addresses to directly communicate with this peer
 	RaftAddrs []string `protobuf:"bytes,2,rep,name=raft_addrs,json=raftAddrs,proto3" json:"raft_addrs,omitempty"`
 }
 
 func (x *RaftAddrsRequest) Reset() {
 	*x = RaftAddrsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[6]
+		mi := &file_proto_peers_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -503,7 +564,7 @@ func (x *RaftAddrsRequest) String() string {
 func (*RaftAddrsRequest) ProtoMessage() {}
 
 func (x *RaftAddrsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[6]
+	mi := &file_proto_peers_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -516,7 +577,7 @@ func (x *RaftAddrsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftAddrsRequest.ProtoReflect.Descriptor instead.
 func (*RaftAddrsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{6}
+	return file_proto_peers_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RaftAddrsRequest) GetRaftId() string {
@@ -533,19 +594,22 @@ func (x *RaftAddrsRequest) GetRaftAddrs() []string {
 	return nil
 }
 
+// Peers self-report their addresses when RaftAddrsRequest is sent.
 type RaftAddrsResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	RaftId    string   `protobuf:"bytes,1,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
+	// Public key of the RAFT peer
+	RaftId string `protobuf:"bytes,1,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
+	// List of joinable addresses to directly communicate with this peer
 	RaftAddrs []string `protobuf:"bytes,2,rep,name=raft_addrs,json=raftAddrs,proto3" json:"raft_addrs,omitempty"`
 }
 
 func (x *RaftAddrsResponse) Reset() {
 	*x = RaftAddrsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[7]
+		mi := &file_proto_peers_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -558,7 +622,7 @@ func (x *RaftAddrsResponse) String() string {
 func (*RaftAddrsResponse) ProtoMessage() {}
 
 func (x *RaftAddrsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[7]
+	mi := &file_proto_peers_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +635,7 @@ func (x *RaftAddrsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftAddrsResponse.ProtoReflect.Descriptor instead.
 func (*RaftAddrsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{7}
+	return file_proto_peers_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RaftAddrsResponse) GetRaftId() string {
@@ -594,16 +658,20 @@ type AssignmentResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Topic    string   `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
-	Id       string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	LeaderId string   `protobuf:"bytes,3,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
-	Type     PeerType `protobuf:"varint,4,opt,name=type,proto3,enum=rpc.PeerType" json:"type,omitempty"`
+	// Name of the topic ("shard") to subscribe and listen on
+	Topic string `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
+	// ID of the peer being assigned to
+	Id string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	// ID of the leader of the topic
+	LeaderId string `protobuf:"bytes,3,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
+	// Role of the peer on this topic
+	Type PeerType `protobuf:"varint,4,opt,name=type,proto3,enum=rpc.PeerType" json:"type,omitempty"`
 }
 
 func (x *AssignmentResponse) Reset() {
 	*x = AssignmentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[8]
+		mi := &file_proto_peers_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -616,7 +684,7 @@ func (x *AssignmentResponse) String() string {
 func (*AssignmentResponse) ProtoMessage() {}
 
 func (x *AssignmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[8]
+	mi := &file_proto_peers_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -629,7 +697,7 @@ func (x *AssignmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignmentResponse.ProtoReflect.Descriptor instead.
 func (*AssignmentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{8}
+	return file_proto_peers_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AssignmentResponse) GetTopic() string {
@@ -660,18 +728,21 @@ func (x *AssignmentResponse) GetType() PeerType {
 	return PeerType_UNKNOWN_PEER_TYPE
 }
 
+// Sent by the newly elected RAFT leader when it wins an election, so others
+// know who's in control.
 type NewLeaderResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// Public key of the new leader
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
 func (x *NewLeaderResponse) Reset() {
 	*x = NewLeaderResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[9]
+		mi := &file_proto_peers_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -684,7 +755,7 @@ func (x *NewLeaderResponse) String() string {
 func (*NewLeaderResponse) ProtoMessage() {}
 
 func (x *NewLeaderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[9]
+	mi := &file_proto_peers_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -697,7 +768,7 @@ func (x *NewLeaderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewLeaderResponse.ProtoReflect.Descriptor instead.
 func (*NewLeaderResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{9}
+	return file_proto_peers_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *NewLeaderResponse) GetId() string {
@@ -733,48 +804,50 @@ var file_proto_peers_proto_rawDesc = []byte{
 	0x2e, 0x72, 0x70, 0x63, 0x2e, 0x50, 0x65, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74,
 	0x79, 0x70, 0x65, 0x12, 0x24, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x04, 0x20, 0x01,
 	0x28, 0x0e, 0x32, 0x0e, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x50, 0x65, 0x65, 0x72, 0x53, 0x74, 0x61,
-	0x74, 0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x22, 0x4a, 0x0a, 0x10, 0x50, 0x6f, 0x6c,
-	0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a,
-	0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x6f,
-	0x70, 0x69, 0x63, 0x12, 0x20, 0x0a, 0x0b, 0x70, 0x72, 0x6f, 0x62, 0x61, 0x62, 0x69, 0x6c, 0x69,
-	0x74, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0b, 0x70, 0x72, 0x6f, 0x62, 0x61, 0x62,
-	0x69, 0x6c, 0x69, 0x74, 0x79, 0x22, 0x3c, 0x0a, 0x11, 0x50, 0x6f, 0x6c, 0x6c, 0x50, 0x65, 0x65,
-	0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x27, 0x0a, 0x06, 0x73, 0x74,
-	0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x72, 0x70, 0x63,
-	0x2e, 0x50, 0x65, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x22, 0x13, 0x0a, 0x11, 0x41, 0x73, 0x73, 0x69, 0x67, 0x6e, 0x6d, 0x65, 0x6e,
-	0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4a, 0x0a, 0x10, 0x52, 0x61, 0x66, 0x74,
-	0x41, 0x64, 0x64, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x17, 0x0a, 0x07,
-	0x72, 0x61, 0x66, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72,
-	0x61, 0x66, 0x74, 0x49, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x61, 0x66, 0x74, 0x5f, 0x61, 0x64,
-	0x64, 0x72, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x09, 0x72, 0x61, 0x66, 0x74, 0x41,
-	0x64, 0x64, 0x72, 0x73, 0x22, 0x4b, 0x0a, 0x11, 0x52, 0x61, 0x66, 0x74, 0x41, 0x64, 0x64, 0x72,
-	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x17, 0x0a, 0x07, 0x72, 0x61, 0x66,
-	0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x61, 0x66, 0x74,
-	0x49, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x61, 0x66, 0x74, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x73,
-	0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x09, 0x72, 0x61, 0x66, 0x74, 0x41, 0x64, 0x64, 0x72,
-	0x73, 0x22, 0x7a, 0x0a, 0x12, 0x41, 0x73, 0x73, 0x69, 0x67, 0x6e, 0x6d, 0x65, 0x6e, 0x74, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x12, 0x0e, 0x0a,
-	0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a,
-	0x09, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x49, 0x64, 0x12, 0x21, 0x0a, 0x04, 0x74, 0x79,
-	0x70, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0d, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x50,
-	0x65, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x23, 0x0a,
-	0x11, 0x4e, 0x65, 0x77, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02,
-	0x69, 0x64, 0x2a, 0x3e, 0x0a, 0x08, 0x50, 0x65, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x15,
-	0x0a, 0x11, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x5f, 0x50, 0x45, 0x45, 0x52, 0x5f, 0x54,
-	0x59, 0x50, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x45, 0x4c, 0x45, 0x43, 0x54, 0x41, 0x42,
-	0x4c, 0x45, 0x10, 0x02, 0x12, 0x0c, 0x0a, 0x08, 0x4c, 0x49, 0x53, 0x54, 0x45, 0x4e, 0x45, 0x52,
-	0x10, 0x03, 0x2a, 0x43, 0x0a, 0x09, 0x50, 0x65, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12,
-	0x16, 0x0a, 0x12, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x5f, 0x50, 0x45, 0x45, 0x52, 0x5f,
-	0x53, 0x54, 0x41, 0x54, 0x45, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x42, 0x55, 0x53, 0x59, 0x10,
-	0x01, 0x12, 0x08, 0x0a, 0x04, 0x49, 0x44, 0x4c, 0x45, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x50,
-	0x41, 0x55, 0x53, 0x45, 0x44, 0x10, 0x03, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35,
-	0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75,
-	0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x74, 0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x22, 0x13, 0x0a, 0x11, 0x53, 0x65, 0x6c,
+	0x66, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4a,
+	0x0a, 0x10, 0x50, 0x6f, 0x6c, 0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x12, 0x20, 0x0a, 0x0b, 0x70, 0x72, 0x6f, 0x62,
+	0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0b, 0x70,
+	0x72, 0x6f, 0x62, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x22, 0x3c, 0x0a, 0x11, 0x50, 0x6f,
+	0x6c, 0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x27, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x0f, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x50, 0x65, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x13, 0x0a, 0x11, 0x41, 0x73, 0x73, 0x69,
+	0x67, 0x6e, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4a, 0x0a,
+	0x10, 0x52, 0x61, 0x66, 0x74, 0x41, 0x64, 0x64, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x17, 0x0a, 0x07, 0x72, 0x61, 0x66, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x06, 0x72, 0x61, 0x66, 0x74, 0x49, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x61,
+	0x66, 0x74, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x09,
+	0x72, 0x61, 0x66, 0x74, 0x41, 0x64, 0x64, 0x72, 0x73, 0x22, 0x4b, 0x0a, 0x11, 0x52, 0x61, 0x66,
+	0x74, 0x41, 0x64, 0x64, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x17,
+	0x0a, 0x07, 0x72, 0x61, 0x66, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x06, 0x72, 0x61, 0x66, 0x74, 0x49, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x61, 0x66, 0x74, 0x5f,
+	0x61, 0x64, 0x64, 0x72, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x09, 0x72, 0x61, 0x66,
+	0x74, 0x41, 0x64, 0x64, 0x72, 0x73, 0x22, 0x7a, 0x0a, 0x12, 0x41, 0x73, 0x73, 0x69, 0x67, 0x6e,
+	0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05,
+	0x74, 0x6f, 0x70, 0x69, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x6f, 0x70,
+	0x69, 0x63, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02,
+	0x69, 0x64, 0x12, 0x1b, 0x0a, 0x09, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x49, 0x64, 0x12,
+	0x21, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0d, 0x2e,
+	0x72, 0x70, 0x63, 0x2e, 0x50, 0x65, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79,
+	0x70, 0x65, 0x22, 0x23, 0x0a, 0x11, 0x4e, 0x65, 0x77, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x2a, 0x3e, 0x0a, 0x08, 0x50, 0x65, 0x65, 0x72, 0x54,
+	0x79, 0x70, 0x65, 0x12, 0x15, 0x0a, 0x11, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x5f, 0x50,
+	0x45, 0x45, 0x52, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x45, 0x4c,
+	0x45, 0x43, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x10, 0x02, 0x12, 0x0c, 0x0a, 0x08, 0x4c, 0x49, 0x53,
+	0x54, 0x45, 0x4e, 0x45, 0x52, 0x10, 0x03, 0x2a, 0x43, 0x0a, 0x09, 0x50, 0x65, 0x65, 0x72, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x12, 0x16, 0x0a, 0x12, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x5f,
+	0x50, 0x45, 0x45, 0x52, 0x5f, 0x53, 0x54, 0x41, 0x54, 0x45, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04,
+	0x42, 0x55, 0x53, 0x59, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x49, 0x44, 0x4c, 0x45, 0x10, 0x02,
+	0x12, 0x0a, 0x0a, 0x06, 0x50, 0x41, 0x55, 0x53, 0x45, 0x44, 0x10, 0x03, 0x42, 0x2e, 0x5a, 0x2c,
+	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74,
+	0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f,
+	0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -790,20 +863,21 @@ func file_proto_peers_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_peers_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_peers_proto_goTypes = []interface{}{
 	(PeerType)(0),              // 0: rpc.PeerType
 	(PeerState)(0),             // 1: rpc.PeerState
 	(*Queue)(nil),              // 2: rpc.Queue
 	(*Registry)(nil),           // 3: rpc.Registry
 	(*PeerStatus)(nil),         // 4: rpc.PeerStatus
-	(*PollPeersRequest)(nil),   // 5: rpc.PollPeersRequest
-	(*PollPeersResponse)(nil),  // 6: rpc.PollPeersResponse
-	(*AssignmentRequest)(nil),  // 7: rpc.AssignmentRequest
-	(*RaftAddrsRequest)(nil),   // 8: rpc.RaftAddrsRequest
-	(*RaftAddrsResponse)(nil),  // 9: rpc.RaftAddrsResponse
-	(*AssignmentResponse)(nil), // 10: rpc.AssignmentResponse
-	(*NewLeaderResponse)(nil),  // 11: rpc.NewLeaderResponse
+	(*SelfStatusRequest)(nil),  // 5: rpc.SelfStatusRequest
+	(*PollPeersRequest)(nil),   // 6: rpc.PollPeersRequest
+	(*PollPeersResponse)(nil),  // 7: rpc.PollPeersResponse
+	(*AssignmentRequest)(nil),  // 8: rpc.AssignmentRequest
+	(*RaftAddrsRequest)(nil),   // 9: rpc.RaftAddrsRequest
+	(*RaftAddrsResponse)(nil),  // 10: rpc.RaftAddrsResponse
+	(*AssignmentResponse)(nil), // 11: rpc.AssignmentResponse
+	(*NewLeaderResponse)(nil),  // 12: rpc.NewLeaderResponse
 }
 var file_proto_peers_proto_depIdxs = []int32{
 	2, // 0: rpc.Registry.queues:type_name -> rpc.Queue
@@ -861,7 +935,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PollPeersRequest); i {
+			switch v := v.(*SelfStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -873,7 +947,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PollPeersResponse); i {
+			switch v := v.(*PollPeersRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -885,7 +959,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AssignmentRequest); i {
+			switch v := v.(*PollPeersResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -897,7 +971,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RaftAddrsRequest); i {
+			switch v := v.(*AssignmentRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -909,7 +983,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RaftAddrsResponse); i {
+			switch v := v.(*RaftAddrsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -921,7 +995,7 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AssignmentResponse); i {
+			switch v := v.(*RaftAddrsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -933,6 +1007,18 @@ func file_proto_peers_proto_init() {
 			}
 		}
 		file_proto_peers_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AssignmentResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_peers_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NewLeaderResponse); i {
 			case 0:
 				return &v.state
@@ -951,7 +1037,7 @@ func file_proto_peers_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_peers_proto_rawDesc,
 			NumEnums:      2,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

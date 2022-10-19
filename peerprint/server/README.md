@@ -16,6 +16,12 @@ protoc --go_out=. --go_opt=paths=source_relative proto/*.proto
 go build .
 ```
 
+## Build
+
+```
+cd server && go build .
+```
+
 ## Demo
 
 In a separate console, run 
@@ -29,7 +35,7 @@ ipfs daemon
 Make a note of the CID of the published registry.
 
 ```
-./pubsub -registry $IPFS_REGISTRY_CID
+./peerprint_server -registry $IPFS_REGISTRY_CID
 ```
 
 

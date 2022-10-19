@@ -1,4 +1,4 @@
-module github.com/smartin015/peerprint/pubsub
+module github.com/smartin015/peerprint/peerprint_server
 
 go 1.19
 

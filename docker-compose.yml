@@ -8,6 +8,13 @@ x-base: &base
     - "/tmp:/tmp" #enable IPC comms for debugging
 
 services:
+  dev:
+    build: 
+      context: .
+    command: /bin/bash
+    volumes:
+      - "./:/volume"
+    working_dir: "/volume"
   server1:
     <<: *base
     volumes: 
@@ -15,7 +22,7 @@ services:
   server2:
     <<: *base
     volumes: 
-      - "./peerprint/networking/testdata/server1/:/volume"
+      - "./peerprint/networking/testdata/server2/:/volume"
   cli:
     <<: *base
     command: python3 -m peerprint.cli --base_dir=/volume

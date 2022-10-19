@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type Callback func(string, string, interface{}) error
+type Callback func(string, string, proto.Message) (proto.Message, error)
 
 type PRPC struct {
 	ID     string
@@ -50,7 +50,10 @@ func (p *PRPC) handleSub(ctx context.Context, sub *pubsub.Subscription, l *log.L
 		if err != nil {
 			panic(err)
 		}
-    err = p.cb(sub.Topic(), peer, msg)
+    rep, err := p.cb(sub.Topic(), peer, msg)
+    if rep != nil && err == nil {
+      err = p.Publish(ctx, sub.Topic(), rep.(proto.Message))
+    }
     if err != nil {
       l.Println(err.Error())
     }

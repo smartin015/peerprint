@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package rpc;
+
+enum PeerType {
+  UNKNOWN_PEER_TYPE = 0;
+  ELECTABLE = 2; // This peer is involved in RAFT consensus and log replication
+  LISTENER = 3; // Not involved in consensus
+}
+
+enum PeerState {
+  UNKNOWN_PEER_STATE = 0;
+  BUSY = 1; // Peer is doing work
+  IDLE = 2; // Peer is ready to work
+  PAUSED = 3; // Peer is awaiting human touch
+}
+
+// Queue is an entry in the Registry describing a distributed queue.
+message Queue {
+  // User-readable name for the queue
+  string name = 1;
+
+  // A user-readable description of the queue's purpose
+  string desc = 2;
+
+  // A web URL (or IPFS CID) for more information on the queue
+  string url = 3;
+
+  // String used for MDNS or DHT rendezvous between peers
+  string rendezvous = 4;
+
+  // List of peers which participate in RAFT leadership and
+  // peer assignment (i.e. PeerType.ELECTABLE)
+  repeated string trustedPeers = 5;
+}
+
+// Registry is a listing Queues with some information on 
+// the list maintainers.
+message Registry {
+  // Unix timestamp of when the registry was written
+  uint64 created = 1;
+
+  // A web URL (or IPFS CID) for more information about the registry
+  string url = 2;
+
+  // List of joinable queues.
+  repeated Queue queues = 3;
+}
+
+// PeerStatus is sent by a peer to indicate its role and what it's doing.
+message PeerStatus {
+  // Public key ID of the peer
+  string id = 1;
+ 
+  // The topic of queue items on which this peer operates
+  // Analgous to a "shard" in other distributed systems, but named so
+  // because pubsub is the backing implementation.
+  string topic = 2;
+  
+  // The role of the peer
+  PeerType type = 3;
+
+  // What the peer is up to right now
+  PeerState state = 4;
+}
+
+// Command sent by wrapper to server to get the server's current state
+message SelfStatusRequest {}
+
+// Probabilistically poll all peers on a topic for census-taking and reporting
+message PollPeersRequest {
+  string topic = 1;
+  double probability = 2;
+}
+
+// PollPeersResponse is published by peers with probability given in PollPeersRequest
+message PollPeersResponse {
+  PeerStatus status = 1;
+}
+
+// Peer requesting assignment to a particular role. This is typically
+// sent to the "assignment" topic
+message AssignmentRequest {}
+
+// Get address(es) of raft peers on the network
+message RaftAddrsRequest {
+  // Public key of the RAFT peer
+  string raft_id = 1;
+
+  // List of joinable addresses to directly communicate with this peer
+  repeated string raft_addrs = 2;
+}
+
+// Peers self-report their addresses when RaftAddrsRequest is sent.
+message RaftAddrsResponse {
+  // Public key of the RAFT peer
+  string raft_id = 1;
+
+  // List of joinable addresses to directly communicate with this peer
+  repeated string raft_addrs = 2;
+}
+
+// A response sent by the leader of the topic to assign a peer to some work
+message AssignmentResponse {
+  // Name of the topic ("shard") to subscribe and listen on
+  string topic = 1;
+
+  // ID of the peer being assigned to
+  string id = 2;
+
+  // ID of the leader of the topic
+  string leader_id = 3;
+
+  // Role of the peer on this topic
+  PeerType type = 4;
+}
+
+// Sent by the newly elected RAFT leader when it wins an election, so others
+// know who's in control.
+message NewLeaderResponse {
+  // Public key of the new leader
+  string id = 1;
+}
+

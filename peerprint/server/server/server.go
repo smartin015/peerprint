@@ -10,10 +10,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 	ma "github.com/multiformats/go-multiaddr"
-	pb "github.com/smartin015/peerprint/pubsub/proto"
-	"github.com/smartin015/peerprint/pubsub/prpc"
-	"github.com/smartin015/peerprint/pubsub/raft"
-	"github.com/smartin015/peerprint/pubsub/cmd"
+	pb "github.com/smartin015/peerprint/peerprint_server/proto"
+	"github.com/smartin015/peerprint/peerprint_server/prpc"
+	"github.com/smartin015/peerprint/peerprint_server/raft"
+	"github.com/smartin015/peerprint/peerprint_server/cmd"
 	"log"
 	"sync"
 	"time"
@@ -118,34 +118,31 @@ func (t *PeerPrint) connectToRaftPeer(id string, addrs []string) error {
 	return nil
 }
 
-func (t *PeerPrint) sendErr(e error) {
-  t.cmd.Send(&pb.Error{Status: e.Error()})
-}
-
-func (t *PeerPrint) sendWithLoopback(req proto.Message) error {
-  if t.getLeader() == t.p.ID {
-    return t.Recv(t.topic, t.p.ID, req)
-  } else {
-    return t.p.Publish(t.ctx, t.topic, req)
-  }
-}
-
 func (t *PeerPrint) onCmd(req proto.Message) {
-  err := t.sendWithLoopback(req)
-  if err != nil {
-    t.sendErr(err)
-  } else {
-    s, err := t.state.Get()
+  // Some commands are sent directly to this server instance - in that case,
+  // we return the reply directly.
+  // Otherwise we publish the command as-is and return the current state.
+  var err error
+  var rep proto.Message
+  switch req.(type) {
+  case *pb.SelfStatusRequest:
+    rep, err = t.Handle(t.topic, t.p.ID, req)
+  default:
+    err = t.p.Publish(t.ctx, t.topic, req)
     if err != nil {
-      t.sendErr(fmt.Errorf("Failed to get state: %w", err))
-    } else {
-      t.cmd.Send(s)
+      rep, err = t.state.Get()
     }
+  }
+
+  if err != nil {
+    t.cmd.Send(&pb.Error{Status: err.Error()})
+  } else {
+    t.cmd.Send(rep)
   }
 }
 
 func (t *PeerPrint) Loop() {
-	t.p.RegisterCallback(t.Recv)
+	t.p.RegisterCallback(t.Handle)
 
   if t.cmd != nil {
     go t.cmd.Loop(t.onCmd)
@@ -181,7 +178,11 @@ func (t *PeerPrint) Loop() {
         // Important to publish state after initial leader election,
         // so all listener nodes are also on the same page.
         // This may fail on new queue that hasn't been bootstrapped yet
-        if err := t.publishState(); err != nil {
+        s, err := t.resolveState()
+        if err != nil {
+          panic(err)
+        }
+        if err := t.p.Publish(t.ctx, t.topic, s); err != nil {
           t.l.Println(err)
         }
 			}
@@ -200,25 +201,28 @@ func (t *PeerPrint) publishLeader() error {
 	})
 }
 
-func (t *PeerPrint) publishState() error {
+func (t *PeerPrint) resolveState() (*pb.State, error) {
 	s, err := t.state.Get()
 	if err != nil {
     if err == raft.ErrNoState && t.bootstrap {
       t.l.Println("RAFT state not bootstrapped; doing so now")
       s, err = t.raft.BootstrapState()
       if err != nil {
-        return fmt.Errorf("bootstrap error: %w", err)
+        return nil, fmt.Errorf("bootstrap error: %w", err)
       }
     } else {
-		  return fmt.Errorf("state.Get() error: %w\n", err)
+		  return nil, fmt.Errorf("state.Get() error: %w\n", err)
     }
 	}
   t.bootstrap = false
+	return s, nil
+}
 
-	if err = t.p.Publish(t.ctx, t.topic, s); err != nil {
-		return fmt.Errorf("Publish error: %w\n", err)
-	}
-  return nil
+func (t *PeerPrint) commitAndGetState(s *pb.State) (*pb.State, error) {
+  if err := t.raft.Commit(s); err != nil {
+    return nil, fmt.Errorf("raft.Commit(): %w\n", err)
+  }
+  return t.resolveState()
 }
 
 func (t *PeerPrint) raftAddrs() []string {
@@ -229,17 +233,17 @@ func (t *PeerPrint) raftAddrs() []string {
 	return a
 }
 
-func (t *PeerPrint) raftAddrsRequest() error {
-	return t.p.Publish(t.ctx, t.topic, &pb.RaftAddrsRequest{
+func (t *PeerPrint) raftAddrsRequest() *pb.RaftAddrsRequest {
+	return &pb.RaftAddrsRequest{
 		RaftId:    t.raftHost.ID().Pretty(),
 		RaftAddrs: t.raftAddrs(),
-	})
+	}
 }
-func (t *PeerPrint) raftAddrsResponse() error {
-	return t.p.Publish(t.ctx, t.topic, &pb.RaftAddrsResponse{
+func (t *PeerPrint) raftAddrsResponse() *pb.RaftAddrsResponse {
+	return &pb.RaftAddrsResponse{
 		RaftId:    t.raftHost.ID().Pretty(),
 		RaftAddrs: t.raftAddrs(),
-	})
+	}
 }
 
 func (t *PeerPrint) requestAssignment(repeat bool) error {

@@ -11,7 +11,7 @@ import (
 	consensus "github.com/libp2p/go-libp2p-consensus"
 	p2praft "github.com/libp2p/go-libp2p-raft"
 	"github.com/libp2p/go-libp2p/core/host"
-	pb "github.com/smartin015/peerprint/pubsub/proto"
+	pb "github.com/smartin015/peerprint/peerprint_server/proto"
   "google.golang.org/protobuf/proto"
 )
 

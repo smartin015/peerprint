@@ -3,8 +3,8 @@ package server
 
 import (
 	"fmt"
-	pb "github.com/smartin015/peerprint/pubsub/proto"
-	"github.com/smartin015/peerprint/pubsub/raft"
+	pb "github.com/smartin015/peerprint/peerprint_server/proto"
+	"github.com/smartin015/peerprint/peerprint_server/raft"
 )
 
 type ServerState struct {

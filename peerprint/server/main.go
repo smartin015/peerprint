@@ -9,11 +9,11 @@ import (
 	"github.com/ghodss/yaml"
 	ipfs "github.com/ipfs/go-ipfs-api"
 	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/smartin015/peerprint/pubsub/conn"
-	pb "github.com/smartin015/peerprint/pubsub/proto"
-	"github.com/smartin015/peerprint/pubsub/prpc"
-	"github.com/smartin015/peerprint/pubsub/server"
-	"github.com/smartin015/peerprint/pubsub/cmd"
+	"github.com/smartin015/peerprint/peerprint_server/conn"
+	pb "github.com/smartin015/peerprint/peerprint_server/proto"
+	"github.com/smartin015/peerprint/peerprint_server/prpc"
+	"github.com/smartin015/peerprint/peerprint_server/server"
+	"github.com/smartin015/peerprint/peerprint_server/cmd"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	"log"
@@ -162,7 +162,11 @@ func main() {
 		panic(fmt.Errorf("Error fetching queue: %w", err))
 	}
 
-	logger.Printf("Queue:\n- Name: %v\n- Description: %v\n- URL: %v\n- Trusted Peers: %d\n\n", queue.Name, queue.Desc, queue.Url, len(queue.TrustedPeers))
+  tpstr := ""
+  for _, tp := range(queue.TrustedPeers) {
+    tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
+  }
+	logger.Printf("Queue:\n- Name: %v\n- Description: %v\n- URL: %v\n- Trusted Peers:\n%s\n", queue.Name, queue.Desc, queue.Url, tpstr)
 
 	ctx := context.Background()
 	logger.Printf("Loading keys...")
