@@ -1,0 +1,587 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.3.1, mkdocs-material-8.3.9">
+    
+    
+      
+        <title>Process Architecture - PeerPrint</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.1d29e8d0.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.cbb835fc.min.css">
+        
+      
+      
+    
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../style.css">
+    
+    <script>__md_scope=new URL("..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="indigo">
+  
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&"object"==typeof palette.color)for(var key of Object.keys(palette.color))document.body.setAttribute("data-md-color-"+key,palette.color[key])</script>
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#process-architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="PeerPrint" class="md-header__button md-logo" aria-label="PeerPrint" data-md-component="logo">
+      
+  <img src="../CPQ_white.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PeerPrint
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Process Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      <form class="md-header__option" data-md-component="palette">
+        
+          
+          
+          <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+          
+            <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zM7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </label>
+          
+        
+          
+          
+          <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+          
+            <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3Z"/></svg>
+            </label>
+          
+        
+      </form>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" aria-label="Clear" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="PeerPrint" class="md-nav__button md-logo" aria-label="PeerPrint" data-md-component="logo">
+      
+  <img src="../CPQ_white.svg" alt="logo">
+
+    </a>
+    PeerPrint
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        Home
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../new-queue/" class="md-nav__link">
+        Creating Queues
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-architecture/" class="md-nav__link">
+        Network Architecture
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+    
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Process Architecture
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        Process Architecture
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#server-and-wrapper" class="md-nav__link">
+    Server and Wrapper
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-communication" class="md-nav__link">
+    Local Communication
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#life-cycle" class="md-nav__link">
+    Life cycle
+  </a>
+  
+    <nav class="md-nav" aria-label="Life cycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#registry-acquisition" class="md-nav__link">
+    Registry acquisition
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-identity-generation" class="md-nav__link">
+    Key / Identity generation
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery" class="md-nav__link">
+    Discovery
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#leader-election-and-synchronization" class="md-nav__link">
+    Leader election and synchronization
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#job-operations" class="md-nav__link">
+    Job operations
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        Contributing
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#server-and-wrapper" class="md-nav__link">
+    Server and Wrapper
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-communication" class="md-nav__link">
+    Local Communication
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#life-cycle" class="md-nav__link">
+    Life cycle
+  </a>
+  
+    <nav class="md-nav" aria-label="Life cycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#registry-acquisition" class="md-nav__link">
+    Registry acquisition
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-identity-generation" class="md-nav__link">
+    Key / Identity generation
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery" class="md-nav__link">
+    Discovery
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#leader-election-and-synchronization" class="md-nav__link">
+    Leader election and synchronization
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#job-operations" class="md-nav__link">
+    Job operations
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content" data-md-component="content">
+            <article class="md-content__inner md-typeset">
+              
+                
+
+
+<h1 id="process-architecture">Process Architecture</h1>
+<h2 id="server-and-wrapper">Server and Wrapper</h2>
+<p>PeerPrint is broken down into two parts: the server and the wrapper.</p>
+<p><strong>The server</strong> manages connections among 3D print servers and synchronizes their state.</p>
+<p><strong>The wrapper</strong> allows other software (e.g. OctoPrint) to interact with the server. </p>
+<p>The <a href="https://github.com/smartin015/continuousprint">Continuous Print Queue plugin</a> is the first such software to use the wrapper. </p>
+<h2 id="local-communication">Local Communication</h2>
+<p>The wrapper translates queue commands into <a href="https://developers.google.com/protocol-buffers">protocol buffers</a>, which are then serialized and sent to the server (by default, using <a href="https://zeromq.org/">ZeroMQ</a> <a href="https://www.howtogeek.com/devops/what-are-unix-sockets-and-how-do-they-work/#:~:text=Unix%20sockets%20are%20a%20form,processes%20without%20any%20network%20overhead.">UNIX sockets</a>) to be executed. This is done with a <a href="https://zguide.zeromq.org/docs/chapter1/#Ask-and-Ye-Shall-Receive">REP/REQ</a> socket pair, with the server returning either an <code>OK</code> message or an error with a status string.</p>
+<p>The wrapper also receives asynchronous updates from the server using a <a href="https://zguide.zeromq.org/docs/chapter1/#Divide-and-Conquer">PUSH/PULL</a> socket pair, deserializing the received protobufs and triggering callbacks into the host process. Message data is additionally cached by the wrapper so that looking up print jobs, peers etc. requires zero additional communications between server and wrapper.</p>
+<p>The server's log messages are also sent over a zmq <code>PUSH</code> socket and received by the wrapper for insertion into the host process' logs.</p>
+<h2 id="life-cycle">Life cycle</h2>
+<p>Peerprint's life begins when the host process (e.g. the Continuous Print Queue plugin from OctoPrint) calls the <code>connect</code> function of the wrapper class. This forks off a new suprocess to manage the p2p connection and queue state, which initializes by:</p>
+<ol>
+<li>Fetching configuration (the "registry") and identity (public &amp; private keys)</li>
+<li>Discovering peers based on a rendezvous string (either MDNS for LAN queues or via DHT for WAN queues)</li>
+<li>Establishing leadership (via RAFT consensus if a participant in elections, otherwise by subscribing to the current elected leader)</li>
+<li>Recovering state (from RAFT logs)</li>
+</ol>
+<p>Among other arguments, the name of the queue to join is passed via <code>-queue</code> command line argument.</p>
+<p>In addition to forking off the process, the wrapper also initializes ZMQ sockets to interact with the server's command, update, and log streams.</p>
+<h3 id="registry-acquisition">Registry acquisition</h3>
+<p>The server first attempts to load a registry - this can either be a local file or a CID reference to a file hosted on IPFS. The regstry contains a list of queues and metadata on how to connect and interact with them. The target queue data is parsed and used later in the Discovery step.</p>
+<h3 id="key-identity-generation">Key / Identity generation</h3>
+<p>Identity of peers is important, as this dictates who is trusted as part of the RAFT leadership pool, who holds leases on shared state objects, and may eventually be part of role-based access control.</p>
+<p>When PeerPrint is run for the first time, a public/private key pair is generated and saved (location specified by <code>-privkeyfile</code> and <code>-pubkeyfile</code>). This key pair is reused on consecutive runs and establishes the identity of the printer/server using PeerPrint.</p>
+<h3 id="discovery">Discovery</h3>
+<p>After the prerequisite steps above, PeerPrint spends a few seconds searching for peers of the queue it wishes to join. This is done via distributed hash table rendevous (DHT rendezvous implementation summary <a href="https://en.wikipedia.org/wiki/Distributed_hash_table#Rendezvous_hashing">here</a>). In either case, the name of the queue (from <code>-queue</code>) is used as the rendezvous string.</p>
+<p>If <code>-local</code> is provided via argv, then <a href="https://en.wikipedia.org/wiki/Multicast_DNS">MDNS</a> is used instead to look for peers on the local network. In this case, non-local peers cannot be discovered and the queue is LAN-only.</p>
+<h3 id="leader-election-and-synchronization">Leader election and synchronization</h3>
+<p>After the discovery period is over and peers have been found, PeerPrint falls into one of two roles:</p>
+<ol>
+<li>If the peer's public key is not listed under <code>trustedPeers</code> in the manifest for the joined queue, it is a <strong>LISTENER</strong> (excluded from participation in RAFT) and it asks the current leader for an assignment to a pubsub topic.</li>
+<li>If the peer is in <code>trustedPeers</code>, it is considered <strong>ELECTABLE</strong> and it asks for - and connects to - the other electable peers, before starting its own RAFT server and joining in elections.</li>
+</ol>
+<p>The state of the queue is eventually passed to the server either via the leader (if a listener) or via looking up the state of the raft queue (if electable). This is then forwarded on to the wrapper and the host process.</p>
+<h3 id="job-operations">Job operations</h3>
+<p>When a wrapper receives a request to mutate a job, it sends this request over ZMQ socket to the server. </p>
+<p>The server then communicates the request remotely to the leader via <a href="https://docs.libp2p.io/concepts/publish-subscribe/">lib2p2 pubsub</a>. Use of pubsub for command execution allows for a nearly unbounded number of peers to contribute to a network queue. </p>
+<p>The leader receives this message and validates it before committing any mutations to the RAFT log. The log state is then synchronized to other electable peers via RAFT log replication, and published to all remaining peers over pubsub.</p>
+<p>As peers receive the update, they push it to the wrapper (again over ZMQ socket) which notifies the host process.</p>
+
+              
+            </article>
+            
+          </div>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+    <nav class="md-footer__inner md-grid" aria-label="Footer" >
+      
+        
+        <a href="../network-architecture/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Network Architecture" rel="prev">
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+          </div>
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              Network Architecture
+            </div>
+          </div>
+        </a>
+      
+      
+        
+        <a href="../contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing" rel="next">
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              Contributing
+            </div>
+          </div>
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
+          </div>
+        </a>
+      
+    </nav>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.6c7ad80a.min.js"></script>
+      
+    
+  </body>
+</html>
