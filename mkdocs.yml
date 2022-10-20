@@ -23,5 +23,7 @@ extra_css:
     - style.css
 nav:
   - Home: index.md
-  - 'getting-started.md'
-  - 'architecture.md'
+  - 'new-queue.md'
+  - 'network-architecture.md'
+  - 'process-architecture.md'
+  - 'contributing.md'
