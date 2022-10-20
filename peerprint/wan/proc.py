@@ -35,7 +35,7 @@ class ServerProcess():
         args = opts.render()
         self._proc = subprocess.Popen(args)
         self._logger.debug(f"Launch: {args}")
-        atexit.register(self._cleanup)
+        atexit.register(self.destroy)
 
     def _signal(self, sig, timeout=5):
         self._proc.send_signal(signal.SIGINT)
@@ -45,7 +45,9 @@ class ServerProcess():
             pass
         return self._proc.returncode is not None
 
-    def _cleanup(self):
+    def destroy(self):
+        atexit.unregister(self.destroy)
+
         if self._proc is None or self._proc.returncode is not None:
             return
         self._logger.info(f"PID {self._proc.pid} (SIGINT)")

@@ -9,6 +9,17 @@ print(__file__)
 
 logging.basicConfig(level=logging.DEBUG)
 
+class Codec():
+    @classmethod
+    def encode(self, manifest):
+        return (manifest, "lazy")
+
+    def decode(self, data, protocol):
+        return data
+
+def on_update(changetype, prev, nxt):
+    print("on_update")
+
 ns = "Test queue"
 def make_queue(ns, idx):
     ppq = PeerPrintQueue(ServerProcessOpts(
@@ -21,7 +32,7 @@ def make_queue(ns, idx):
             zmqlog=f"ipc:///tmp/continuousprint_{ns}_{idx}_log.ipc",
             local=True,
             bootstrap=True,
-    ), logger=logging.getLogger(f"q{idx}"))
+    ), Codec, on_update, logger=logging.getLogger(f"q{idx}"))
     logging.info(f"Starting connection ({idx})")
     ppq.connect()
     return ppq

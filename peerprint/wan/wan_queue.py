@@ -1,6 +1,6 @@
 import sys
+import os
 import time
-import json
 from .comms import ZMQLogSink, ZMQClient
 from .proc import ServerProcess
 import peerprint.server.proto.state_pb2 as spb
@@ -9,43 +9,69 @@ import peerprint.server.proto.peers_pb2 as ppb
 from google.protobuf.any_pb2 import Any
 from enum import Enum
 
+class ChangeType(Enum):
+    JOBS = 0
+    PEERS = 1
+
 class PeerPrintQueue():
-    def __init__(self, opts, logger):
-      self._logger = logger
-      self._opts = opts
-      self._proc = None
-      self._ready = False
-      # These are cached from updates
-      self._jobs = dict()
-      self._locks = dict()
-      self._peers = ppb.PeersSummary(peer_estimate=0, variance=float('inf'), sample=[])
-    
+    def __init__(self, opts, codec, update_cb, logger, keydir=None):
+        self._logger = logger
+        self._opts = opts
+        self._proc = None
+        self._ready = False
+        self._codec = codec
+        self._update_cb = update_cb
+
+        self._zmqlogger = None
+        self._zmqclient = None
+        self._proc = None
+
+        # These are cached from updates
+        self._jobs = dict()
+        self._peers = ppb.PeersSummary(peer_estimate=0, variance=float('inf'), sample=[])
+        # Including pid in sockets allows running multiple instances
+        # using the same filesystem (e.g. for development or containerized
+        # farms)
+        pid = os.getpid()
+        if self._opts.zmqlog is None:
+            self._opts.zmqlog = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}_log.ipc"
+        if self._opts.zmq is None:
+            self._opts.zmq = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}.ipc"
+        if self._opts.zmqpush is None:
+            self._opts.zmqpush = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}_push.ipc"
+        
+        if keydir is not None:
+            self._opts.privkeyfile = os.path.join(keydir, f"{opts.queue}_priv.key")
+            self._opts.pubkeyfile = os.path.join(keydir, f"{opts.queue}_pub.key")
+
     def connect(self):
         self._zmqlogger = ZMQLogSink(self._opts.zmqlog, self._logger)
         self._proc = ServerProcess(self._opts, self._logger)
         self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqpush, self._update, self._logger)
 
-    def _parse(self, job):
-        if job.protocol == "json":
-            try:
-                return json.loads(job.data)
-            except json.JSONDecodeError as e:
-                self._logger.error(f"JSON decode error for job {job.id}: {str(e)}")
-        else:
-            self._logger.error(f"No decoder for job {job.id} with protocol '{job.protocol}'")
+    def destroy(self):
+        if self._zmqlogger is not None:
+            self._zmqlogger.destroy()
+        if self._zmqclient is not None:
+            self._zmqclient.destroy()
+        if self._proc is not None:
+            self._proc.destroy()
+
 
     def _update(self, msg):
         expiry_ts = time.time() - 1*60*60
         if isinstance(msg, spb.State):
             newjobs = dict()
-            newlocks = dict()
             for k,v in msg.jobs.items():
-                newjobs[k] = self._parse(v)
+                newjobs[k] = self._codec.decode(v.data, v.protocol)
+                newjobs[k]['peer_'] = v.owner
                 if v.lock is not None and v.lock.created > expiry_ts:
-                    newlocks[k] = v.lock
+                    newjobs[k]['acquired'] = True
+                    newjobs[k]['acquired_by_'] = v.lock.id
+            self._update_cb(ChangeType.JOBS, self._jobs, newjobs)
             self._jobs = newjobs
-            self._locks = newlocks
         elif isinstance(msg, ppb.PeersSummary):
+            self._update_cb(ChangeType.PEERS, self._peers, msg)
             self._peers = msg
         self._ready = True
 
@@ -67,23 +93,19 @@ class PeerPrintQueue():
     def hasJob(self, jid) -> bool:
         return self._jobs.get(jid) is not None
 
-    def setJob(self, jid, manifest: dict):
+    def setJob(self, jid, manifest: dict, addr=None):
+        data, protocol = self._codec.encode(manifest)
         self._zmqclient.call(jpb.SetJobRequest(
             job=jpb.Job(
                 id=jid,
-                protocol="json",
-                data=json.dumps(manifest).encode("utf8"),
+                owner=addr,
+                protocol=protocol,
+                data=data,
             ),
         ))
 
-    def getLocks(self):
-        return self._locks
-
     def getJobs(self):
         return self._jobs
-
-    def getJob(self, jid):
-        return self._jobs.get(jid)
 
     def removeJob(self, jid: str):
         self._zmqclient.call(jpb.DeleteJobRequest(id=jid))

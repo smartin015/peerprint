@@ -19,15 +19,18 @@ message Job {
   // Typically a UUID, this is unique for every job in the queue.
   string id = 1;
 
+  // The ID of the peer that "owns" the job.
+  string owner = 2;
+
   // Indicates which peer holds write access to this job.
-  Lock lock = 4;
+  Lock lock = 3;
 
   // This indicates method used to serialize job data. This is opaque to PeerPrint and should not be inspected.
-  string protocol = 2;
+  string protocol = 4;
 
   // data is the actual metadata surrounding the job (e.g. the material to print, or the number of repeats).
   // This is opaque to PeerPrint and should not be inspected.
-  bytes data = 3;
+  bytes data = 5;
 }
 
 // GetJobsRequest is sent by the wrapper to interrogate the state of the golang server.

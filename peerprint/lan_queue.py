@@ -11,7 +11,6 @@ from collections import defaultdict
 from .discovery import P2PDiscovery
 from .filesharing import pack_job
 from .sync_objects import CPOrderedReplDict, CPReplLockManager
-from .libp2p_pubsub.transport import PubsubTransport
 
 class ChangeType(Enum):
     PEER = "peer"
@@ -54,13 +53,11 @@ class LANPrintQueueBase():
         self.jobs = CPOrderedReplDict(self._tagged_cb(ChangeType.JOB))
 
         self.locks = CPReplLockManager(selfID=self.addr, autoUnlockTime=60, cb=self._tagged_cb(ChangeType.LOCK))
-
-        self.transport = PubsubTransport(self.ns)
         conf = SyncObjConf(
                 onReady=self.on_ready, 
                 dynamicMembershipChange=True,
           )
-        self._syncobj = SyncObj(self.addr, peers, conf, consumers=[self.peers, self.jobs, self.locks], transport=self.transport, transportClass=None)
+        self._syncobj = SyncObj(self.addr, peers, conf, consumers=[self.peers, self.jobs, self.locks])
 
     def is_ready(self):
         return self._syncobj.isReady()

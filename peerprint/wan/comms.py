@@ -28,6 +28,10 @@ class ZMQLogSink():
             msg = self._log_sock.recv().decode('utf8').rstrip()
             self._logger.info(msg)
 
+    def destroy(self):
+        self._log_sock.destroy()
+        self._log_sock = None
+
 
 class ZMQClient():
     def __init__(self, req_addr, pull_addr, cb, logger):
@@ -50,6 +54,10 @@ class ZMQClient():
         self._pull_thread.start()
         self._logger.debug(f"ZMQClient listener thread started (bound to {pull_addr})")
     
+    def destroy(self):
+        self._sock.destroy()
+        self._pull.destroy()
+
     def _unpack(self, data):
         apb = Any()
         apb.ParseFromString(data)
@@ -63,7 +71,7 @@ class ZMQClient():
         raise MessageUnpackError(f"Could not unpack message: {apb}")
 
     def _listen(self):
-        while True:
+        while self._pull is not None:
             data = self._pull.recv()
             self._cb(self._unpack(data))
 
