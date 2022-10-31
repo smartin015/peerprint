@@ -21,8 +21,8 @@ class ServerProcessOpts():
     zmqlog: str = None
     bootstrap: bool = None
 
-    def render(self):
-        args = ["peerprint_server"]
+    def render(self, binary_path):
+        args = [binary_path]
         for field in fields(self):
             val = getattr(self, field.name)
             if val is not None:
@@ -30,9 +30,9 @@ class ServerProcessOpts():
         return args
 
 class ServerProcess():
-    def __init__(self, opts, logger):
+    def __init__(self, opts, binary_path, logger):
         self._logger = logger
-        args = opts.render()
+        args = opts.render(binary_path)
         self._proc = subprocess.Popen(args)
         self._logger.debug(f"Launch: {args}")
         atexit.register(self.destroy)

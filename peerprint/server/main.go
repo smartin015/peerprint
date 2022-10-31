@@ -154,7 +154,9 @@ func main() {
 		panic("-queue must be specified!")
 	}
   if *zmqLogAddrFlag != "" {
-    logger = cmd.NewLog(*zmqLogAddrFlag)
+    var dlog cmd.Destructor
+    logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
+    defer dlog()
   }
 
 	logger.Printf("Fetching queue %v details from registry %v", *queueFlag, *registryFlag)
@@ -174,15 +176,28 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
 	}
-	c := conn.New(ctx, *localFlag, *pubsubAddrFlag, queue.Rendezvous, kpriv, logger)
-	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", c.GetID(), *connectTimeoutFlag)
+
+
+	h, err := libp2p.New(libp2p.ListenAddrStrings(*pubsubAddrFlag), libp2p.Identity(kpriv))
+	if err != nil {
+		panic(err)
+	}
+
+	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
+  d := discovery.New(ctx, h, (*localFlag) ? discovery.MDNS : discovery.DHT, queue.Rendezvous, logger)
 	connectCtx, _ := context.WithTimeout(ctx, *connectTimeoutFlag)
-	if err := c.AwaitReady(connectCtx); err != nil {
+	if err := d.AwaitReady(connectCtx); err != nil {
 		panic(fmt.Errorf("Error connecting to peers: %w", err))
 	} else {
 		logger.Println("Peers found; discovery complete")
 	}
-	p := prpc.New(c.GetID(), c.GetPubSub())
+
+	ps, err := pubsub.NewGossipSub(ctx, h)
+	if err != nil {
+		panic(err)
+	}
+
+	p := prpc.New(h.ID().String(), ps)
 	s := server.New(server.PeerPrintOptions {
     Ctx: ctx, 
     Prpc: p, 

@@ -14,9 +14,10 @@ class ChangeType(Enum):
     PEERS = 1
 
 class PeerPrintQueue():
-    def __init__(self, opts, codec, update_cb, logger, keydir=None):
+    def __init__(self, opts, codec, binary_path, update_cb, logger, keydir=None):
         self._logger = logger
         self._opts = opts
+        self._binary_path = binary_path
         self._proc = None
         self._ready = False
         self._codec = codec
@@ -46,7 +47,7 @@ class PeerPrintQueue():
 
     def connect(self):
         self._zmqlogger = ZMQLogSink(self._opts.zmqlog, self._logger)
-        self._proc = ServerProcess(self._opts, self._logger)
+        self._proc = ServerProcess(self._opts, self._binary_path, self._logger)
         self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqpush, self._update, self._logger)
 
     def destroy(self):

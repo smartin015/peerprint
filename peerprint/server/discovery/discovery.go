@@ -1,73 +1,67 @@
-package conn
+// Package discovery wraps a libp2p host / key ID and discovers peers based on a rendezvous string.
+// NOTE: this package is not threadsafe on AwaitReady.
+package discovery
 
 import (
 	"context"
-	"flag"
+  "fmt"
 	"log"
 	"sync"
-	"time"
 
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 )
 
-var (
-	topicNameFlag = flag.String("topicName", "applesauce", "name of topic to join")
+type Method int64
+const (
+  MDNS Method = iota
+  DHT
 )
 
-type Conn struct {
+type Discovery struct {
 	ctx          context.Context
-	addr         string
-	rendezvous   string
 	h            host.Host
-	ps           *pubsub.PubSub
 	onReady      chan bool
-	anyConnected bool
+	newConn      chan bool
   l *log.Logger
 }
 
-func New(ctx context.Context, local bool, addr string, rendezvous string, pkey crypto.PrivKey, logger *log.Logger) *Conn {
-	h, err := libp2p.New(libp2p.ListenAddrStrings(addr), libp2p.Identity(pkey))
-	if err != nil {
-		panic(err)
-	}
+var (
+  bootstrapPeers []peer.AddrInfo
+)
 
-	ps, err := pubsub.NewGossipSub(ctx, h)
-	if err != nil {
-		panic(err)
-	}
+func SetBootstrapPeers(bp []peer.AddrInfo) {
+  bootstrapPeers = bp
+}
 
-	c := &Conn{
+func New(ctx context.Context, m Method, h host.Host, rendezvous string, logger *log.Logger) *Discovery {
+	c := &Discovery{
 		ctx:          ctx,
-		addr:         addr,
-		rendezvous:   rendezvous,
 		h:            h,
-		ps:           ps,
 		onReady:      make(chan bool),
-		anyConnected: false,
+		newConn:      make(chan bool),
     l: logger,
 	}
 
-	if local {
+  if bootstrapPeers == nil {
+    bootstrapPeers = dht.GetDefaultBootstrapPeerAddrInfos()
+  }
+
+	if m == MDNS{
 		go c.discoverPeersMDNS(rendezvous)
-	} else {
+	} else if m == DHT{
 		go c.discoverPeersDHT(rendezvous)
-	}
+	} else {
+    panic(fmt.Errorf("Unhandled discovery method: %+v", m))
+  }
 	return c
 }
 
-func (c *Conn) GetID() string {
-	return c.h.ID().String()
-}
-
-func (c *Conn) initDHT() *dht.IpfsDHT {
+func (c *Discovery) initDHT() *dht.IpfsDHT {
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
 	// DHT, so that the bootstrapping node of the DHT can go down without
@@ -80,13 +74,12 @@ func (c *Conn) initDHT() *dht.IpfsDHT {
 		panic(err)
 	}
 	var wg sync.WaitGroup
-	for _, peerAddr := range dht.DefaultBootstrapPeers {
-		peerinfo, _ := peer.AddrInfoFromP2pAddr(peerAddr)
+	for _, peerinfo := range bootstrapPeers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := c.h.Connect(c.ctx, *peerinfo); err != nil {
-				c.l.Println("Bootstrap warning: %s", err)
+			if err := c.h.Connect(c.ctx, peerinfo); err != nil {
+				c.l.Printf("Bootstrap warning: %s\n", err)
 			}
 		}()
 	}
@@ -95,7 +88,7 @@ func (c *Conn) initDHT() *dht.IpfsDHT {
 }
 
 // interface to be called when new  peer is found
-func (c *Conn) HandlePeerFound(peer peer.AddrInfo) {
+func (c *Discovery) HandlePeerFound(peer peer.AddrInfo) {
 	if peer.ID == c.h.ID() {
 		return // No self connection
 	}
@@ -104,32 +97,48 @@ func (c *Conn) HandlePeerFound(peer peer.AddrInfo) {
 		c.l.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
 	} else {
 		c.l.Println("Connected to:", peer.ID.Pretty())
-		c.anyConnected = true
+		notify(c.newConn)
 	}
 }
 
-func (c *Conn) discoverPeersMDNS(rendezvous string) {
+// Try to notify on a channel - return immediately if the channel is full
+func notify(c chan bool) {
+  select {
+    case c <- true:
+    default:
+  }
+}
+
+func (c *Discovery) discoverPeersMDNS(rendezvous string) {
 	// srv calls HandlePeerFound()
 	srv := mdns.NewMdnsService(c.h, rendezvous, c)
 	if err := srv.Start(); err != nil {
 		panic(err)
 	}
-	// TODO timeout
-	for !c.anyConnected {
-		c.l.Println("Searching for peers")
-		time.Sleep(10 * time.Second)
-	}
-	c.onReady <- true
+  select {
+  case <-c.newConn:
+    notify(c.onReady)
+    return
+  case <-c.ctx.Done():
+    return
+  }
 }
 
-func (c *Conn) discoverPeersDHT(rendezvous string) {
+func (c *Discovery) discoverPeersDHT(rendezvous string) {
 	kademliaDHT := c.initDHT()
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(c.ctx, routingDiscovery, rendezvous)
 
 	// Look for others who have announced and attempt to connect to them
-	for !c.anyConnected {
-		c.l.Println("Searching for peers...")
+	c.l.Println("Searching for peers...")
+	for {
+    select {
+    case <-c.newConn:
+      c.l.Println("Peer discovery complete")
+      notify(c.onReady)
+      return
+    default:
+    }
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
 			panic(err)
@@ -138,17 +147,12 @@ func (c *Conn) discoverPeersDHT(rendezvous string) {
 			c.HandlePeerFound(peer)
 		}
 	}
-	c.l.Println("Peer discovery complete")
-	c.onReady <- true
 }
 
-func (c *Conn) GetPubSub() *pubsub.PubSub {
-	return c.ps
-}
-
-func (c *Conn) AwaitReady(ctx context.Context) error {
+func (c *Discovery) AwaitReady(ctx context.Context) error {
 	select {
 	case <-c.onReady:
+    c.l.Println("Ready state achieved, returning from AwaitReady")
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
