@@ -6,9 +6,9 @@ import (
   "log"
 	"fmt"
 	"time"
-
+  "github.com/libp2p/go-libp2p/core/peer"
+  ma "github.com/multiformats/go-multiaddr"
 	"github.com/hashicorp/raft"
-	consensus "github.com/libp2p/go-libp2p-consensus"
 	p2praft "github.com/libp2p/go-libp2p-raft"
 	"github.com/libp2p/go-libp2p/core/host"
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
@@ -41,41 +41,84 @@ func (rs *MarshableState) Unmarshal(in io.Reader) error {
   return proto.Unmarshal(b, rs.State)
 }
 
+type Raft interface{
+  ID() string
+  Addrs() []string
+  SetPeers([]*pb.AddrInfo) error
+  GetPeers() []*pb.AddrInfo
+
+  Leader() string
+  SetLeader(string)
+  LeaderChan() (chan struct{})
+  Commit(*pb.State) (*pb.State, error)
+  Get() (*pb.State, error)
+}
+
+type LocalMemoryImpl struct {
+  s *pb.State
+  l string
+  lc chan struct{}
+}
+func (ri *LocalMemoryImpl) ID() string { return "" }
+func (ri *LocalMemoryImpl) Addrs() []string {
+  return nil
+}
+func (ri *LocalMemoryImpl) SetPeers([]*pb.AddrInfo) error {
+  return nil
+}
+func (ri *LocalMemoryImpl) GetPeers() []*pb.AddrInfo {
+  return nil
+}
+func (ri *LocalMemoryImpl) Leader() string {
+  return ri.l
+}
+func (ri *LocalMemoryImpl) LeaderChan() (chan struct{}) {
+  return ri.lc
+}
+func (ri *LocalMemoryImpl) Get() (*pb.State, error) {
+  return ri.s, nil
+}
+func (ri *LocalMemoryImpl) Commit(s *pb.State) (*pb.State, error) {
+  ri.s = s
+  return ri.s, nil
+}
+func (ri *LocalMemoryImpl) SetLeader(l string) {
+  ri.l = l
+}
+
+
 type RaftImpl struct {
+  ctx       context.Context
 	host      host.Host
+  filestorePath string
+  logger *log.Logger
+  servers []raft.Server
+
 	raft      *raft.Raft
-	consensus consensus.Consensus
+	consensus *p2praft.Consensus
 	transport *raft.NetworkTransport
 	actor     *p2praft.Actor
 	leaderObs *raft.Observer
-	newLeader *chan struct{}
+	newLeader chan struct{}
 }
 
-func (ri *RaftImpl) WaitForLeader(ctx context.Context) error {
-	obsCh := make(chan raft.Observation, 1)
-	observer := raft.NewObserver(obsCh, false, nil)
-	ri.raft.RegisterObserver(observer)
-	defer ri.raft.DeregisterObserver(observer)
+func (ri *RaftImpl) ID() string {
+  return ri.host.ID().Pretty()
+}
 
-	ticker := time.NewTicker(time.Second / 2)
-	defer ticker.Stop()
-	for {
-		select {
-		case obs := <-obsCh:
-			switch obs.Data.(type) {
-			case raft.RaftState:
-				if ri.raft.Leader() != "" {
-					return nil
-				}
-			}
-		case <-ticker.C:
-			if ri.raft.Leader() != "" {
-				return nil
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("WaitForLeader context timed out")
-		}
+func (ri *RaftImpl) Addrs() []string {
+	a := []string{}
+	for _, addr := range ri.host.Addrs() {
+		a = append(a, addr.String())
 	}
+	return a
+}
+
+func (ri *RaftImpl) SetLeader(leader string) {
+  // Do nothing - raft leadership is earned, not assigned
+}
+func (ri *RaftImpl) LeaderChan() (chan struct{}) {
+  return ri.newLeader
 }
 
 func (ri *RaftImpl) Shutdown() {
@@ -88,65 +131,89 @@ func (ri *RaftImpl) Shutdown() {
 	}
 }
 
-// New creates a libp2p host and transport layer, a new consensus, FSM, actor, config, logstore, snapshot method, and
-// basically all other moving parts needed to elect a leader and synchronize a log across the leader peers.
-// The result has an .Observer field channel which provides updates
-func New(ctx context.Context, h host.Host, filestorePath string, peers []string, newLeader *chan struct{}, l *log.Logger) (*RaftImpl, error) {
-	if len(peers) == 0 {
-		return nil, fmt.Errorf("No peers in raft group - cannot create")
-	}
+func New(ctx context.Context, h host.Host, filestorePath string, l *log.Logger) *RaftImpl {
+  return &RaftImpl{
+    ctx: ctx,
+    host: h,
+    filestorePath: filestorePath,
+    logger: l,
+    servers: []raft.Server{},
+  }
+}
 
-	transport, err := p2praft.NewLibp2pTransport(h, 2*time.Second)
+func (ri *RaftImpl) addServer(id string, addrs []string) error {
+	pid, err := peer.Decode(id)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("Decode error on id %s: %w", id, err)
 	}
-	consensus := p2praft.NewConsensus(&MarshableState{
-    State: &pb.State{Jobs: nil},
-  })
-	servers := make([]raft.Server, len(peers))
-	for i, peer := range peers {
-		servers[i] = raft.Server{
-			Suffrage: raft.Voter,
-			ID:       raft.ServerID(peer),
-			Address:  raft.ServerAddress(peer), // Libp2pTransport treats ID as address here
+	p := peer.AddrInfo{
+		ID:    pid,
+		Addrs: []ma.Multiaddr{},
+	}
+	for _, a := range addrs {
+		aa, err := ma.NewMultiaddr(a)
+		if err != nil {
+			return fmt.Errorf("Error creating AddrInfo from string %s: %w", a, err)
 		}
+		p.Addrs = append(p.Addrs, aa)
 	}
+	if err := ri.host.Connect(ri.ctx, p); err != nil {
+		return fmt.Errorf("RAFT peer connection error: %w", err)
+	}
+  ri.servers = append(ri.servers, raft.Server{
+			Suffrage: raft.Voter,
+			ID:       raft.ServerID(id),
+			Address:  raft.ServerAddress(id), // Libp2pTransport treats ID as address here
+	})
+	return nil
+}
 
-	config := raft.DefaultConfig()
-	config.LocalID = raft.ServerID(h.ID().Pretty())
-  config.LogOutput = l.Writer()
-	snapshots, err := raft.NewFileSnapshotStore(filestorePath, 3, nil)
+func (ri *RaftImpl) GetPeers() []*pb.AddrInfo {
+  panic("TODO")
+}
+
+// New creates all moving parts needed to elect a leader and synchronize a log across the leader peers.
+// The result has an .Observer field channel which provides updates.
+func (ri *RaftImpl) SetPeers(ais []*pb.AddrInfo) error {
+  for _, ai := range ais {
+    ri.addServer(ai.GetId(), ai.GetAddrs())
+  }
+
+  // TODO handle reinit
+	if len(ri.servers) == 0 {
+		return fmt.Errorf("No servers in raft group - cannot connect")
+	}
+  var err error
+
+  if ri.transport, err = p2praft.NewLibp2pTransport(ri.host, 2*time.Second); err != nil {
+		return err
+	}
+	ri.consensus = p2praft.NewConsensus(&MarshableState{State: &pb.State{Jobs: nil}})
+
+	cfg := raft.DefaultConfig()
+	cfg.LocalID = raft.ServerID(ri.host.ID().Pretty())
+  cfg.LogOutput = ri.logger.Writer()
+	snapshots, err := raft.NewFileSnapshotStore(ri.filestorePath, 3, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// InmemStore implements the LogStore and StableStore interface. It should NOT EVER be used for production. It is used only for unit tests. Use the MDBStore implementation instead.
+	// InmemStore implements the LogStore and StableStore interface. It should NOT EVER be used for production. It is used only for unit tests. TODO Use the MDBStore implementation instead.
 	logStore := raft.NewInmemStore()
-
 	bootstrapped, err := raft.HasExistingState(logStore, logStore, snapshots)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !bootstrapped {
-		raft.BootstrapCluster(config, logStore, logStore, snapshots, transport, raft.Configuration{Servers: servers})
+		raft.BootstrapCluster(cfg, logStore, logStore, snapshots, ri.transport, raft.Configuration{Servers: ri.servers})
 	}
 
-	r, err := raft.NewRaft(config, consensus.FSM(), logStore, logStore, snapshots, transport)
-	if err != nil {
-		return nil, err
+	if ri.raft, err = raft.NewRaft(cfg, ri.consensus.FSM(), logStore, logStore, snapshots, ri.transport); err != nil {
+		return err
 	}
-	actor := p2praft.NewActor(r)
-	consensus.SetActor(actor)
-
-	ri := &RaftImpl{
-		host:      h,
-		raft:      r,
-		consensus: consensus,
-		transport: transport,
-		actor:     actor,
-		newLeader: newLeader,
-	}
+	ri.actor = p2praft.NewActor(ri.raft)
+	ri.consensus.SetActor(ri.actor)
 	go ri.observeLeadership(context.Background())
-	return ri, nil
+  return nil
 }
 
 func (ri *RaftImpl) observeLeadership(ctx context.Context) {
@@ -166,7 +233,7 @@ func (ri *RaftImpl) observeLeadership(ctx context.Context) {
 		}
 		if l := ri.Leader(); l != last {
 			last = l
-			*ri.newLeader <- struct{}{}
+			ri.newLeader <- struct{}{}
 		}
 	}
 }
@@ -175,37 +242,44 @@ func (ri *RaftImpl) Leader() string {
 	return string(ri.raft.Leader())
 }
 
-func (ri *RaftImpl) Commit(s *pb.State) error {
+func (ri *RaftImpl) Commit(s *pb.State) (*pb.State, error) {
 	if ri.actor.IsLeader() {
     agreedState, err := ri.consensus.CommitState(&MarshableState{State: s}) // Blocking
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if agreedState == nil {
-			return fmt.Errorf("agreedState is nil: commited on a non-leader?")
+			return nil, fmt.Errorf("agreedState is nil: commited on a non-leader?")
 		}
-		return nil
+		return ri.Get()
 	} else {
-		return fmt.Errorf("Not leader; cannot commit")
+		return nil, fmt.Errorf("Not leader; cannot commit")
 	}
 }
 
-func (ri *RaftImpl) BootstrapState() (*pb.State, error) {
+func (ri *RaftImpl) bootstrapState() (*pb.State, error) {
   s := &pb.State{
     Jobs: make(map[string]*pb.Job),
   }
-  // j := &pb.Job{Id: "testid", Protocol: "testing", Data: []byte{1,2,3}}
-  // s.Jobs[j.GetId()] = j
-
-  if err := ri.Commit(s); err != nil {
-    return nil, err
-  }
-  return ri.GetState()
+  return ri.Commit(s)
 }
 
-var ErrNoState = p2praft.ErrNoState
+func (ri *RaftImpl) Get() (*pb.State, error) {
+  v, err := ri.getState()
+  if err != nil {
+    if err == p2praft.ErrNoState {
+      v, err = ri.bootstrapState()
+      if err != nil {
+        return nil, fmt.Errorf("bootstrap error: %w", err)
+      }
+    } else {
+      return nil, fmt.Errorf("state.Get() error: %w (did you bootstrap?)\n", err)
+    }
+  }
+  return v, nil
+}
 
-func (ri *RaftImpl) GetState() (*pb.State, error) {
+func (ri *RaftImpl) getState() (*pb.State, error) {
 	s, err := ri.consensus.GetCurrentState()
 	if err != nil {
 		return nil, err

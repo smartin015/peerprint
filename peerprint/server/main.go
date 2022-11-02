@@ -11,7 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/smartin015/peerprint/peerprint_server/conn"
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
-	"github.com/smartin015/peerprint/peerprint_server/prpc"
+	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
 	"github.com/smartin015/peerprint/peerprint_server/server"
 	"github.com/smartin015/peerprint/peerprint_server/cmd"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -182,6 +182,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	rh, err := libp2p.New(libp2p.ListenAddrStrings(*raftAddrFlag), libp2p.Identity(kpriv))
+	if err != nil {
+		panic(err)
+	}
 
 	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
   d := discovery.New(ctx, h, (*localFlag) ? discovery.MDNS : discovery.DHT, queue.Rendezvous, logger)
@@ -196,19 +200,33 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+  raft := raft.NewInMemory(nil, rh, *raftPathFlag, *bootstrapFlag)
 
-	p := prpc.New(h.ID().String(), ps)
+  cmdRecvChan := make(chan proto.Message, 5)
+  subChan := make(chan prpc.TopicMsg, 5)
+  errChan := make(chan error, 5)
+
+  openFn := func(topic string) (chan proto.Message, error) {
+    return tr.NewTopicChannel(ctx, subChan, h.ID().String(), ps, topic, errChan)
+  }
+
+  cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
+  logger.Println("ZMQ server at ", opts.ZmqServerAddr)
+
+	if len(opts.TrustedPeers) == 0 {
+		panic("server.New() requires len(opts.TrustedPeers) > 0")
+	}
 	s := server.New(server.PeerPrintOptions {
-    Ctx: ctx, 
-    Prpc: p, 
-    TrustedPeers: queue.TrustedPeers,
-    RaftAddr: *raftAddrFlag, 
-    RaftPath: *raftPathFlag, 
-    ZmqServerAddr: *zmqRepFlag,
-    ZmqPushAddr: *zmqPushFlag,
-    Bootstrap: *bootstrapFlag, 
-    PKey: kpriv, 
     Logger: logger,
+    State: state,
+    TrustedPeers: queue.TrustedPeers,
+
+    RecvPubsub: subChan,
+    RecvCmd: cmdRecvChan,
+
+    SendCmd: cmdSend,
+    PushCmd: cmdPush,
+    Opener: openFn,
   })
-	s.Loop()
+	s.Loop(ctx)
 }

@@ -70,6 +70,11 @@ message PeerStatus {
   PeerState state = 5;
 }
 
+// Leader is sent when a new leader is asserted on the topic
+message Leader {
+  string id = 1;
+}
+
 // Published after polling to update all clients on state of peers
 message PeersSummary {
   // Estimate may not be fully accurate unless variance indicates such
@@ -99,22 +104,23 @@ message PollPeersResponse {
 // sent to the "assignment" topic
 message AssignmentRequest {}
 
+// Matches https://pkg.go.dev/github.com/libp2p/go-libp2p/core/peer#AddrInfo
+// using string encoding for id and addrs.
+message AddrInfo {
+  string id = 1;
+  repeated string addrs = 2;
+}
+
 // Get address(es) of raft peers on the network
 message RaftAddrsRequest {
-  // Public key of the RAFT peer
-  string raft_id = 1;
-
-  // List of joinable addresses to directly communicate with this peer
-  repeated string raft_addrs = 2;
+  // Network details for the requester
+  AddrInfo addr_info = 1;
 }
 
 // Peers self-report their addresses when RaftAddrsRequest is sent.
 message RaftAddrsResponse {
-  // Public key of the RAFT peer
-  string raft_id = 1;
-
-  // List of joinable addresses to directly communicate with this peer
-  repeated string raft_addrs = 2;
+  // List of peers present in the consensus group
+  repeated AddrInfo peers = 1;
 }
 
 // A response sent by the leader of the topic to assign a peer to some work

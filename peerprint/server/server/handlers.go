@@ -5,13 +5,65 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
-	"github.com/smartin015/peerprint/peerprint_server/raft"
-	"golang.org/x/exp/maps"
 	"time"
 	"math/rand"
 )
 
-func (t *PeerPrint) Handle(topic string, peer string, p proto.Message) (proto.Message, error) {
+func (t *Server) isSelfLeader() bool {
+  return t.getLeader() == t.getID()
+}
+
+func (t *Server) isLeader(peer string) bool {
+  return t.getLeader() == peer
+}
+
+func (t *Server) isTrusted(peer string) bool {
+  if _, ok := t.trustedPeers[peer]; ok {
+    return true
+  }
+  return t.isLeader(peer)
+}
+
+func (t *Server) isSelfElectable() bool {
+  return t.getType() == pb.PeerType_ELECTABLE
+}
+
+func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
+  switch v := p.(type) {
+  case *pb.SetJobRequest:
+    return t.isSelfLeader()
+  case *pb.DeleteJobRequest:
+    return t.isSelfLeader()
+  case *pb.AcquireJobRequest:
+    return t.isSelfLeader()
+  case *pb.ReleaseJobRequest:
+    return t.isSelfLeader()
+  case *pb.State:
+    return t.isLeader(from)
+  case *pb.Leader:
+    return t.isTrusted(from)
+  case *pb.PeersSummary:
+    return t.isTrusted(from)
+  case *pb.AssignmentRequest:
+    return t.isSelfLeader()
+  case *pb.AssignmentResponse:
+    // Always require a trusted peer, and only observe messages sent to us
+    return t.isTrusted(from) && v.GetId() == t.getID()
+  case *pb.RaftAddrsRequest:
+    return t.isSelfLeader() && t.isTrusted(from)
+  case *pb.RaftAddrsResponse:
+    return t.isSelfElectable() && t.isTrusted(from)
+  default:
+    t.l.Println("No handler validation for message type")
+    return false // Fail closed so we're forced to implement
+	}
+}
+
+func (t *Server) Handle(topic string, peer string, p proto.Message) (proto.Message, error) {
+  if !t.CanHandleMessage(peer, p) {
+    return nil, nil
+  }
+
 	switch v := p.(type) {
 	// proto/peers.proto
 	case *pb.AssignmentRequest:
@@ -21,7 +73,7 @@ func (t *PeerPrint) Handle(topic string, peer string, p proto.Message) (proto.Me
 	case *pb.RaftAddrsRequest:
 		return t.OnRaftAddrsRequest(topic, peer, v)
 	case *pb.AssignmentResponse:
-		return nil, t.OnAssignmentResponse(topic, peer, v)
+		return t.OnAssignmentResponse(topic, peer, v)
 	case *pb.PollPeersResponse:
 		return nil, t.OnPollPeersResponse(topic, peer, v)
   case *pb.PeersSummary:
@@ -46,130 +98,94 @@ func (t *PeerPrint) Handle(topic string, peer string, p proto.Message) (proto.Me
 	}
 }
 
-func (t *PeerPrint) OnPollPeersRequest(topic string, from string, req *pb.PollPeersRequest) (*pb.PollPeersResponse, error) {
+func (t *Server) OnPollPeersRequest(topic string, from string, req *pb.PollPeersRequest) (*pb.PollPeersResponse, error) {
 	if rand.Float64() < req.Probability {
 		return &pb.PollPeersResponse{
-      Status: t.peerStatus(),
+      Status: &t.status,
     }, nil
 	}
   return nil, nil
 }
 
-func (t *PeerPrint) OnPollPeersResponse(topic string, from string, resp *pb.PollPeersResponse) error {
-	if t.polling == nil {
-    return nil
-  }
-
-  t.l.Println("Got poll response from", from)
-  t.pollResult = append(t.pollResult, resp.Status)
-  if len(t.pollResult) >= MaxPoll {
-    t.polling.Broadcast()
-  }
+func (t *Server) OnPollPeersResponse(topic string, from string, resp *pb.PollPeersResponse) error {
+  t.poller.Update(resp.Status)
   return nil
 }
-func (t *PeerPrint) OnAssignmentRequest(topic string, from string, req *pb.AssignmentRequest) (*pb.AssignmentResponse, error) {
-	if t.getLeader() == t.p.ID {
-		return &pb.AssignmentResponse{
-			Id:    from,
-			Topic: t.topic,
-			Type:  pb.PeerType_LISTENER,
-		}, nil
-	}
+func (t *Server) OnAssignmentRequest(topic string, from string, req *pb.AssignmentRequest) (*pb.AssignmentResponse, error) {
+  return &pb.AssignmentResponse{
+    LeaderId: t.getLeader(),
+    Id:    from,
+    Topic: t.getTopic(),
+    Type:  pb.PeerType_LISTENER,
+  }, nil
+}
+
+func (t *Server) OnAssignmentResponse(topic string, from string, resp *pb.AssignmentResponse) (*pb.RaftAddrsRequest, error) {
+  // New assignment, so close other topic
+  if prev, ok := t.sendPubsub[t.getTopic()]; ok {
+    close(prev)
+  }
+
+  t.status.Topic = resp.GetTopic()
+  t.status.Type = resp.GetType()
+	t.raft.SetLeader(resp.GetLeaderId())
+
+  // Open the new topic if we haven't already
+  if _, ok := t.sendPubsub[t.getTopic()]; !ok {
+    pub, err := t.open(t.getTopic())
+    if err != nil {
+      return nil, err
+    }
+    t.sendPubsub[t.getTopic()] = pub
+  }
+
+  // Begin raft connection process if we're electable, otherwise wait for
+  // data over pubsub (no action)
+  if t.getType() == pb.PeerType_ELECTABLE {
+    return t.raftAddrsRequest(), nil
+  }
   return nil, nil
 }
-func (t *PeerPrint) OnAssignmentResponse(topic string, from string, resp *pb.AssignmentResponse) error {
-	if _, ok := t.trustedPeers[from]; !ok {
-		return fmt.Errorf("Ignoring OnAssignmentResponse from untrusted peer %s", from)
-	}
-	if resp.Id == t.p.ID { // This is our assignment
-		t.topic = resp.GetTopic()
-		t.p.JoinTopic(t.ctx, t.topic, t.l)
-		t.typ = resp.GetType()
-		if t.typ == pb.PeerType_ELECTABLE {
-			if t.raft != nil {
-				return fmt.Errorf("TODO garbage collect old raft instance")
-			}
-			if err := t.p.Publish(t.ctx, t.topic, t.raftAddrsRequest()); err != nil {
-				return err
-			}
-			t.l.Println("Sent connection request; waiting for raft addresses to propagate")
-			time.Sleep(5 * time.Second)
 
-			ri, err := raft.New(t.ctx, t.raftHost, t.raftPath, maps.Keys(t.trustedPeers), &t.leadershipChange, t.l)
-			if err != nil {
-				return err
-			}
-			t.raft = ri
-			t.state.Set(t.raft, nil) // Switch to raft for state handling
-		}
-	}
-	// We always set the leader when receiving assignment messages
-	// on our topic
-	if resp.GetTopic() == t.topic {
-		t.leader = resp.GetLeaderId()
-		t.l.Printf("New leader:", t.leader)
-	}
-
-  return nil
-}
-
-func (t *PeerPrint) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrsRequest) (*pb.RaftAddrsResponse, error) {
-	if t.typ != pb.PeerType_ELECTABLE {
-		return nil, nil // Not our problem
-	}
-	if _, ok := t.trustedPeers[from]; ok && topic == t.topic {
-		if err := t.connectToRaftPeer(req.RaftId, req.RaftAddrs); err != nil {
-      return nil, err
-		}
+func (t *Server) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrsRequest) (*pb.RaftAddrsResponse, error) {
+	if _, ok := t.trustedPeers[from]; ok && topic == t.getTopic() {
+    peers := t.raft.GetPeers()
+    peers = append(peers, req.AddrInfo)
+    t.raft.SetPeers(peers)
 		return t.raftAddrsResponse(), nil
 	}
   return nil, nil
 }
 
-func (t *PeerPrint) OnRaftAddrsResponse(topic string, from string, resp *pb.RaftAddrsResponse) error {
-	if t.typ != pb.PeerType_ELECTABLE {
-		return nil // Not our problem
-	}
-	if _, ok := t.trustedPeers[from]; ok && topic == t.topic {
-		return t.connectToRaftPeer(resp.RaftId, resp.RaftAddrs)
-	}
-  return nil
+func (t *Server) OnRaftAddrsResponse(topic string, from string, resp *pb.RaftAddrsResponse) error {
+  return t.raft.SetPeers(resp.GetPeers())
 }
 
-func (t *PeerPrint) OnSetJobRequest(topic string, from string, req *pb.SetJobRequest) (*pb.State, error) {
-	if t.getLeader() != t.p.ID {
-    return nil, nil // Not our problem
+func (t *Server) OnSetJobRequest(topic string, from string, req *pb.SetJobRequest) (*pb.State, error) {
+	s, err := t.raft.Get()
+  if err != nil || s == nil {
+		return nil, fmt.Errorf("raft.Get(): %w\n", err)
 	}
-	s, err := t.state.Get()
-	if err != nil {
-		return nil, fmt.Errorf("state.Get(): %w\n", err)
-	}
-  j := s.Jobs[req.GetJob().GetId()]
-  ln := j.GetLock().GetPeer()
-  if ln != "" && ln != req.GetJob().GetLock().GetPeer() {
-    return nil, fmt.Errorf("Rejecting SetJob request: lock data was tampered with")
+  if j, ok := s.Jobs[req.GetJob().GetId()]; ok {
+    ln := j.GetLock().GetPeer()
+    if ln != "" && ln != req.GetJob().GetLock().GetPeer() {
+      return nil, fmt.Errorf("Rejecting SetJob request: lock data was tampered with")
+    }
   }
-
   s.Jobs[req.GetJob().GetId()] = req.GetJob()
-	return t.commitAndGetState(s)
+	return t.raft.Commit(s)
 }
 
-func (t *PeerPrint) OnDeleteJobRequest(topic string, from string, req *pb.DeleteJobRequest) (*pb.State, error) {
-	if t.getLeader() != t.p.ID {
-		return nil, nil // Not our problem
-	}
+func (t *Server) OnDeleteJobRequest(topic string, from string, req *pb.DeleteJobRequest) (*pb.State, error) {
   s, _, err := t.getMutableJob(req.GetId(), from)
 	if err != nil {
 		return nil, fmt.Errorf("OnDeleteJobRequest: %w", err)
 	}
   delete(s.Jobs, req.GetId())
-	return t.commitAndGetState(s)
+	return t.raft.Commit(s)
 }
 
-func (t *PeerPrint) OnAcquireJobRequest(topic string, from string, req *pb.AcquireJobRequest) (*pb.State, error) {
-	if t.getLeader() != t.p.ID {
-		return nil, nil // Not our problem
-	}
+func (t *Server) OnAcquireJobRequest(topic string, from string, req *pb.AcquireJobRequest) (*pb.State, error) {
   s, j, err := t.getMutableJob(req.GetId(), from)
 	if err != nil {
 		return nil, fmt.Errorf("OnAcquireJobRequest: %w", err)
@@ -178,37 +194,35 @@ func (t *PeerPrint) OnAcquireJobRequest(topic string, from string, req *pb.Acqui
     Peer:    from,
     Created: uint64(time.Now().Unix()),
   }
-	return t.commitAndGetState(s)
+	return t.raft.Commit(s)
 }
 
-func (t *PeerPrint) OnReleaseJobRequest(topic string, from string, req *pb.ReleaseJobRequest) (*pb.State, error) {
-	if t.getLeader() != t.p.ID {
-		return nil, nil // Not our problem
-	}
+func (t *Server) OnReleaseJobRequest(topic string, from string, req *pb.ReleaseJobRequest) (*pb.State, error) {
   s, j, err := t.getMutableJob(req.GetId(), from)
 	if err != nil {
 		return nil, fmt.Errorf("OnReleaseJobRequest: %w", err)
 	}
 	j.Lock = nil
-	return t.commitAndGetState(s)
+	return t.raft.Commit(s)
 }
-func (t *PeerPrint) OnState(topic string, from string, resp *pb.State) error {
-	if t.getLeader() == from && t.raft == nil {
-		t.state.Set(nil, resp)
+func (t *Server) OnState(topic string, from string, resp *pb.State) error {
+  t.pushCmd <- resp
+	if t.getLeader() == from {
+    _, err := t.raft.Commit(resp)
+    return err
 	}
-  // Also forward state change to the wrapper
-  if err := t.cmd.Push(resp); err != nil {
-    t.l.Println(err)
-  }
   return nil
 }
-func (t *PeerPrint) OnPeersSummary(topic string, from string, resp *pb.PeersSummary) error {
+func (t *Server) OnLeader(topic string, from string, resp *pb.Leader) error {
+  t.raft.SetLeader(resp.GetId())
+  return nil
+}
+
+func (t *Server) OnPeersSummary(topic string, from string, resp *pb.PeersSummary) error {
   if t.getLeader() == from {
-    t.peersSummary = resp
-  }
-  // Also forward state change to the wrapper
-  if err := t.cmd.Push(resp); err != nil {
-    t.l.Println(err)
+    // Peer summary is only "stored" ephemerally, i.e. passed along to the 
+    // wrapper
+    t.pushCmd <- resp
   }
   return nil
 }

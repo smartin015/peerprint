@@ -14,15 +14,27 @@ import (
 type Zmq struct {
   c *goczmq.Channeler
   p *goczmq.Channeler
+  recvChan chan<- proto.Message
+  errChan chan<- error
+  sendChan chan proto.Message
+  pushChan chan proto.Message
 }
 
 type Destructor func()
 
-func New(rep_addr string, push_addr string) *Zmq {
-  return &Zmq {
+func New(rep_addr string, push_addr string, recvChan chan<- proto.Message, errChan chan<- error) (chan<- proto.Message, chan<- proto.Message) {
+  z := &Zmq {
     c: goczmq.NewRepChanneler(rep_addr), // will Bind() by default
     p: goczmq.NewPushChanneler(push_addr), // will Connect() by default
-  }
+    sendChan: make(chan proto.Message, 5),
+    pushChan: make(chan proto.Message, 5),
+    recvChan: recvChan,
+    errChan: errChan,
+ }
+ go z.receiver()
+ go z.pipe(z.sendChan, z.c.SendChan)
+ go z.pipe(z.pushChan, z.p.SendChan)
+ return z.sendChan, z.pushChan
 }
 
 // Returns a logger and its destructor
@@ -43,25 +55,38 @@ func (z *Zmq) Destroy() {
   z.p.Destroy()
 }
 
-func (z *Zmq) Loop(cb func(proto.Message)) {
+func (z *Zmq) receiver() {
   for {
     select {
       case mm, more := <-z.c.RecvChan:
         if !more {
           return // Channel closed; no more messages
         }
-        msg, err := z.Deserialize(mm)
+        msg, err := Deserialize(mm)
         if err != nil {
-          log.Println("cmd Loop() error:", err)
-          panic("TEST")
+          z.errChan <- fmt.Errorf("receiver error: %w", err)
         } else {
-          cb(msg)
+          z.recvChan <- msg
         }
     }
   }
 }
 
-func (z *Zmq) Deserialize(mm [][]byte) (proto.Message, error) {
+func (z *Zmq) pipe(in <-chan proto.Message, out chan<- [][]byte) {
+  for {
+    req, more := <-in
+    if !more {
+      return
+    }
+    data, err := Serialize(req)
+    if err != nil {
+      z.errChan <- err
+    }
+    out<- data
+  }
+}
+
+func Deserialize(mm [][]byte) (proto.Message, error) {
   for _, m := range(mm) {
     any := anypb.Any{}
     if err := proto.Unmarshal(m, &any); err != nil {
@@ -76,7 +101,7 @@ func (z *Zmq) Deserialize(mm [][]byte) (proto.Message, error) {
   return nil, fmt.Errorf("Deserialize failure for msg: %+v", mm)
 }
 
-func (z *Zmq) Serialize(req proto.Message) ([][]byte, error) {
+func Serialize(req proto.Message) ([][]byte, error) {
 	any, err := anypb.New(req)
 	if err != nil {
 		return nil, fmt.Errorf("any-cast failed")
@@ -86,22 +111,4 @@ func (z *Zmq) Serialize(req proto.Message) ([][]byte, error) {
 		return nil, fmt.Errorf("marshal error: %w", err)
 	}
   return [][]byte{msg}, nil
-}
-
-func (z *Zmq) Push(req proto.Message) error {
-  data, err := z.Serialize(req)
-  if err != nil {
-    return err
-  }
-  z.p.SendChan <- data
-  return nil
-}
-
-func (z *Zmq) Send(req proto.Message) error {
-  data, err := z.Serialize(req)
-  if err != nil {
-    return err
-  }
-	z.c.SendChan <- data
-  return nil
 }

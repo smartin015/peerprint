@@ -2,7 +2,21 @@
 
 ![build status](https://img.shields.io/travis/smartin015/peerprint/main?style=plastic)
 
-PeerPrint is a framework for sharing 3D printing tasks across a peer-to-peer network of 3D printers.
+**PeerPrint is a framework for sharing 3D printing tasks across a peer-to-peer network of 3D printers.**
+
+# Mission
+
+**PeerPrint's mission is to facilitate coordination of a diverse network of 3D printers to enable efficient, reliable, and scalable 3D printing.**
+
+According to the US EPA, industry and transportation contribute [over 50% of all greenhouse gas emissions](https://www.epa.gov/ghgemissions/sources-greenhouse-gas-emissions). 
+
+While 3D printing (particularly filament) is not emissions-free, networked printing through peerprint can provide:
+
+* better efficiency (fewer printers that are idle less often)
+* [eco-friendly](https://us.polymaker.com/products/polyterra-pla) material choices, rather than new plastic [which is recycled less than 10% of the time](https://www.epa.gov/facts-and-figures-about-materials-waste-and-recycling/plastics-material-specific-data).
+* lower transportation costs (transporting 1kg of filament uses way fewer boxes, packaging, and transportation volume than tens - or hundreds - of small parts)
+
+More 3D printers coordinating on the same work also means more parallelism in printing, and less disruption when one or more printers develops a problem and stops printing.
 
 # Integration
 
