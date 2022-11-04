@@ -22,6 +22,7 @@ const (
 type Server struct {
 	l                *log.Logger
 	trustedPeers     map[string]struct{}
+  roleAssigned     chan pb.PeerType
 
   recvPubsub      <-chan tr.TopicMsg
   recvCmd         <-chan proto.Message
@@ -60,6 +61,7 @@ func New(opts ServerOptions) *Server {
   s := &Server{
     l:                opts.Logger,
     trustedPeers:     tp,
+    roleAssigned:     make(chan pb.PeerType),
 
     recvPubsub:       opts.RecvPubsub,
     recvCmd:          opts.RecvCmd,
@@ -132,24 +134,34 @@ func (t *Server) Loop(ctx context.Context) {
     for t.getTopic() == AssignmentTopic {
       select {
       case t.sendPubsub[AssignmentTopic] <- &pb.AssignmentRequest{}:
-        t.l.Println("Sent pubsub assignment request")
-        time.Sleep(10 * time.Second)
       default:
         panic("requestAssignment: channel overflow during request")
+      }
+
+      t.l.Println("Sent pubsub assignment request")
+      tmr := time.NewTimer(10 * time.Second)
+      select {
+      case <-ctx.Done():
+        return
+      case <-t.roleAssigned:
+        break
+      case <-tmr.C:
+        continue
       }
     }
   }
 	for {
     select {
     case req := <-t.recvCmd:
+      t.l.Println("recvCmd")
       var err error
+      var rep proto.Message
       // Skip pubsub if we're the leader, as we are authoritative
       if t.getID() == t.getLeader() {
-        rep, err := t.Handle(t.getTopic(), t.getID(), req)
-        if err != nil {
-          t.l.Println(fmt.Errorf("Handle error: %w", err))
-        } else if rep != nil {
+        rep, err = t.Handle(t.getTopic(), t.getID(), req)
+        if err == nil && rep != nil {
           t.sendPubsub[t.getTopic()]<- rep
+          t.pushCmd<- rep
         }
       } else {
         // Otherwise we publish the command as-is, return OK
@@ -172,22 +184,24 @@ func (t *Server) Loop(ctx context.Context) {
       }
 		case <-t.raft.LeaderChan():
 			if t.getLeader() == t.getID() {
-				t.publishLeader()
+        t.sendPubsub[t.getTopic()]<-&pb.Leader{
+          Id: t.getLeader(),
+        }
         // Important to publish state after initial leader election,
         // so all listener nodes are also on the same page.
         // This may fail on new queue that hasn't been bootstrapped yet
         s, err := t.raft.Get()
-        if err != nil {
-          panic(err)
+        if err == nil {
+          t.sendPubsub[t.getTopic()]<- s
+          t.pushCmd<- s
         }
-        t.sendPubsub[t.getTopic()]<- s
-        t.pushCmd<- s
 			}
       t.poller.Resume()
     case prob, more := <-t.poller.Epoch():
       if !more {
-        return 
+        return
       }
+      t.l.Println(t.getTopic())
       t.sendPubsub[t.getTopic()]<- &pb.PollPeersRequest{
         Probability: prob,
       }
@@ -201,17 +215,9 @@ func (t *Server) Loop(ctx context.Context) {
       default:
       }
 		case <-ctx.Done():
+      close(t.roleAssigned)
 			return
 		}
-	}
-}
-
-func (t *Server) publishLeader() {
-	// Peers always scrape leader ID from assignment, even if they aren't
-	// the assignee
-  t.sendPubsub[AssignmentTopic]<-&pb.AssignmentResponse{
-		Topic:    t.getTopic(),
-		LeaderId: t.getLeader(),
 	}
 }
 
@@ -234,19 +240,26 @@ func (t *Server) raftAddrsResponse() *pb.RaftAddrsResponse {
 	}}
 }
 
+func (t *Server) checkMutable(j *pb.Job, peer string) error {
+	expiry := uint64(time.Now().Unix() - LockTimeoutSeconds)
+  p := j.Lock.GetPeer()
+	if !(p == "" || p == peer || j.Lock.Created < expiry) {
+    return fmt.Errorf("access denied for %q; job %s acquired by %q", peer, j.GetId(), j.Lock.GetPeer())
+  }
+  return nil
+}
+
 func (t *Server) getMutableJob(jid string, peer string) (*pb.State, *pb.Job, error) {
 	s, err := t.raft.Get()
 	if err != nil {
 		return nil, nil, fmt.Errorf("raft.Get(): %w", err)
 	}
 	j, ok := s.Jobs[jid]
-	if !ok {
-		return nil, nil, fmt.Errorf("Job %s not found", jid)
-	}
-	expiry := uint64(time.Now().Unix() - LockTimeoutSeconds)
-  p := j.Lock.GetPeer()
-	if !(p == "" || p == peer || j.Lock.Created < expiry) {
-    return nil, nil, fmt.Errorf("Cannot modify job %s; acquired by %s", jid, j.Lock.GetPeer())
+  if !ok {
+    return nil, nil, fmt.Errorf("job not found")
+  }
+  if err := t.checkMutable(j, peer); err != nil {
+    return nil, nil, err
   }
   return s, j, nil
 }

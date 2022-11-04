@@ -36,5 +36,3 @@ func TestUnmarshalError(t *testing.T) {
     t.Errorf("Expected unmarshal error")
   }
 }
-
-

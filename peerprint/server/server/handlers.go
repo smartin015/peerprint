@@ -43,7 +43,7 @@ func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
   case *pb.Leader:
     return t.isTrusted(from)
   case *pb.PeersSummary:
-    return t.isTrusted(from)
+    return t.isLeader(from)
   case *pb.AssignmentRequest:
     return t.isSelfLeader()
   case *pb.AssignmentResponse:
@@ -61,6 +61,7 @@ func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
 
 func (t *Server) Handle(topic string, peer string, p proto.Message) (proto.Message, error) {
   if !t.CanHandleMessage(peer, p) {
+    t.l.Println("no can do")
     return nil, nil
   }
 
@@ -140,10 +141,12 @@ func (t *Server) OnAssignmentResponse(topic string, from string, resp *pb.Assign
   }
 
   // Begin raft connection process if we're electable, otherwise wait for
-  // data over pubsub (no action)
+  // state to arrive over pubsub (no action)
   if t.getType() == pb.PeerType_ELECTABLE {
     return t.raftAddrsRequest(), nil
   }
+
+  t.roleAssigned<- t.getType()
   return nil, nil
 }
 
@@ -166,12 +169,19 @@ func (t *Server) OnSetJobRequest(topic string, from string, req *pb.SetJobReques
   if err != nil || s == nil {
 		return nil, fmt.Errorf("raft.Get(): %w\n", err)
 	}
-  if j, ok := s.Jobs[req.GetJob().GetId()]; ok {
-    ln := j.GetLock().GetPeer()
-    if ln != "" && ln != req.GetJob().GetLock().GetPeer() {
-      return nil, fmt.Errorf("Rejecting SetJob request: lock data was tampered with")
+  // Confirm job can be written to if already exists
+  j, ok := s.Jobs[req.GetJob().GetId()]
+  if ok {
+    if err := t.checkMutable(j, from); err != nil {
+      return nil, err
     }
   }
+
+  // Ensure lock data is not tampered with
+  if j != nil {
+    req.GetJob().Lock = j.GetLock()
+  }
+
   s.Jobs[req.GetJob().GetId()] = req.GetJob()
 	return t.raft.Commit(s)
 }
@@ -219,10 +229,8 @@ func (t *Server) OnLeader(topic string, from string, resp *pb.Leader) error {
 }
 
 func (t *Server) OnPeersSummary(topic string, from string, resp *pb.PeersSummary) error {
-  if t.getLeader() == from {
-    // Peer summary is only "stored" ephemerally, i.e. passed along to the 
-    // wrapper
-    t.pushCmd <- resp
-  }
+  // Peer summary is only "stored" ephemerally, i.e. passed along to the 
+  // wrapper
+  t.pushCmd <- resp
   return nil
 }
