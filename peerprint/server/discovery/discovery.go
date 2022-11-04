@@ -8,8 +8,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
@@ -61,6 +61,13 @@ func New(ctx context.Context, m Method, h host.Host, rendezvous string, logger *
 	return c
 }
 
+func (c *Discovery) bootstrapPeer(peer peer.AddrInfo, wg *sync.WaitGroup) {
+  defer wg.Done()
+  if err := c.h.Connect(c.ctx, peer); err != nil {
+    c.l.Printf("Bootstrap warning: %s\n", err)
+  }
+}
+
 func (c *Discovery) initDHT() *dht.IpfsDHT {
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
@@ -74,14 +81,9 @@ func (c *Discovery) initDHT() *dht.IpfsDHT {
 		panic(err)
 	}
 	var wg sync.WaitGroup
-	for _, peerinfo := range bootstrapPeers {
+	for _, peer := range bootstrapPeers {
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := c.h.Connect(c.ctx, peerinfo); err != nil {
-				c.l.Printf("Bootstrap warning: %s\n", err)
-			}
-		}()
+		go c.bootstrapPeer(peer, &wg)
 	}
 	wg.Wait()
 	return kademliaDHT

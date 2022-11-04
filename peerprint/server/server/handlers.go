@@ -154,7 +154,9 @@ func (t *Server) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrs
 	if _, ok := t.trustedPeers[from]; ok && topic == t.getTopic() {
     peers := t.raft.GetPeers()
     peers = append(peers, req.AddrInfo)
-    t.raft.SetPeers(peers)
+    if err := t.raft.SetPeers(peers); err != nil {
+      return nil, err
+    }
 		return t.raftAddrsResponse(), nil
 	}
   return nil, nil

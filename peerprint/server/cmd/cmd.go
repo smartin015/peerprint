@@ -32,8 +32,8 @@ func New(rep_addr string, push_addr string, recvChan chan<- proto.Message, errCh
     errChan: errChan,
  }
  go z.receiver()
- go z.pipe(z.sendChan, z.c.SendChan)
- go z.pipe(z.pushChan, z.p.SendChan)
+ go z.pipe(z.sendChan, z.c)
+ go z.pipe(z.pushChan, z.p)
  return z.sendChan, z.pushChan
 }
 
@@ -56,23 +56,18 @@ func (z *Zmq) Destroy() {
 }
 
 func (z *Zmq) receiver() {
-  for {
-    select {
-      case mm, more := <-z.c.RecvChan:
-        if !more {
-          return // Channel closed; no more messages
-        }
-        msg, err := Deserialize(mm)
-        if err != nil {
-          z.errChan <- fmt.Errorf("receiver error: %w", err)
-        } else {
-          z.recvChan <- msg
-        }
+  for mm := range z.c.RecvChan {
+    msg, err := Deserialize(mm)
+    if err != nil {
+      z.errChan <- fmt.Errorf("receiver error: %w", err)
+    } else {
+      z.recvChan <- msg
     }
   }
 }
 
-func (z *Zmq) pipe(in <-chan proto.Message, out chan<- [][]byte) {
+func (z *Zmq) pipe(in <-chan proto.Message, c *goczmq.Channeler) {
+  defer c.Destroy()
   for {
     req, more := <-in
     if !more {
@@ -82,23 +77,24 @@ func (z *Zmq) pipe(in <-chan proto.Message, out chan<- [][]byte) {
     if err != nil {
       z.errChan <- err
     }
-    out<- data
+    c.SendChan<- data
   }
 }
 
 func Deserialize(mm [][]byte) (proto.Message, error) {
-  for _, m := range(mm) {
-    any := anypb.Any{}
-    if err := proto.Unmarshal(m, &any); err != nil {
-      return nil, fmt.Errorf("Failed to unmarshal ZMQ message to Any(): %w", err)
-    }
-    msg, err := any.UnmarshalNew()
-    if err != nil {
-      return nil, fmt.Errorf("Failed to unmarshal ZMQ message from Any() to final type: %w", err)
-    }
-    return msg, nil
+  if len(mm) == 0 {
+    return nil, fmt.Errorf("cannot deserialize empty msg")
   }
-  return nil, fmt.Errorf("Deserialize failure for msg: %+v", mm)
+
+  any := anypb.Any{}
+  if err := proto.Unmarshal(mm[0], &any); err != nil {
+    return nil, fmt.Errorf("Failed to unmarshal ZMQ message to Any(): %w", err)
+  }
+  msg, err := any.UnmarshalNew()
+  if err != nil {
+    return nil, fmt.Errorf("Failed to unmarshal ZMQ message from Any() to final type: %w", err)
+  }
+  return msg, nil
 }
 
 func Serialize(req proto.Message) ([][]byte, error) {

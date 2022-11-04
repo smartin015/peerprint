@@ -92,12 +92,15 @@ func (t *Server) setup() {
 
 	if t.amTrusted() {
 		// t.l.Println("We are a trusted peer; overriding assignment")
-		t.OnAssignmentResponse(AssignmentTopic, t.getID(), &pb.AssignmentResponse{
+    // TODO do we need to issue a raft addrs request here since electable?
+    if _, err := t.OnAssignmentResponse(AssignmentTopic, t.getID(), &pb.AssignmentResponse{
 			Id:       t.getID(),
 			Topic:    DefaultTopic,
 			Type:     pb.PeerType_ELECTABLE,
 			LeaderId: "",
-		})
+		}); err != nil {
+      panic(err)
+    }
 	}
 }
 
@@ -120,10 +123,6 @@ func (t *Server) getType() pb.PeerType {
 
 func (t *Server) getLeader() string {
   return t.raft.Leader()
-}
-
-func (t *Server) getRaftPeers() []*pb.AddrInfo {
-  return t.raft.GetPeers()
 }
 
 
@@ -180,7 +179,7 @@ func (t *Server) Loop(ctx context.Context) {
         continue
       }
       if rep != nil {
-        t.sendPubsub[msg.Topic] <- rep.(proto.Message)
+        t.sendPubsub[msg.Topic] <- rep
       }
 		case <-t.raft.LeaderChan():
 			if t.getLeader() == t.getID() {

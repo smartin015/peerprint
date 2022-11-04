@@ -141,7 +141,10 @@ func TestPeersSummary(t *testing.T) {
     PeerEstimate: 1337,
     Variance: 0.5,
   }
-  pp.P.OnPeersSummary(TestTopic, TrustedPeer, want)
+  err := pp.P.OnPeersSummary(TestTopic, TrustedPeer, want)
+  if err != nil {
+    t.Errorf(err.Error())
+  }
   got := <-pp.CmdPush
   if got != want {
     t.Errorf("want %v got %v", want, got)
@@ -179,7 +182,7 @@ func testJobMutation(t *testing.T, req proto.Message, lockPeer string) (*pb.Job,
   if err != nil {
     return nil, err
   }
-  j, _ := pp.R.s.Jobs["foo"]
+  j := pp.R.s.Jobs["foo"]
   return j, nil
 }
 
@@ -355,8 +358,11 @@ func TestHandleNonLeaderMutationRequest(t *testing.T) {
 }
 func TestMissingJobRequest(t *testing.T) {
   pp := testEnv(t, true, true)
-  pp.P.raft.Commit(&pb.State{Jobs: make(map[string]*pb.Job)})
-  _, err := pp.P.Handle(AssignmentTopic, TrustedPeer, &pb.AcquireJobRequest{
+  _, err := pp.P.raft.Commit(&pb.State{Jobs: make(map[string]*pb.Job)})
+  if err != nil {
+    t.Errorf(err.Error())
+  }
+  _, err = pp.P.Handle(AssignmentTopic, TrustedPeer, &pb.AcquireJobRequest{
     Id: "notarealjob",
   })
   if err == nil {

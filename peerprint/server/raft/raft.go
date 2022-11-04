@@ -179,11 +179,11 @@ func (ri *RaftImpl) GetPeers() []*pb.AddrInfo {
   panic("TODO")
 }
 
-// New creates all moving parts needed to elect a leader and synchronize a log across the leader peers.
-// The result has an .Observer field channel which provides updates.
 func (ri *RaftImpl) SetPeers(ais []*pb.AddrInfo) error {
   for _, ai := range ais {
-    ri.addServer(ai.GetId(), ai.GetAddrs())
+    if err := ri.addServer(ai.GetId(), ai.GetAddrs()); err != nil {
+      return err
+    }
   }
 
   // TODO handle reinit
@@ -211,7 +211,9 @@ func (ri *RaftImpl) SetPeers(ais []*pb.AddrInfo) error {
 		return err
 	}
 	if !bootstrapped {
-		raft.BootstrapCluster(cfg, logStore, logStore, snapshots, ri.transport, raft.Configuration{Servers: ri.servers})
+    if err := raft.BootstrapCluster(cfg, logStore, logStore, snapshots, ri.transport, raft.Configuration{Servers: ri.servers}); err != nil {
+      return err
+    }
 	}
 
 	if ri.raft, err = raft.NewRaft(cfg, ri.consensus.FSM(), logStore, logStore, snapshots, ri.transport); err != nil {

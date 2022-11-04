@@ -87,7 +87,8 @@ func (p *PollerImpl) loop() {
     select {
       case <-p.ticker.C:
         if p.polling == nil {
-          ctx2, _ := context.WithTimeout(p.ctx, p.pollTimeout)
+          ctx2, cancel := context.WithTimeout(p.ctx, p.pollTimeout)
+          defer cancel()
           go p.pollPeersSync(ctx2)
           p.ticker.Reset(p.pollPeriod)
         }

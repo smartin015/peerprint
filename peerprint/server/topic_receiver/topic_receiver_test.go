@@ -7,8 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
   "github.com/libp2p/go-libp2p"
   "google.golang.org/protobuf/types/known/wrapperspb"
-  "github.com/libp2p/go-libp2p-core/host"
-  "github.com/libp2p/go-libp2p-core/peer"
+  "github.com/libp2p/go-libp2p/core/host"
+  "github.com/libp2p/go-libp2p/core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 

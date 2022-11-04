@@ -1,22 +1,22 @@
 package main
 
 import (
-  "strings"
 	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
-  "github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
+	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"google.golang.org/protobuf/proto"
-	"github.com/smartin015/peerprint/peerprint_server/server"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/smartin015/peerprint/peerprint_server/cmd"
 	"github.com/smartin015/peerprint/peerprint_server/discovery"
 	"github.com/smartin015/peerprint/peerprint_server/raft"
+	"github.com/smartin015/peerprint/peerprint_server/server"
+	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
+	"google.golang.org/protobuf/proto"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -24,17 +24,16 @@ var (
 	pubsubAddrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to join for pubsub")
 	raftAddrFlag       = flag.String("raftAddr", "/ip4/0.0.0.0/tcp/0", "Address to join for RAFT consensus")
 	raftPathFlag       = flag.String("raftPath", "./state.raft", "Path to raft state snapshot")
-  rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required")
-  trustedPeersFlag   = flag.String("trustedPeers", "", "Comma-separated list of peer IDs to consider as trusted")
+	rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required")
+	trustedPeersFlag   = flag.String("trustedPeers", "", "Comma-separated list of peer IDs to consider as trusted")
 	localFlag          = flag.Bool("local", true, "Use local MDNS (instead of global DHT) for discovery")
 	privkeyfileFlag    = flag.String("privkeyfile", "./priv.key", "Path to serialized private key (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubkeyfile", "./pub.key", "Path to serialized public key (if not present, one will be created at that location)")
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
-  zmqRepFlag        = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
-  zmqPushFlag        = flag.String("zmqpush", "", "zmq server PUSH address (can be IPC, socket, etc.) defaults to none")
-  zmqLogAddrFlag        = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
-  bootstrapFlag      = flag.Bool("bootstrap", true, "Bootstrap storage if not already established (set false for errors if no initial state)")
-	logger = log.New(os.Stderr, "", 0)
+	zmqRepFlag         = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+	zmqPushFlag        = flag.String("zmqpush", "", "zmq server PUSH address (can be IPC, socket, etc.) defaults to none")
+	zmqLogAddrFlag     = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+	logger             = log.New(os.Stderr, "", 0)
 )
 
 func fileExists(path string) bool {
@@ -101,26 +100,25 @@ func main() {
 	if *trustedPeersFlag == "" {
 		panic("-trustedPeers must be specified!")
 	}
-  if *zmqLogAddrFlag != "" {
-    var dlog cmd.Destructor
-    logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
-    defer dlog()
-  }
+	if *zmqLogAddrFlag != "" {
+		var dlog cmd.Destructor
+		logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
+		defer dlog()
+	}
 
-  tpstr := ""
-  tps := []string{}
-  for _, tp := range(strings.Split(*trustedPeersFlag, ",")) {
-    tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
-    tps = append(tps, strings.TrimSpace(tp))
-  }
-  logger.Printf("Rendezvous:%s\nPeers:\n%s\n", *rendezvousFlag, tpstr)
+	tpstr := ""
+	tps := []string{}
+	for _, tp := range strings.Split(*trustedPeersFlag, ",") {
+		tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
+		tps = append(tps, strings.TrimSpace(tp))
+	}
+	logger.Printf("Rendezvous:%s\nPeers:\n%s\n", *rendezvousFlag, tpstr)
 
 	ctx := context.Background()
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
 	}
-
 
 	h, err := libp2p.New(libp2p.ListenAddrStrings(*pubsubAddrFlag), libp2p.Identity(kpriv))
 	if err != nil {
@@ -132,12 +130,13 @@ func main() {
 	}
 
 	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
-  disco := discovery.DHT
-  if *localFlag {
-    disco = discovery.MDNS
-  }
-  d := discovery.New(ctx, disco, h, *rendezvousFlag, logger)
-	connectCtx, _ := context.WithTimeout(ctx, *connectTimeoutFlag)
+	disco := discovery.DHT
+	if *localFlag {
+		disco = discovery.MDNS
+	}
+	d := discovery.New(ctx, disco, h, *rendezvousFlag, logger)
+	connectCtx, cancel := context.WithTimeout(ctx, *connectTimeoutFlag)
+	defer cancel()
 	if err := d.AwaitReady(connectCtx); err != nil {
 		panic(fmt.Errorf("Error connecting to peers: %w", err))
 	} else {
@@ -148,30 +147,30 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-  r := raft.New(nil, rh, *raftPathFlag, logger)
+	r := raft.New(context.Background(), rh, *raftPathFlag, logger)
 
-  cmdRecvChan := make(chan proto.Message, 5)
-  subChan := make(chan tr.TopicMsg, 5)
-  errChan := make(chan error, 5)
+	cmdRecvChan := make(chan proto.Message, 5)
+	subChan := make(chan tr.TopicMsg, 5)
+	errChan := make(chan error, 5)
 
-  openFn := func(topic string) (chan<- proto.Message, error) {
-    return tr.NewTopicChannel(ctx, subChan, h.ID().String(), ps, topic, errChan)
-  }
+	openFn := func(topic string) (chan<- proto.Message, error) {
+		return tr.NewTopicChannel(ctx, subChan, h.ID().String(), ps, topic, errChan)
+	}
 
-  cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
-  logger.Println("ZMQ sockets at", *zmqRepFlag, *zmqPushFlag)
+	cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
+	logger.Println("ZMQ sockets at", *zmqRepFlag, *zmqPushFlag)
 
 	s := server.New(server.ServerOptions{
-    Logger: logger,
-    Raft: r,
-    TrustedPeers: tps,
+		Logger:       logger,
+		Raft:         r,
+		TrustedPeers: tps,
 
-    RecvPubsub: subChan,
-    RecvCmd: cmdRecvChan,
+		RecvPubsub: subChan,
+		RecvCmd:    cmdRecvChan,
 
-    SendCmd: cmdSend,
-    PushCmd: cmdPush,
-    Opener: openFn,
-  })
+		SendCmd: cmdSend,
+		PushCmd: cmdPush,
+		Opener:  openFn,
+	})
 	s.Loop(ctx)
 }

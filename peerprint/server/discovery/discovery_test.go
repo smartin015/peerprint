@@ -7,8 +7,8 @@ import (
   "testing"
   "log"
   "github.com/libp2p/go-libp2p"
-  "github.com/libp2p/go-libp2p-core/host"
-  "github.com/libp2p/go-libp2p-core/peer"
+  "github.com/libp2p/go-libp2p/core/host"
+  "github.com/libp2p/go-libp2p/core/peer"
 )
 
 const rendezvous = "test_rendezvous"
@@ -76,7 +76,9 @@ func TestNewLocal(t *testing.T) {
   // Don't actually need to wait long, as HandlePeerFound already triggered
   ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Millisecond)
   t.Cleanup(cancel)
-  d.AwaitReady(ctx)
+  if err := d.AwaitReady(ctx); err == nil {
+    t.Errorf("Expected context cancel on awaitready")
+  }
   assertHasPeers(t, h, peers)
 }
 func TestNewDHT(t *testing.T) {
@@ -91,6 +93,8 @@ func TestNewDHT(t *testing.T) {
   // Don't actually need to wait long, as HandlePeerFound already triggered
   ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Millisecond)
   t.Cleanup(cancel)
-  d.AwaitReady(ctx)
+  if err := d.AwaitReady(ctx); err == nil {
+    t.Errorf("Expected context cancel on awaitready")
+  }
   assertHasPeers(t, h, peers)
 }
