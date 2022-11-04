@@ -34,7 +34,7 @@ type Server struct {
 	raft             raft.Raft
   poller           poll.Poller
   status           pb.PeerStatus
-  open             func(string) (chan proto.Message, error)
+  open             func(string) (chan<- proto.Message, error)
 }
 
 type ServerOptions struct {
@@ -50,7 +50,7 @@ type ServerOptions struct {
   SendCmd         chan<- proto.Message
   PushCmd         chan<- proto.Message
 
-  Opener func(string)(chan proto.Message, error)
+  Opener func(string)(chan<- proto.Message, error)
 }
 
 func New(opts ServerOptions) *Server {

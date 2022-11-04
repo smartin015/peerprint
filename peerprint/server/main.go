@@ -6,16 +6,15 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
-	"github.com/ghodss/yaml"
-	ipfs "github.com/ipfs/go-ipfs-api"
+  "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/smartin015/peerprint/peerprint_server/conn"
-	pb "github.com/smartin015/peerprint/peerprint_server/proto"
 	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"google.golang.org/protobuf/proto"
 	"github.com/smartin015/peerprint/peerprint_server/server"
 	"github.com/smartin015/peerprint/peerprint_server/cmd"
-	"google.golang.org/protobuf/encoding/protojson"
-	"io"
+	"github.com/smartin015/peerprint/peerprint_server/discovery"
+	"github.com/smartin015/peerprint/peerprint_server/raft"
 	"log"
 	"os"
 	"time"
@@ -25,9 +24,8 @@ var (
 	pubsubAddrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to join for pubsub")
 	raftAddrFlag       = flag.String("raftAddr", "/ip4/0.0.0.0/tcp/0", "Address to join for RAFT consensus")
 	raftPathFlag       = flag.String("raftPath", "./state.raft", "Path to raft state snapshot")
-	registryFlag       = flag.String("registry", "QmZQ4bLHRCrcmJUnTbY7updR6chfvumbaEx6cCya3chz9n", "IPFS content ID of the queue (required)")
-	queueFlag          = flag.String("queue", "Test queue", "Name of the registered queue  (required)")
-	ipfsServerFlag     = flag.String("ipfs_server", "localhost:5001", "Route to the IPFS daemon / server")
+  rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required")
+  trustedPeersFlag   = flag.String("trustedPeers", "", "Comma-separated list of peer IDs to consider as trusted")
 	localFlag          = flag.Bool("local", true, "Use local MDNS (instead of global DHT) for discovery")
 	privkeyfileFlag    = flag.String("privkeyfile", "./priv.key", "Path to serialized private key (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubkeyfile", "./pub.key", "Path to serialized public key (if not present, one will be created at that location)")
@@ -38,56 +36,6 @@ var (
   bootstrapFlag      = flag.Bool("bootstrap", true, "Bootstrap storage if not already established (set false for errors if no initial state)")
 	logger = log.New(os.Stderr, "", 0)
 )
-
-func getFileAsJSON(cid string) ([]byte, error) {
-  var fh io.ReadCloser
-  var err error
-  if strings.Contains(cid, ".y") {
-    fh, err = os.Open(cid)
-  } else {
-    // TODO this assumes the daemon is running - should probably
-    // guard this
-    sh := ipfs.NewShell(*ipfsServerFlag)
-    fh, err = sh.Cat(cid)
-  }
-  if err != nil {
-    return nil, fmt.Errorf("failed to open %s: %w", cid, err)
-  }
-  defer fh.Close()
-
-	y := make([]byte, 4096)
-  n, err := fh.Read(y)
-  if err != nil && err != io.EOF {
-    return nil, fmt.Errorf("ipfs Read() error: %w", err)
-  }
-	return yaml.YAMLToJSON(y[:n])
-}
-
-func getRegistry(cid string) (*pb.Registry, error) {
-	j, err := getFileAsJSON(cid)
-	if err != nil {
-		return nil, err
-	}
-	m := &pb.Registry{}
-	err = protojson.Unmarshal(j, m)
-	if err != nil {
-		return nil, fmt.Errorf("Registry unmarshal error: %w", err)
-	}
-	return m, nil
-}
-
-func getQueueFromRegistry(cid string, queue string) (*pb.Queue, error) {
-	reg, err := getRegistry(cid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get registry %v: %w", cid, err)
-	}
-	for _, q := range reg.Queues {
-		if q.Name == queue {
-			return q, nil
-		}
-	}
-	return nil, fmt.Errorf("failed to find queue %v in registry %v (%d entries)", queue, cid, len(reg.Queues))
-}
 
 func fileExists(path string) bool {
 	if _, err := os.Stat(path); err == nil {
@@ -147,11 +95,11 @@ func loadOrGenerateKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, 
 
 func main() {
 	flag.Parse()
-	if *registryFlag == "" {
-		panic("-registry must be specified!")
+	if *rendezvousFlag == "" {
+		panic("-rendezvous must be specified!")
 	}
-	if *queueFlag == "" {
-		panic("-queue must be specified!")
+	if *trustedPeersFlag == "" {
+		panic("-trustedPeers must be specified!")
 	}
   if *zmqLogAddrFlag != "" {
     var dlog cmd.Destructor
@@ -159,17 +107,13 @@ func main() {
     defer dlog()
   }
 
-	logger.Printf("Fetching queue %v details from registry %v", *queueFlag, *registryFlag)
-	queue, err := getQueueFromRegistry(*registryFlag, *queueFlag)
-	if err != nil {
-		panic(fmt.Errorf("Error fetching queue: %w", err))
-	}
-
   tpstr := ""
-  for _, tp := range(queue.TrustedPeers) {
+  tps := []string{}
+  for _, tp := range(strings.Split(*trustedPeersFlag, ",")) {
     tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
+    tps = append(tps, strings.TrimSpace(tp))
   }
-	logger.Printf("%s (%s) %s\n%s\n", queue.Name, queue.Url, queue.Desc, tpstr)
+  logger.Printf("Rendezvous:%s\nPeers:\n%s\n", *rendezvousFlag, tpstr)
 
 	ctx := context.Background()
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
@@ -188,7 +132,11 @@ func main() {
 	}
 
 	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
-  d := discovery.New(ctx, h, (*localFlag) ? discovery.MDNS : discovery.DHT, queue.Rendezvous, logger)
+  disco := discovery.DHT
+  if *localFlag {
+    disco = discovery.MDNS
+  }
+  d := discovery.New(ctx, disco, h, *rendezvousFlag, logger)
 	connectCtx, _ := context.WithTimeout(ctx, *connectTimeoutFlag)
 	if err := d.AwaitReady(connectCtx); err != nil {
 		panic(fmt.Errorf("Error connecting to peers: %w", err))
@@ -200,26 +148,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-  raft := raft.NewInMemory(nil, rh, *raftPathFlag, *bootstrapFlag)
+  r := raft.New(nil, rh, *raftPathFlag, logger)
 
   cmdRecvChan := make(chan proto.Message, 5)
-  subChan := make(chan prpc.TopicMsg, 5)
+  subChan := make(chan tr.TopicMsg, 5)
   errChan := make(chan error, 5)
 
-  openFn := func(topic string) (chan proto.Message, error) {
+  openFn := func(topic string) (chan<- proto.Message, error) {
     return tr.NewTopicChannel(ctx, subChan, h.ID().String(), ps, topic, errChan)
   }
 
   cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
-  logger.Println("ZMQ server at ", opts.ZmqServerAddr)
+  logger.Println("ZMQ sockets at", *zmqRepFlag, *zmqPushFlag)
 
-	if len(opts.TrustedPeers) == 0 {
-		panic("server.New() requires len(opts.TrustedPeers) > 0")
-	}
-	s := server.New(server.PeerPrintOptions {
+	s := server.New(server.ServerOptions{
     Logger: logger,
-    State: state,
-    TrustedPeers: queue.TrustedPeers,
+    Raft: r,
+    TrustedPeers: tps,
 
     RecvPubsub: subChan,
     RecvCmd: cmdRecvChan,

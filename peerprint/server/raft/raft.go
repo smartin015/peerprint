@@ -59,6 +59,13 @@ type LocalMemoryImpl struct {
   l string
   lc chan struct{}
 }
+func NewInMemory() *LocalMemoryImpl {
+  return &LocalMemoryImpl{
+    s: &pb.State{Jobs: make(map[string]*pb.Job)},
+    l: "",
+    lc: make(chan struct{}),
+  }
+}
 func (ri *LocalMemoryImpl) ID() string { return "" }
 func (ri *LocalMemoryImpl) Addrs() []string {
   return nil

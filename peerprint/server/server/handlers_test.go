@@ -8,13 +8,6 @@ import (
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
 )
 
-const (
-  TestTopic = "testtopic"
-  TrustedPeer = "trustedpeer"
-  TestRAFTId = "raftid"
-)
-
-
 func TestAssignmentRequest(t *testing.T) {
   pp := testEnv(t, true, true)
   rep, err := pp.P.OnAssignmentRequest(AssignmentTopic, "asdf", &pb.AssignmentRequest{})
