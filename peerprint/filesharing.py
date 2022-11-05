@@ -7,7 +7,7 @@ import json
 import time
 import re
 import tempfile
-from .ipfs import IPFS
+from .wan.ipfs import IPFS
 from abc import ABC, abstractmethod
 from pathlib import Path
 from .version import __version__ as version

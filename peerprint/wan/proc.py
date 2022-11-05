@@ -9,7 +9,8 @@ class ServerProcessOpts():
     addr: str = None
     raftAddr: str = None
     raftPath: str = None
-    registry: str = None
+    rendezvous: str = None
+    trustedPeers: str = None
     queue: str = None
     ipfs_server: str = None
     local: bool = None
@@ -29,12 +30,8 @@ class ServerProcessOpts():
                 args.append(f"-{field.name}={val}")
         return args
 
-class ServerProcess():
-    def __init__(self, opts, binary_path, logger):
-        self._logger = logger
-        args = opts.render(binary_path)
-        self._proc = subprocess.Popen(args)
-        self._logger.debug(f"Launch: {args}")
+class DependentProcess:
+    def __init__(self):
         atexit.register(self.destroy)
 
     def _signal(self, sig, timeout=5):
@@ -60,6 +57,30 @@ class ServerProcess():
 
         self._logger.info(f"PID {self._proc.pid} (SIGTERM)")
         self._signal(signal.SIGKILL, timeout=None)
+
+class IPFSDaemonProcess(DependentProcess):
+    def __init__(self, logger):
+        self._logger = logger
+        if self.is_running():
+            self._logger.warning("IPFS daemon already running; skipping daemon creation")
+            self._proc = None
+        else:
+            self._proc = subprocess.Popen(["ipfs", "daemon", "--init", "--enable-pubsub-experiment"])
+            self._logger.info("Launched IPFS daemon")
+        super().__init__()
+
+    def is_running(self):
+        p = subprocess.Popen(["ipfs", "stats", "bw"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.communicate()
+        return (p.returncode == 0)
+
+
+class ServerProcess(DependentProcess):
+    def __init__(self, opts, binary_path, logger):
+        self._logger = logger
+        args = opts.render(binary_path)
+        self._proc = subprocess.Popen(args)
+        self._logger.debug(f"Launch: {args}")
 
     def is_ready(self):
         return self._proc.returncode is None
