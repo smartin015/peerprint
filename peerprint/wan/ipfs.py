@@ -18,6 +18,13 @@ class IPFS:
         proc = IPFSDaemonProcess(logging.getLogger())
         return proc
 
+    @classmethod 
+    def stop_daemon(self):
+        global proc
+        if proc != None:
+            proc.destroy()
+            proc = None
+
     @classmethod
     def check(self):
         global proc
@@ -80,7 +87,7 @@ class IPFS:
         result = subprocess.run(["ipfs", "cat", hash_], capture_output=True)
         if result.returncode != 0:
             raise Exception(f"fetchStr result {result.returncode}: {result.stderr}")
-        return result.stdout.strip()
+        return result.stdout.decode('utf8').strip()
 
 
 if __name__ == '__main__':

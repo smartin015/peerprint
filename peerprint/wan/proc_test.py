@@ -1,6 +1,5 @@
 import unittest
 import logging
-import signal
 from unittest.mock import MagicMock, call, patch, ANY
 from .proc import ServerProcessOpts, DependentProcess, IPFSDaemonProcess, ServerProcess
 
