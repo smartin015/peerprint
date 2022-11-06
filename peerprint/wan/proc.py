@@ -20,7 +20,6 @@ class ServerProcessOpts():
     zmq: str = None
     zmqpush: str = None
     zmqlog: str = None
-    bootstrap: bool = None
 
     def render(self, binary_path):
         args = [binary_path]
@@ -35,7 +34,7 @@ class DependentProcess:
         atexit.register(self.destroy)
 
     def _signal(self, sig, timeout=5):
-        self._proc.send_signal(signal.SIGINT)
+        self._proc.send_signal(sig)
         try:
             self._proc.wait(timeout)
         except subprocess.TimeoutExpired:
@@ -45,7 +44,7 @@ class DependentProcess:
     def destroy(self):
         atexit.unregister(self.destroy)
 
-        if self._proc is None or self._proc.returncode is not None:
+        if getattr(self, "_proc", None) is None or self._proc.returncode is not None:
             return
         self._logger.info(f"PID {self._proc.pid} (SIGINT)")
         if self._signal(signal.SIGINT):
@@ -56,7 +55,7 @@ class DependentProcess:
             return
 
         self._logger.info(f"PID {self._proc.pid} (SIGTERM)")
-        self._signal(signal.SIGKILL, timeout=None)
+        self._signal(signal.SIGTERM, timeout=None)
 
 class IPFSDaemonProcess(DependentProcess):
     def __init__(self, logger):

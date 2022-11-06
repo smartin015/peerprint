@@ -24,7 +24,7 @@ class ZMQLogSink():
         self._logger.debug(f"ZMQLogSink thread started (bound to {addr})")
     
     def _stream_log(self):
-        while self._log_sock is not None:
+        while self._log_sock is not None and not self._log_sock.closed:
             msg = self._log_sock.recv().decode('utf8').rstrip()
             self._logger.info(msg)
 
@@ -71,9 +71,12 @@ class ZMQClient():
         raise MessageUnpackError(f"Could not unpack message: {apb}")
 
     def _listen(self):
-        while self._pull is not None:
+        while self._pull is not None and not self._pull.closed:
             data = self._pull.recv()
-            self._cb(self._unpack(data))
+            try:
+                self._cb(self._unpack(data))
+            except MessageUnpackError as e:
+                self._cb(e)
 
     def call(self, p):
         amsg = Any()
