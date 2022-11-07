@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import tempfile
 from .comms import ZMQLogSink, ZMQClient
 from .proc import ServerProcess
 import peerprint.server.proto.state_pb2 as spb
@@ -30,16 +31,16 @@ class PeerPrintQueue():
         # These are cached from updates
         self._jobs = dict()
         self._peers = ppb.PeersSummary(peer_estimate=0, variance=float('inf'), sample=[])
-        # Including pid in sockets allows running multiple instances
+        # Using a temporary directory allows running multiple instances/queues
         # using the same filesystem (e.g. for development or containerized
         # farms)
-        pid = os.getpid()
+        self.tmpdir = tempfile.TemporaryDirectory()
         if self._opts.zmqlog is None:
-            self._opts.zmqlog = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}_log.ipc"
+            self._opts.zmqlog = f"ipc://{self.tmpdir.name}/log.ipc"
         if self._opts.zmq is None:
-            self._opts.zmq = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}.ipc"
+            self._opts.zmq = f"ipc://{self.tmpdir.name}/cmd.ipc"
         if self._opts.zmqpush is None:
-            self._opts.zmqpush = f"ipc:///tmp/continuousprint_{opts.queue}_{pid}_push.ipc"
+            self._opts.zmqpush = f"ipc://{self.tmpdir.name}/push.ipc"
         
         if keydir is not None:
             self._opts.privkeyfile = os.path.join(keydir, f"{opts.queue}_priv.key")
@@ -57,6 +58,7 @@ class PeerPrintQueue():
             self._zmqclient.destroy()
         if self._proc is not None:
             self._proc.destroy()
+        self.tmpdir.cleanup(ignore_cleanup_errors=True)
 
 
     def _update(self, msg):

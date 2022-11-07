@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/protobuf/proto"
+  "math/rand"
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
 	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
 	"github.com/smartin015/peerprint/peerprint_server/raft"
@@ -91,8 +92,7 @@ func (t *Server) setup() {
   t.sendPubsub[AssignmentTopic] = atc
 
 	if t.amTrusted() {
-		// t.l.Println("We are a trusted peer; overriding assignment")
-    // TODO do we need to issue a raft addrs request here since electable?
+		t.l.Println("We are a trusted peer; overriding assignment")
     if _, err := t.OnAssignmentResponse(AssignmentTopic, t.getID(), &pb.AssignmentResponse{
 			Id:       t.getID(),
 			Topic:    DefaultTopic,
@@ -101,7 +101,7 @@ func (t *Server) setup() {
 		}); err != nil {
       panic(err)
     }
-	}
+  }
 }
 
 func (t *Server) amTrusted() bool {
@@ -125,34 +125,71 @@ func (t *Server) getLeader() string {
   return t.raft.Leader()
 }
 
+func (t *Server) handshakeRaft(ctx context.Context) {
+  t.l.Println("Beginning raft handshake")
+  // Random initial offset helps spread out initial requests
+  // in the case of bootstrapping multiple servers simultaneously
+  tmr := time.NewTimer((time.Duration)(rand.Int63n(5)) * time.Second)
+  <-tmr.C
+
+  for {
+    select {
+    case t.sendPubsub[DefaultTopic] <- t.raftAddrsRequest():
+    default:
+      panic("raft assignment: channel overflow during request")
+    }
+
+    t.l.Println("Sent RaftAddrsRequest")
+    tmr = time.NewTimer(5 * time.Second)
+    select {
+    case <-ctx.Done():
+      return
+		case <-t.raft.LeaderChan():
+      t.l.Println("Raft leader assigned")
+      break
+    case <-tmr.C:
+      continue
+    }
+  }
+}
+
+func (t *Server) handshakeListener(ctx context.Context) {
+  t.status.Topic = AssignmentTopic
+  t.l.Println("Beginning assignment request loop")
+  for t.getTopic() == AssignmentTopic {
+    select {
+    case t.sendPubsub[AssignmentTopic] <- &pb.AssignmentRequest{}:
+    default:
+      panic("requestAssignment: channel overflow during request")
+    }
+
+    t.l.Println("Sent pubsub assignment request")
+    tmr := time.NewTimer(10 * time.Second)
+    select {
+    case <-ctx.Done():
+      return
+    case <-t.roleAssigned:
+      break
+    case <-tmr.C:
+      continue
+    }
+  }
+}
 
 func (t *Server) Loop(ctx context.Context) {
 	if !t.amTrusted() {
-    t.status.Topic = AssignmentTopic
-    t.l.Println("Beginning assignment request loop")
-    for t.getTopic() == AssignmentTopic {
-      select {
-      case t.sendPubsub[AssignmentTopic] <- &pb.AssignmentRequest{}:
-      default:
-        panic("requestAssignment: channel overflow during request")
-      }
-
-      t.l.Println("Sent pubsub assignment request")
-      tmr := time.NewTimer(10 * time.Second)
-      select {
-      case <-ctx.Done():
-        return
-      case <-t.roleAssigned:
-        break
-      case <-tmr.C:
-        continue
-      }
-    }
+    t.handshakeListener(ctx)
+  } else {
+    // Do this asynchronously so an initial set of unrafted trusted peers
+    // can reply to each others' pubsub raft requests and establish
+    // a consensus group
+    go t.handshakeRaft(ctx)
   }
+
+  t.l.Println("Begin main loop")
 	for {
     select {
     case req := <-t.recvCmd:
-      t.l.Println("recvCmd")
       var err error
       var rep proto.Message
       // Skip pubsub if we're the leader, as we are authoritative

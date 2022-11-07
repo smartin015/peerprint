@@ -1,7 +1,7 @@
 site_name: PeerPrint
 theme:
   name: material
-  logo: ./CPQ_white.svg
+  # logo: ./CPQ_white.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -19,8 +19,8 @@ theme:
         name: Switch to light mode
 markdown_extensions:
   - admonition
-extra_css:
-    - style.css
+# extra_css:
+# - style.css
 nav:
   - Home: index.md
   - 'new-queue.md'

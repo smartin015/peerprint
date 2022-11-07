@@ -4,41 +4,39 @@ import logging
 import time
 import sys
 import os
+import json
 
 print(__file__)
 
 logging.basicConfig(level=logging.DEBUG)
 
-class Codec():
+if len(sys.argv) != 4:
+    raise Exception(f"Usage: {sys.argv[0]} <path_to_peerprint_server> <path_to_key_dir_server1> <path_to_key_dir_server2>")
+
+class JSONCodec():
     @classmethod
     def encode(self, manifest):
-        return (manifest, "lazy")
+        return (json.dumps(manifest), "json")
 
     def decode(self, data, protocol):
-        return data
+        assert protocol=="json"
+        return json.loads(data)
 
 def on_update(changetype, prev, nxt):
     print("on_update")
 
-ns = "Test queue"
-def make_queue(ns, idx):
+def make_queue(idx):
     ppq = PeerPrintQueue(ServerProcessOpts(
-            queue=ns,
-            registry=sys.argv[1],
-            privkeyfile=os.path.join(sys.argv[2], f"peer{idx+1}/priv.key"),
-            pubkeyfile=os.path.join(sys.argv[2], f"peer{idx+1}/pub.key"),
-            zmq=f"ipc:///tmp/continuousprint_{ns}_{idx}_reqrep.ipc",
-            zmqpush=f"ipc:///tmp/continuousprint_{ns}_{idx}_pushpull.ipc",
-            zmqlog=f"ipc:///tmp/continuousprint_{ns}_{idx}_log.ipc",
+            rendezvous="secret_rendezvouuuuuus",
+            trustedPeers=",".join(["12D3KooWQgJbshwq6rwDigXkkYg46NT3zUsizzHy6H2aHWbaj5PA", "12D3KooWGzEzMqMtjUtmvvJRCA6fzLvUJrUGUUNHX8dfSzgqJjrz"]),
             local=True,
-            bootstrap=True,
-    ), Codec, on_update, logger=logging.getLogger(f"q{idx}"))
+    ), JSONCodec, sys.argv[1], on_update, logging.getLogger(f"q{idx}"), sys.argv[2+idx])
     logging.info(f"Starting connection ({idx})")
     ppq.connect()
     return ppq
 
-q0 = make_queue(ns, 0)
-q1 = make_queue(ns, 1)
+q0 = make_queue(0)
+q1 = make_queue(1)
 
 while not q0.is_ready() or not q1.is_ready():
     logging.info("Waiting for queues to be ready...")

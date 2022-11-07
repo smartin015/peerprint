@@ -14,7 +14,7 @@ Decentralized 3D printing is a solution whenever 3d printer reliability and band
 
 Here are a few examples:
 
-**Disaster mitigation** - join a global queue to contribute masks, ventilator parts, and other scarce supplies on-demand for the next pandemic.
+**Disaster mitigation** - join a global queue to contribute scarce supplies on-demand for the next global crisis.
 
 **Hobbyist communities** - issue print orders to mass-produce blasters for a NERF battle, or airframes for a quadcopter competition.
 

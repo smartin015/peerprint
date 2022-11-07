@@ -99,6 +99,7 @@ type RaftImpl struct {
 	host      host.Host
   filestorePath string
   logger *log.Logger
+  peers   []*pb.AddrInfo
   servers []raft.Server
 
 	raft      *raft.Raft
@@ -129,6 +130,7 @@ func (ri *RaftImpl) LeaderChan() (chan struct{}) {
 }
 
 func (ri *RaftImpl) Shutdown() {
+  ri.logger.Println("raft.Shutdown() called")
 	defer ri.transport.Close()
 	defer ri.host.Close()
 	defer ri.raft.DeregisterObserver(ri.leaderObs)
@@ -145,72 +147,112 @@ func New(ctx context.Context, h host.Host, filestorePath string, l *log.Logger) 
     filestorePath: filestorePath,
     logger: l,
     servers: []raft.Server{},
+    peers: []*pb.AddrInfo{},
+    transport: nil, // Signals that we haven't yet initialized raft
   }
 }
 
-func (ri *RaftImpl) addServer(id string, addrs []string) error {
-	pid, err := peer.Decode(id)
+func protoToPeerAddrInfo(ai *pb.AddrInfo) (*peer.AddrInfo, error) {
+	pid, err := peer.Decode(ai.GetId())
 	if err != nil {
-		return fmt.Errorf("Decode error on id %s: %w", id, err)
+		return nil, fmt.Errorf("Decode error on id %s: %w", ai.GetId(), err)
 	}
-	p := peer.AddrInfo{
+	p := &peer.AddrInfo{
 		ID:    pid,
 		Addrs: []ma.Multiaddr{},
 	}
-	for _, a := range addrs {
+	for _, a := range ai.GetAddrs() {
 		aa, err := ma.NewMultiaddr(a)
 		if err != nil {
-			return fmt.Errorf("Error creating AddrInfo from string %s: %w", a, err)
+			return nil, fmt.Errorf("Error creating AddrInfo from string %s: %w", a, err)
 		}
 		p.Addrs = append(p.Addrs, aa)
 	}
-	if err := ri.host.Connect(ri.ctx, p); err != nil {
-		return fmt.Errorf("RAFT peer connection error: %w", err)
+  return p, nil
+}
+
+func (ri *RaftImpl) addServer(ai *pb.AddrInfo) error {
+  ri.peers = append(ri.peers, ai)
+
+  p, err := protoToPeerAddrInfo(ai)
+  if err != nil {
+    return fmt.Errorf("addServer() failed to convert pb.AddrInfo to peer.AddrInfo: %w", err)
+  }
+
+	if err = ri.host.Connect(ri.ctx, *p); err != nil {
+		return fmt.Errorf("addServer() RAFT peer connection error: %w", err)
 	}
-  ri.servers = append(ri.servers, raft.Server{
+  s := raft.Server{
 			Suffrage: raft.Voter,
-			ID:       raft.ServerID(id),
-			Address:  raft.ServerAddress(id), // Libp2pTransport treats ID as address here
-	})
+			ID:       raft.ServerID(ai.GetId()),
+			Address:  raft.ServerAddress(ai.GetId()), // Libp2pTransport treats ID as address here
+	}
+  ri.servers = append(ri.servers, s)
+
+  if addr, id := ri.raft.LeaderWithId(); id == ri.host.ID().Pretty() {
+    // TODO handle failure to add due to raft config index changing
+    ri.raft.AddVoter(s.ID, s.Address, ri.raft.AppliedIndex(), 0)
+  }
 	return nil
 }
 
 func (ri *RaftImpl) GetPeers() []*pb.AddrInfo {
-  panic("TODO")
+  return ri.peers
+}
+
+func (ri *RaftImpl) hasPeer(ai *pb.AddrInfo) bool {
+  for _, ei := range ri.peers {
+    if ai.GetId() == ei.GetId() {
+      return true
+    }
+  }
+  return false
 }
 
 func (ri *RaftImpl) SetPeers(ais []*pb.AddrInfo) error {
+  ri.logger.Println("SetPeers(): ", ais)
   for _, ai := range ais {
-    if err := ri.addServer(ai.GetId(), ai.GetAddrs()); err != nil {
+    if ri.hasPeer(ai) {
+      continue
+    }
+    if err := ri.addServer(ai); err != nil {
       return err
     }
   }
 
-  // TODO handle reinit
+  if ri.transport == nil {
+    ri.setup()
+  }
+}
+
+
+func (ri *RaftImpl) setup() error {
 	if len(ri.servers) == 0 {
 		return fmt.Errorf("No servers in raft group - cannot connect")
 	}
   var err error
-
   if ri.transport, err = p2praft.NewLibp2pTransport(ri.host, 2*time.Second); err != nil {
 		return err
 	}
 	ri.consensus = p2praft.NewConsensus(&MarshableState{State: &pb.State{Jobs: nil}})
 
-	cfg := raft.DefaultConfig()
-	cfg.LocalID = raft.ServerID(ri.host.ID().Pretty())
-  cfg.LogOutput = ri.logger.Writer()
 	snapshots, err := raft.NewFileSnapshotStore(ri.filestorePath, 3, nil)
 	if err != nil {
 		return err
 	}
 	// InmemStore implements the LogStore and StableStore interface. It should NOT EVER be used for production. It is used only for unit tests. TODO Use the MDBStore implementation instead.
 	logStore := raft.NewInmemStore()
+
+  // For defaults, see https://github.com/hashicorp/raft/blob/ace424ea865b24a1ea66087d375051687b9fd404/config.go#L295
+	cfg := raft.DefaultConfig() 
+  cfg.ShutdownOnRemove = false
+	cfg.LocalID = raft.ServerID(ri.host.ID().Pretty())
+  cfg.LogOutput = ri.logger.Writer()
+
 	bootstrapped, err := raft.HasExistingState(logStore, logStore, snapshots)
 	if err != nil {
 		return err
-	}
-	if !bootstrapped {
+	} else if !bootstrapped {
     if err := raft.BootstrapCluster(cfg, logStore, logStore, snapshots, ri.transport, raft.Configuration{Servers: ri.servers}); err != nil {
       return err
     }

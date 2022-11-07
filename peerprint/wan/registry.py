@@ -56,13 +56,21 @@ class Registry:
 
 if __name__ == "__main__":
     import time
-    r = Registry("QmZQ4bLHRCrcmJUnTbY7updR6chfvumbaEx6cCya3chz9n")
+    import sys
+    if len(sys.argv) != 2:
+        # CID e.g. QmZQ4bLHRCrcmJUnTbY7updR6chfvumbaEx6cCya3chz9n
+        raise Exception(f"Usage: {sys.argv[0]} <IPFS CID>")
+    r = Registry(sys.argv[1])
 
     print("connecting")
     while not r.ready():
         print(".")
         time.sleep(1)
 
-    print("Trusted peers:", r.get_trusted_peers("Test queue"))
-    print("Rendezvous:", r.get_rendezvous("Test queue"))
+    tp = r.get_trusted_peers("Test queue")
+    rend = r.get_rendezvous("Test queue")
+    print("\n\n\n=========================== Queue data: ============================\n")
+    print("\t- Trusted peers:", tp)
+    print("\t- Rendezvous:", rend)
+    print("\n======================================================================")
 

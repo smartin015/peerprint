@@ -50,7 +50,7 @@ func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
     // Always require a trusted peer, and only observe messages sent to us
     return t.isTrusted(from) && v.GetId() == t.getID()
   case *pb.RaftAddrsRequest:
-    return t.isSelfLeader() && t.isTrusted(from)
+    return t.isTrusted(from)
   case *pb.RaftAddrsResponse:
     return t.isSelfElectable() && t.isTrusted(from)
   default:
@@ -60,8 +60,8 @@ func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
 }
 
 func (t *Server) Handle(topic string, peer string, p proto.Message) (proto.Message, error) {
+  t.l.Println("Handling ", p.ProtoReflect().Descriptor().FullName())
   if !t.CanHandleMessage(peer, p) {
-    t.l.Println("no can do")
     return nil, nil
   }
 
@@ -146,7 +146,10 @@ func (t *Server) OnAssignmentResponse(topic string, from string, resp *pb.Assign
     return t.raftAddrsRequest(), nil
   }
 
-  t.roleAssigned<- t.getType()
+  select {
+  case t.roleAssigned<- t.getType():
+  default:
+  }
   return nil, nil
 }
 
@@ -163,6 +166,7 @@ func (t *Server) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrs
 }
 
 func (t *Server) OnRaftAddrsResponse(topic string, from string, resp *pb.RaftAddrsResponse) error {
+  // TODO handle duplicate peers
   return t.raft.SetPeers(resp.GetPeers())
 }
 

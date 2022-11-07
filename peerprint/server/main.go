@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
+  "strconv"
 	"fmt"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -12,6 +12,8 @@ import (
 	"github.com/smartin015/peerprint/peerprint_server/discovery"
 	"github.com/smartin015/peerprint/peerprint_server/raft"
 	"github.com/smartin015/peerprint/peerprint_server/server"
+	"github.com/smartin015/peerprint/peerprint_server/poll"
+	reggen "github.com/smartin015/peerprint/peerprint_server/registry_generator"
 	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
 	"google.golang.org/protobuf/proto"
 	"log"
@@ -70,29 +72,27 @@ func loadOrGenerateKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, 
 		}
 		return priv, pub, nil
 	} else {
-		priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Generating keypair error: %w", err)
-		}
-		data, err := crypto.MarshalPrivateKey(priv)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Marshal private key: %w", err)
-		}
-		if err := os.WriteFile(privkeyFile, data, 0644); err != nil {
-			return nil, nil, fmt.Errorf("Write %s: %w", privkeyFile, err)
-		}
-		data, err = crypto.MarshalPublicKey(pub)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Marshal public key: %w", err)
-		}
-		if err := os.WriteFile(pubkeyFile, data, 0644); err != nil {
-			return nil, nil, fmt.Errorf("Write %s: %w", pubkeyFile, err)
-		}
-		return priv, pub, nil
+    return reggen.GenKeyPairFile(privkeyFile, pubkeyFile)
 	}
 }
 
 func main() {
+  if os.Args[1] == "generate_registry" {
+    if len(os.Args) != 4 {
+      log.Fatal("Usage ", os.Args[0], " generate_registry <num_peers> <dest_dir>")
+    }
+    npeer, err := strconv.Atoi(os.Args[2])
+    if err != nil {
+      log.Fatal("generate_registry: <npeer> argument not an integer")
+    }
+    dest_dir := os.Args[3]
+    if err := reggen.GenRegistryFiles(npeer, dest_dir); err != nil {
+      log.Fatal(fmt.Errorf("Error writing generated registry to %s: %v", dest_dir, err).Error())
+    }
+    fmt.Println("Generated registry YAML file and peer keys in dir %s", dest_dir)
+    return
+  }
+
 	flag.Parse()
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
@@ -112,7 +112,7 @@ func main() {
 		tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
 		tps = append(tps, strings.TrimSpace(tp))
 	}
-	logger.Printf("Rendezvous:%s\nPeers:\n%s\n", *rendezvousFlag, tpstr)
+  logger.Printf("Config:\n\tRendezvous:%s\n\tTrusted Peers:\n%s\n", *rendezvousFlag, tpstr)
 
 	ctx := context.Background()
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
@@ -129,7 +129,7 @@ func main() {
 		panic(err)
 	}
 
-	logger.Printf("Discovering pubsub peers (ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
+	logger.Printf("Discovering pubsub peers (self ID %v, timeout %v)\n", h.ID().String(), *connectTimeoutFlag)
 	disco := discovery.DHT
 	if *localFlag {
 		disco = discovery.MDNS
@@ -160,16 +160,20 @@ func main() {
 	cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
 	logger.Println("ZMQ sockets at", *zmqRepFlag, *zmqPushFlag)
 
+  poller := poll.New(ctx)
+
 	s := server.New(server.ServerOptions{
+    ID: h.ID().String(),
+		TrustedPeers: tps,
 		Logger:       logger,
 		Raft:         r,
-		TrustedPeers: tps,
+    Poller: poller,
 
 		RecvPubsub: subChan,
 		RecvCmd:    cmdRecvChan,
-
 		SendCmd: cmdSend,
 		PushCmd: cmdPush,
+
 		Opener:  openFn,
 	})
 	s.Loop(ctx)
