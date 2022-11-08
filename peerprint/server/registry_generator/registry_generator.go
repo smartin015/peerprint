@@ -6,9 +6,10 @@ import (
   "time"
   "path/filepath"
 	pb "github.com/smartin015/peerprint/peerprint_server/proto"
-  "gopkg.in/yaml.v3"
+  "github.com/ghodss/yaml"
   "crypto/rand"
 	"github.com/libp2p/go-libp2p/core/crypto"
+  "google.golang.org/protobuf/encoding/protojson"
 	"github.com/libp2p/go-libp2p/core/peer"
   "os"
 )
@@ -37,8 +38,37 @@ func GenKeyPairFile(privkeyFile, pubkeyFile string) (crypto.PrivKey, crypto.PubK
     return priv, pub, nil
 }
 
+func LoadKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, crypto.PubKey, error) {
+		data, err := os.ReadFile(privkeyFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Read %s: %w", privkeyFile, err)
+		}
+		priv, err := crypto.UnmarshalPrivateKey(data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("UnmarshalPrivateKey: %w", err)
+		}
+
+		data, err = os.ReadFile(pubkeyFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Read %s: %w", pubkeyFile, err)
+		}
+		pub, err := crypto.UnmarshalPublicKey(data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("UnmarshalPublicKey: %w", err)
+		}
+		return priv, pub, nil
+
+}
+
 func writeAsYaml(reg *pb.Registry, dest string) error {
-  ydata, err := yaml.Marshal(reg)
+  // We must convert the proto to JSON before converting
+  // to yaml, otherwise field names will not be correctly
+  // specified.
+  jdata, err := protojson.Marshal(reg)
+  if err != nil {
+    return err
+  }
+  ydata, err := yaml.JSONToYAML(jdata)
   if err != nil {
     return err
   }
@@ -71,12 +101,26 @@ func genRegistry(trustedPeers []crypto.PubKey) (*pb.Registry, error) {
   return r, nil
 }
 
+func LoadRegistry(path string) (*pb.Registry, error) {
+	data, err := os.ReadFile(path)
+  j, err := yaml.YAMLToJSON(data)
+	if err != nil {
+    return nil, err
+	}
+	reg := &pb.Registry{}
+	err = protojson.Unmarshal(j, reg)
+	if err != nil {
+    return nil, err
+	}
+  return reg, nil
+}
+
 func GenRegistryFiles(num_peers int, dest_dir string) error {
   pubks := []crypto.PubKey{}
   for i := 0; i < num_peers; i++ {
     _, pub, err := GenKeyPairFile(
-      filepath.Join(dest_dir, fmt.Sprintf("trusted_peer_%d.priv", i)),
-      filepath.Join(dest_dir, fmt.Sprintf("trusted_peer_%d.pub", i)))
+      filepath.Join(dest_dir, fmt.Sprintf("trusted_peer_%d.priv", i+1)),
+      filepath.Join(dest_dir, fmt.Sprintf("trusted_peer_%d.pub", i+1)))
     if err != nil {
       return err
     }

@@ -30,6 +30,7 @@ def make_queue(idx):
             rendezvous="secret_rendezvouuuuuus",
             trustedPeers=",".join(["12D3KooWQgJbshwq6rwDigXkkYg46NT3zUsizzHy6H2aHWbaj5PA", "12D3KooWGzEzMqMtjUtmvvJRCA6fzLvUJrUGUUNHX8dfSzgqJjrz"]),
             local=True,
+            raftPath=f"./peer{idx}.raft",
     ), JSONCodec, sys.argv[1], on_update, logging.getLogger(f"q{idx}"), sys.argv[2+idx])
     logging.info(f"Starting connection ({idx})")
     ppq.connect()

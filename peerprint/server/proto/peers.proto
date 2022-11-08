@@ -120,7 +120,7 @@ message RaftAddrsRequest {
 // Peers self-report their addresses when RaftAddrsRequest is sent.
 message RaftAddrsResponse {
   // List of peers present in the consensus group
-  repeated AddrInfo peers = 1;
+  AddrInfo addr_info = 1;
 }
 
 // A response sent by the leader of the topic to assign a peer to some work

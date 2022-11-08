@@ -54,13 +54,13 @@ func (t *Server) CanHandleMessage(from string, p proto.Message) bool {
   case *pb.RaftAddrsResponse:
     return t.isSelfElectable() && t.isTrusted(from)
   default:
-    t.l.Println("No handler validation for message type")
+    t.l.Println("No handler validation for message type", p.ProtoReflect().Descriptor().FullName())
     return false // Fail closed so we're forced to implement
 	}
 }
 
 func (t *Server) Handle(topic string, peer string, p proto.Message) (proto.Message, error) {
-  t.l.Println("Handling ", p.ProtoReflect().Descriptor().FullName())
+  t.l.Println("Handling", p.ProtoReflect().Descriptor().FullName(), p)
   if !t.CanHandleMessage(peer, p) {
     return nil, nil
   }
@@ -93,9 +93,11 @@ func (t *Server) Handle(topic string, peer string, p proto.Message) (proto.Messa
 		return t.OnReleaseJobRequest(topic, peer, v)
 	case *pb.State:
 		return nil, t.OnState(topic, peer, v)
+  case *pb.Leader:
+    return nil, t.OnLeader(topic, peer, v)
 
 	default:
-		return nil, fmt.Errorf("No handler matching message %+v on topic %s", p, topic)
+		return nil, fmt.Errorf("No handler matching %v message %+v on topic %s", p.ProtoReflect().Descriptor().FullName(), p, topic)
 	}
 }
 
@@ -155,9 +157,9 @@ func (t *Server) OnAssignmentResponse(topic string, from string, resp *pb.Assign
 
 func (t *Server) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrsRequest) (*pb.RaftAddrsResponse, error) {
 	if _, ok := t.trustedPeers[from]; ok && topic == t.getTopic() {
-    peers := t.raft.GetPeers()
-    peers = append(peers, req.AddrInfo)
-    if err := t.raft.SetPeers(peers); err != nil {
+    // Connect() safetly handles duplicates
+    ai := req.GetAddrInfo()
+    if err := t.raft.Connect(ai); err != nil {
       return nil, err
     }
 		return t.raftAddrsResponse(), nil
@@ -166,8 +168,8 @@ func (t *Server) OnRaftAddrsRequest(topic string, from string, req *pb.RaftAddrs
 }
 
 func (t *Server) OnRaftAddrsResponse(topic string, from string, resp *pb.RaftAddrsResponse) error {
-  // TODO handle duplicate peers
-  return t.raft.SetPeers(resp.GetPeers())
+  // Connect() safetly handles duplicates
+  return t.raft.Connect(resp.GetAddrInfo())
 }
 
 func (t *Server) OnSetJobRequest(topic string, from string, req *pb.SetJobRequest) (*pb.State, error) {

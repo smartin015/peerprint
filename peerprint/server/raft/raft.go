@@ -42,10 +42,10 @@ func (rs *MarshableState) Unmarshal(in io.Reader) error {
 }
 
 type Raft interface{
-  ID() string
-  Addrs() []string
-  SetPeers([]*pb.AddrInfo) error
+  AddrInfo() *pb.AddrInfo
+  Connect(*pb.AddrInfo) error
   GetPeers() []*pb.AddrInfo
+  HasPeer(*pb.AddrInfo) bool
 
   Leader() string
   SetLeader(string)
@@ -66,11 +66,8 @@ func NewInMemory() *LocalMemoryImpl {
     lc: make(chan struct{}),
   }
 }
-func (ri *LocalMemoryImpl) ID() string { return "" }
-func (ri *LocalMemoryImpl) Addrs() []string {
-  return nil
-}
-func (ri *LocalMemoryImpl) SetPeers([]*pb.AddrInfo) error {
+func (ri *LocalMemoryImpl) AddrInfo() *pb.AddrInfo { return nil }
+func (ri *LocalMemoryImpl) Connect(*pb.AddrInfo) error {
   return nil
 }
 func (ri *LocalMemoryImpl) GetPeers() []*pb.AddrInfo {
@@ -110,16 +107,16 @@ type RaftImpl struct {
 	newLeader chan struct{}
 }
 
-func (ri *RaftImpl) ID() string {
-  return ri.host.ID().Pretty()
-}
-
-func (ri *RaftImpl) Addrs() []string {
+func (ri *RaftImpl) AddrInfo() *pb.AddrInfo {
 	a := []string{}
 	for _, addr := range ri.host.Addrs() {
 		a = append(a, addr.String())
 	}
-	return a
+
+  return &pb.AddrInfo {
+    Id: ri.host.ID().Pretty(),
+    Addrs: a,
+  }
 }
 
 func (ri *RaftImpl) SetLeader(leader string) {
@@ -141,7 +138,7 @@ func (ri *RaftImpl) Shutdown() {
 }
 
 func New(ctx context.Context, h host.Host, filestorePath string, l *log.Logger) *RaftImpl {
-  return &RaftImpl{
+  ri := &RaftImpl{
     ctx: ctx,
     host: h,
     filestorePath: filestorePath,
@@ -149,7 +146,17 @@ func New(ctx context.Context, h host.Host, filestorePath string, l *log.Logger) 
     servers: []raft.Server{},
     peers: []*pb.AddrInfo{},
     transport: nil, // Signals that we haven't yet initialized raft
+    newLeader: make(chan struct{}, 5),
   }
+
+  // Add ourselves as a server (i.e. part of the electorate)
+  ai := ri.AddrInfo()
+  ri.servers = append(ri.servers, raft.Server{
+          Suffrage: raft.Voter,
+          ID:       raft.ServerID(ai.GetId()),
+          Address:  raft.ServerAddress(ai.GetId()), // Libp2pTransport treats ID as address here
+  })
+  return ri
 }
 
 func protoToPeerAddrInfo(ai *pb.AddrInfo) (*peer.AddrInfo, error) {
@@ -172,24 +179,30 @@ func protoToPeerAddrInfo(ai *pb.AddrInfo) (*peer.AddrInfo, error) {
 }
 
 func (ri *RaftImpl) addServer(ai *pb.AddrInfo) error {
-  ri.peers = append(ri.peers, ai)
+  s := raft.Server{
+			Suffrage: raft.Voter,
+			ID:       raft.ServerID(ai.GetId()),
+			Address:  raft.ServerAddress(ai.GetId()), // Libp2pTransport treats ID as address here
+	}
+
+  if !ri.HasPeer(ai) {
+    ri.peers = append(ri.peers, ai)
+    ri.servers = append(ri.servers, s)
+  }
 
   p, err := protoToPeerAddrInfo(ai)
   if err != nil {
     return fmt.Errorf("addServer() failed to convert pb.AddrInfo to peer.AddrInfo: %w", err)
   }
 
-	if err = ri.host.Connect(ri.ctx, *p); err != nil {
-		return fmt.Errorf("addServer() RAFT peer connection error: %w", err)
-	}
-  s := raft.Server{
-			Suffrage: raft.Voter,
-			ID:       raft.ServerID(ai.GetId()),
-			Address:  raft.ServerAddress(ai.GetId()), // Libp2pTransport treats ID as address here
-	}
-  ri.servers = append(ri.servers, s)
+  if err = ri.host.Connect(ri.ctx, *p); err != nil {
+    return fmt.Errorf("addServer() RAFT peer connection error: %w", err)
+  }
 
-  if addr, id := ri.raft.LeaderWithId(); id == ri.host.ID().Pretty() {
+  if ri.raft != nil && ri.raft.State() == raft.Leader {
+    // Calling AddVoter with an existing voter updates its address
+    // https://pkg.go.dev/github.com/hashicorp/raft#Raft.AddVoter
+    ri.logger.Println("AddVoter()", s.ID)
     // TODO handle failure to add due to raft config index changing
     ri.raft.AddVoter(s.ID, s.Address, ri.raft.AppliedIndex(), 0)
   }
@@ -200,7 +213,7 @@ func (ri *RaftImpl) GetPeers() []*pb.AddrInfo {
   return ri.peers
 }
 
-func (ri *RaftImpl) hasPeer(ai *pb.AddrInfo) bool {
+func (ri *RaftImpl) HasPeer(ai *pb.AddrInfo) bool {
   for _, ei := range ri.peers {
     if ai.GetId() == ei.GetId() {
       return true
@@ -209,20 +222,15 @@ func (ri *RaftImpl) hasPeer(ai *pb.AddrInfo) bool {
   return false
 }
 
-func (ri *RaftImpl) SetPeers(ais []*pb.AddrInfo) error {
-  ri.logger.Println("SetPeers(): ", ais)
-  for _, ai := range ais {
-    if ri.hasPeer(ai) {
-      continue
-    }
-    if err := ri.addServer(ai); err != nil {
-      return err
-    }
+func (ri *RaftImpl) Connect(ai *pb.AddrInfo) error {
+  ri.logger.Println("Connect(): ", ai)
+  if err := ri.addServer(ai); err != nil {
+    return err
   }
-
   if ri.transport == nil {
-    ri.setup()
+    return ri.setup()
   }
+  return nil
 }
 
 
@@ -244,9 +252,9 @@ func (ri *RaftImpl) setup() error {
 	logStore := raft.NewInmemStore()
 
   // For defaults, see https://github.com/hashicorp/raft/blob/ace424ea865b24a1ea66087d375051687b9fd404/config.go#L295
+  // cfg.ShutdownOnRemove = false
 	cfg := raft.DefaultConfig() 
-  cfg.ShutdownOnRemove = false
-	cfg.LocalID = raft.ServerID(ri.host.ID().Pretty())
+	cfg.LocalID = raft.ServerID(ri.AddrInfo().GetId())
   cfg.LogOutput = ri.logger.Writer()
 
 	bootstrapped, err := raft.HasExistingState(logStore, logStore, snapshots)
@@ -280,32 +288,40 @@ func (ri *RaftImpl) observeLeadership(ctx context.Context) {
 		case <-obsCh:
 		case <-ticker.C:
 		case <-ctx.Done():
+      ri.logger.Println("observeLeadership context timed out; ending listening loop")
 			return
 		}
 		if l := ri.Leader(); l != last {
-			last = l
-			ri.newLeader <- struct{}{}
+      select {
+      case ri.newLeader <- struct{}{}:
+			  last = l
+      default:
+        ri.logger.Println("observeLeadership: chan newLeader is full")
+      }
 		}
 	}
 }
 
 func (ri *RaftImpl) Leader() string {
-	return string(ri.raft.Leader())
+  if ri.raft != nil && ri.raft.State() == raft.Leader {
+    return ri.AddrInfo().GetId()
+  }
+  _, id := ri.raft.LeaderWithID()
+  return (string)(id)
 }
 
 func (ri *RaftImpl) Commit(s *pb.State) (*pb.State, error) {
 	if ri.actor.IsLeader() {
     agreedState, err := ri.consensus.CommitState(&MarshableState{State: s}) // Blocking
 		if err != nil {
-			return nil, err
+		return nil, err
 		}
 		if agreedState == nil {
 			return nil, fmt.Errorf("agreedState is nil: commited on a non-leader?")
 		}
-		return ri.Get()
-	} else {
-		return nil, fmt.Errorf("Not leader; cannot commit")
 	}
+  // Commit() is ignored when not leader
+  return ri.Get()
 }
 
 func (ri *RaftImpl) bootstrapState() (*pb.State, error) {

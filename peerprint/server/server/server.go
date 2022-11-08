@@ -145,8 +145,8 @@ func (t *Server) handshakeRaft(ctx context.Context) {
     case <-ctx.Done():
       return
 		case <-t.raft.LeaderChan():
-      t.l.Println("Raft leader assigned")
-      break
+      t.l.Println("Raft leader assigned, handshake complete")
+      return
     case <-tmr.C:
       continue
     }
@@ -169,7 +169,8 @@ func (t *Server) handshakeListener(ctx context.Context) {
     case <-ctx.Done():
       return
     case <-t.roleAssigned:
-      break
+      t.l.Println("Role assigned, request loop complete")
+      return
     case <-tmr.C:
       continue
     }
@@ -195,7 +196,7 @@ func (t *Server) Loop(ctx context.Context) {
       // Skip pubsub if we're the leader, as we are authoritative
       if t.getID() == t.getLeader() {
         rep, err = t.Handle(t.getTopic(), t.getID(), req)
-        if err == nil && rep != nil {
+        if err == nil && rep != nil && rep.ProtoReflect().IsValid() {
           t.sendPubsub[t.getTopic()]<- rep
           t.pushCmd<- rep
         }
@@ -215,7 +216,10 @@ func (t *Server) Loop(ctx context.Context) {
         t.l.Println(fmt.Errorf("callback error: %w", err))
         continue
       }
-      if rep != nil {
+      // Check not only nill state but also proto validity, as
+      // proto-typed nils can evade conditional checking
+      if rep != nil && rep.ProtoReflect().IsValid() {
+        t.l.Println("Replying", rep.ProtoReflect().Descriptor().FullName(), rep)
         t.sendPubsub[msg.Topic] <- rep
       }
 		case <-t.raft.LeaderChan():
@@ -257,23 +261,15 @@ func (t *Server) Loop(ctx context.Context) {
 	}
 }
 
-func (t *Server) raftAddrInfo() *pb.AddrInfo {
-  return  &pb.AddrInfo{
-      Id:    t.raft.ID(),
-		  Addrs: t.raft.Addrs(),
-    }
-}
-
 func (t *Server) raftAddrsRequest() *pb.RaftAddrsRequest {
 	return &pb.RaftAddrsRequest{
-    AddrInfo:	t.raftAddrInfo(),
+    AddrInfo:	t.raft.AddrInfo(),
   }
 }
 func (t *Server) raftAddrsResponse() *pb.RaftAddrsResponse {
-  t.l.Println("TODO get raft peers list")
-	return &pb.RaftAddrsResponse{Peers: []*pb.AddrInfo{
-    t.raftAddrInfo(),
-	}}
+	return &pb.RaftAddrsResponse{
+    AddrInfo: t.raft.AddrInfo(),
+  }
 }
 
 func (t *Server) checkMutable(j *pb.Job, peer string) error {

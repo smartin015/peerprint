@@ -53,24 +53,7 @@ func loadOrGenerateKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, 
 	}
 
 	if privEx && pubEx {
-		data, err := os.ReadFile(privkeyFile)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Read %s: %w", privkeyFile, err)
-		}
-		priv, err := crypto.UnmarshalPrivateKey(data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("UnmarshalPrivateKey: %w", err)
-		}
-
-		data, err = os.ReadFile(pubkeyFile)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Read %s: %w", pubkeyFile, err)
-		}
-		pub, err := crypto.UnmarshalPublicKey(data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("UnmarshalPublicKey: %w", err)
-		}
-		return priv, pub, nil
+    return reggen.LoadKeys(privkeyFile, pubkeyFile)
 	} else {
     return reggen.GenKeyPairFile(privkeyFile, pubkeyFile)
 	}

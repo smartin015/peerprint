@@ -124,14 +124,23 @@ type testRaft struct {
   lc chan struct{}
   peers []*pb.AddrInfo
 }
-func (ri *testRaft) ID() string { return ri.id }
-func (ri *testRaft) Addrs() []string { return []string{}}
-func (ri *testRaft) SetPeers(peers []*pb.AddrInfo) error {
-  ri.peers = peers
+func (ri *testRaft) AddrInfo() *pb.AddrInfo {
+  return &pb.AddrInfo{Id: ri.id}
+}
+func (ri *testRaft) Connect(peer *pb.AddrInfo) error {
+  ri.peers = append(ri.peers, peer)
   return nil
 }
 func (ri *testRaft) GetPeers() []*pb.AddrInfo {
   return ri.peers
+}
+func (ri *testRaft) HasPeer(peer *pb.AddrInfo) bool {
+  for _, p := range ri.peers {
+    if p.GetId() == peer.GetId() {
+      return true
+    }
+  }
+  return false
 }
 func (ri *testRaft) Leader() string {
   return ri.l
