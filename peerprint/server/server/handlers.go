@@ -226,8 +226,9 @@ func (t *Server) OnReleaseJobRequest(topic string, from string, req *pb.ReleaseJ
 	return t.raft.Commit(s)
 }
 func (t *Server) OnState(topic string, from string, resp *pb.State) error {
-  t.pushCmd <- resp
 	if t.getLeader() == from {
+    // Note: Commit triggers StateChan() update in main loop which syncs
+    // new state to the wrapper
     _, err := t.raft.Commit(resp)
     return err
 	}

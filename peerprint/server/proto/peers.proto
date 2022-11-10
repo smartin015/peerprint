@@ -137,11 +137,3 @@ message AssignmentResponse {
   // Role of the peer on this topic
   PeerType type = 4;
 }
-
-// Sent by the newly elected RAFT leader when it wins an election, so others
-// know who's in control.
-message NewLeaderResponse {
-  // Public key of the new leader
-  string id = 1;
-}
-

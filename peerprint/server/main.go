@@ -3,21 +3,21 @@ package main
 import (
 	"context"
 	"flag"
-  "strconv"
 	"fmt"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/smartin015/peerprint/peerprint_server/cmd"
 	"github.com/smartin015/peerprint/peerprint_server/discovery"
-	"github.com/smartin015/peerprint/peerprint_server/raft"
-	"github.com/smartin015/peerprint/peerprint_server/server"
 	"github.com/smartin015/peerprint/peerprint_server/poll"
+	"github.com/smartin015/peerprint/peerprint_server/raft"
 	reggen "github.com/smartin015/peerprint/peerprint_server/registry_generator"
+	"github.com/smartin015/peerprint/peerprint_server/server"
 	tr "github.com/smartin015/peerprint/peerprint_server/topic_receiver"
 	"google.golang.org/protobuf/proto"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,28 +53,28 @@ func loadOrGenerateKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, 
 	}
 
 	if privEx && pubEx {
-    return reggen.LoadKeys(privkeyFile, pubkeyFile)
+		return reggen.LoadKeys(privkeyFile, pubkeyFile)
 	} else {
-    return reggen.GenKeyPairFile(privkeyFile, pubkeyFile)
+		return reggen.GenKeyPairFile(privkeyFile, pubkeyFile)
 	}
 }
 
 func main() {
-  if os.Args[1] == "generate_registry" {
-    if len(os.Args) != 4 {
-      log.Fatal("Usage ", os.Args[0], " generate_registry <num_peers> <dest_dir>")
-    }
-    npeer, err := strconv.Atoi(os.Args[2])
-    if err != nil {
-      log.Fatal("generate_registry: <npeer> argument not an integer")
-    }
-    dest_dir := os.Args[3]
-    if err := reggen.GenRegistryFiles(npeer, dest_dir); err != nil {
-      log.Fatal(fmt.Errorf("Error writing generated registry to %s: %v", dest_dir, err).Error())
-    }
-    fmt.Println("Generated registry YAML file and peer keys in dir", dest_dir)
-    return
-  }
+	if os.Args[1] == "generate_registry" {
+		if len(os.Args) != 4 {
+			log.Fatal("Usage ", os.Args[0], " generate_registry <num_peers> <dest_dir>")
+		}
+		npeer, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			log.Fatal("generate_registry: <npeer> argument not an integer")
+		}
+		dest_dir := os.Args[3]
+		if err := reggen.GenRegistryFiles(npeer, dest_dir); err != nil {
+			log.Fatal(fmt.Errorf("Error writing generated registry to %s: %v", dest_dir, err).Error())
+		}
+		fmt.Println("Generated registry YAML file and peer keys in dir", dest_dir)
+		return
+	}
 
 	flag.Parse()
 	if *rendezvousFlag == "" {
@@ -95,7 +95,7 @@ func main() {
 		tpstr = tpstr + fmt.Sprintf("  - %s\n", tp)
 		tps = append(tps, strings.TrimSpace(tp))
 	}
-  logger.Printf("Config:\n\tRendezvous:%s\n\tTrusted Peers:\n%s\n", *rendezvousFlag, tpstr)
+	logger.Printf("Config:\n\tRendezvous:%s\n\tTrusted Peers:\n%s\n", *rendezvousFlag, tpstr)
 
 	ctx := context.Background()
 	kpriv, _, err := loadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
@@ -143,21 +143,21 @@ func main() {
 	cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecvChan, errChan)
 	logger.Println("ZMQ sockets at", *zmqRepFlag, *zmqPushFlag)
 
-  poller := poll.New(ctx)
+	poller := poll.New(ctx)
 
 	s := server.New(server.ServerOptions{
-    ID: h.ID().String(),
+		ID:           h.ID().String(),
 		TrustedPeers: tps,
 		Logger:       logger,
 		Raft:         r,
-    Poller: poller,
+		Poller:       poller,
 
 		RecvPubsub: subChan,
 		RecvCmd:    cmdRecvChan,
-		SendCmd: cmdSend,
-		PushCmd: cmdPush,
+		SendCmd:    cmdSend,
+		PushCmd:    cmdPush,
 
-		Opener:  openFn,
+		Opener: openFn,
 	})
 	s.Loop(ctx)
 }

@@ -193,17 +193,20 @@ func (t *Server) Loop(ctx context.Context) {
 	for {
     select {
     case req := <-t.recvCmd:
+      t.l.Println("Command", req.ProtoReflect().Descriptor().FullName(), req)
       var err error
       var rep proto.Message
       // Skip pubsub if we're the leader, as we are authoritative
       if t.getID() == t.getLeader() {
         rep, err = t.Handle(t.getTopic(), t.getID(), req)
         if err == nil && rep != nil && rep.ProtoReflect().IsValid() {
+          t.l.Println("Replying", rep.ProtoReflect().Descriptor().FullName(), rep)
           t.sendPubsub[t.getTopic()]<- rep
           t.pushCmd<- rep
         }
       } else {
         // Otherwise we publish the command as-is, return OK
+        t.l.Println("Forwarding command via pubsub")
         t.sendPubsub[t.getTopic()]<- req
       }
 
@@ -223,6 +226,13 @@ func (t *Server) Loop(ctx context.Context) {
       if rep != nil && rep.ProtoReflect().IsValid() {
         t.l.Println("Replying", rep.ProtoReflect().Descriptor().FullName(), rep)
         t.sendPubsub[msg.Topic] <- rep
+      }
+    case <-t.raft.StateChan():
+	    s, err := t.raft.Get()
+      if err != nil {
+        t.l.Println(fmt.Errorf("state change handler error: %w", err))
+      } else {
+        t.pushCmd<- s
       }
 		case <-t.raft.LeaderChan():
       // Used to exit the raft handshake process

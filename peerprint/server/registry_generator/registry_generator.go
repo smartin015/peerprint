@@ -103,6 +103,9 @@ func genRegistry(trustedPeers []crypto.PubKey) (*pb.Registry, error) {
 
 func LoadRegistry(path string) (*pb.Registry, error) {
 	data, err := os.ReadFile(path)
+  if err != nil {
+    return nil, err
+  }
   j, err := yaml.YAMLToJSON(data)
 	if err != nil {
     return nil, err

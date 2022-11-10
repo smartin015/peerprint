@@ -33,9 +33,6 @@ message Job {
   bytes data = 5;
 }
 
-// GetJobsRequest is sent by the wrapper to interrogate the state of the golang server.
-message GetJobsRequest {}
-
 // SetJobRequest inserts or overwrites a job with the matching `job.id` in the queue.
 // This request may be rejected if the peer's role or the job's lock state are incorrect.
 message SetJobRequest {
@@ -55,10 +52,3 @@ message AcquireJobRequest {
 message ReleaseJobRequest {
   string id = 1;
 }
-
-// JobMutationResponse is published as a status update when any mutating
-// request causes one or more jobs to change
-message JobMutationResponse {
-  repeated Job jobs = 1;
-}
-

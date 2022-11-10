@@ -50,8 +50,10 @@ func testEnv(t *testing.T, trusted bool, asLeader bool) *TestEnv {
   e.R = &testRaft{
     id: TestRAFTId,
     s: &pb.State{Jobs: make(map[string]*pb.Job)},
-    lc: make(chan struct{}),
+    lc: make(chan struct{}, 5),
+    sc: make(chan struct{}, 5),
   }
+  t.Cleanup(func() {close(e.R.lc); close(e.R.sc)})
   if asLeader {
     e.R.l = TestID
   }
@@ -122,6 +124,7 @@ type testRaft struct {
   l string
   lset string
   lc chan struct{}
+  sc chan struct{}
   peers []*pb.AddrInfo
 }
 func (ri *testRaft) AddrInfo() *pb.AddrInfo {
@@ -145,14 +148,18 @@ func (ri *testRaft) HasPeer(peer *pb.AddrInfo) bool {
 func (ri *testRaft) Leader() string {
   return ri.l
 }
-func (ri *testRaft) LeaderChan() (chan struct{}) {
+func (ri *testRaft) LeaderChan() (<-chan struct{}) {
   return ri.lc
+}
+func (ri *testRaft) StateChan() (<-chan struct{}) {
+  return ri.sc
 }
 func (ri *testRaft) Get() (*pb.State, error) {
   return ri.s, nil
 }
 func (ri *testRaft) Commit(s *pb.State) (*pb.State, error) {
   ri.s = s
+  ri.sc<- struct{}{}
   return s, nil
 }
 func (ri *testRaft) SetLeader(l string) {

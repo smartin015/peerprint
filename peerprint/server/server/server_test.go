@@ -48,6 +48,19 @@ func TestOnLeaderElected(t *testing.T) {
     t.Errorf("got %v want %v", gotPush, wantState)
   }
 }
+
+func TestOnStateChanged(t *testing.T) {
+  pp := testEnv(t, true, true)
+  pp.R.s = &pb.State{Jobs: map[string]*pb.Job{
+    "foo": &pb.Job{Id: "foo"},
+  }}
+  pp.R.sc<- struct{}{}
+  gotPush := <-pp.CmdPush
+  if !proto.Equal(gotPush, pp.R.s) {
+    t.Errorf("got %v want %v", gotPush, pp.R.s)
+  }
+}
+
 func TestOnCommandReceivedAsLeader(t *testing.T) {
   pp := testEnv(t, true, true)
   want := &pb.Job{Id: "foo"}

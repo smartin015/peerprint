@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import copy
 import tempfile
 from .comms import ZMQLogSink, ZMQClient
 from .proc import ServerProcess
@@ -15,9 +16,10 @@ class ChangeType(Enum):
     PEERS = 1
 
 class PeerPrintQueue():
-    def __init__(self, opts, codec, binary_path, update_cb, logger, keydir=None):
+    def __init__(self, opts, peer_id, codec, binary_path, update_cb, logger, keydir=None):
         self._logger = logger
         self._opts = opts
+        self._peer_id = peer_id
         self._binary_path = binary_path
         self._proc = None
         self._ready = False
@@ -71,11 +73,15 @@ class PeerPrintQueue():
                 if v.lock is not None and v.lock.created > expiry_ts:
                     newjobs[k]['acquired'] = True
                     newjobs[k]['acquired_by_'] = v.lock.peer
+            # Set _jobs BEFORE calling update_cb in case it invokes get_jobs()
+            oldjobs = copy.deepcopy(self._jobs)
             self._jobs = newjobs
             print("New job data:", self._jobs)
             if self._update_cb is not None:
                 self._update_cb(ChangeType.JOBS, self._jobs, newjobs)
         elif isinstance(msg, ppb.PeersSummary):
+            # Set _peers BEFORE calling update_cb in case it invokes get_peers()
+            oldpeers = copy.deepcopy(self._peers)
             self._peers = msg
             if self._update_cb is not None:
                 self._update_cb(ChangeType.PEERS, self._peers, msg)
@@ -83,6 +89,9 @@ class PeerPrintQueue():
 
     def is_ready(self):
         return self._ready
+
+    def get_id(self):
+        return self._peer_id
 
     # ==== Mutation methods ====
 

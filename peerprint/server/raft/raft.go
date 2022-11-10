@@ -49,21 +49,24 @@ type Raft interface{
 
   Leader() string
   SetLeader(string)
-  LeaderChan() (chan struct{})
+  LeaderChan() (<-chan struct{})
   Commit(*pb.State) (*pb.State, error)
   Get() (*pb.State, error)
+  StateChan() (<-chan struct{})
 }
 
 type LocalMemoryImpl struct {
   s *pb.State
   l string
   lc chan struct{}
+  sc chan struct{}
 }
 func NewInMemory() *LocalMemoryImpl {
   return &LocalMemoryImpl{
     s: &pb.State{Jobs: make(map[string]*pb.Job)},
     l: "",
     lc: make(chan struct{}),
+    sc: make(chan struct{}),
   }
 }
 func (ri *LocalMemoryImpl) AddrInfo() *pb.AddrInfo { return nil }
@@ -76,14 +79,18 @@ func (ri *LocalMemoryImpl) GetPeers() []*pb.AddrInfo {
 func (ri *LocalMemoryImpl) Leader() string {
   return ri.l
 }
-func (ri *LocalMemoryImpl) LeaderChan() (chan struct{}) {
+func (ri *LocalMemoryImpl) LeaderChan() (<-chan struct{}) {
   return ri.lc
+}
+func (ri *LocalMemoryImpl) StateChan() (<-chan struct{}) {
+  return ri.sc
 }
 func (ri *LocalMemoryImpl) Get() (*pb.State, error) {
   return ri.s, nil
 }
 func (ri *LocalMemoryImpl) Commit(s *pb.State) (*pb.State, error) {
   ri.s = s
+  ri.sc<- struct{}{}
   return ri.s, nil
 }
 func (ri *LocalMemoryImpl) SetLeader(l string) {
@@ -105,6 +112,7 @@ type RaftImpl struct {
 	actor     *p2praft.Actor
 	leaderObs *raft.Observer
 	newLeader chan struct{}
+  stateChanged <-chan struct{}
 }
 
 func (ri *RaftImpl) AddrInfo() *pb.AddrInfo {
@@ -122,10 +130,13 @@ func (ri *RaftImpl) AddrInfo() *pb.AddrInfo {
 func (ri *RaftImpl) SetLeader(leader string) {
   // Do nothing - raft leadership is earned, not assigned
 }
-func (ri *RaftImpl) LeaderChan() (chan struct{}) {
+func (ri *RaftImpl) LeaderChan() (<-chan struct{}) {
   return ri.newLeader
 }
 
+func (ri *RaftImpl) StateChan() (<-chan struct{}) {
+  return ri.stateChanged
+}
 func (ri *RaftImpl) Shutdown() {
   ri.logger.Println("raft.Shutdown() called")
 	defer ri.transport.Close()
@@ -271,6 +282,7 @@ func (ri *RaftImpl) setup() error {
 	}
 	ri.actor = p2praft.NewActor(ri.raft)
 	ri.consensus.SetActor(ri.actor)
+  ri.stateChanged = ri.consensus.Subscribe()
 	go ri.observeLeadership(context.Background())
   return nil
 }
@@ -320,7 +332,6 @@ func (ri *RaftImpl) Commit(s *pb.State) (*pb.State, error) {
 			return nil, fmt.Errorf("agreedState is nil: commited on a non-leader?")
 		}
 	}
-  // Commit() is ignored when not leader
   return ri.Get()
 }
 

@@ -152,20 +152,21 @@ func TestPeersSummary(t *testing.T) {
 }
 func TestRaftAddrsResponse(t *testing.T) {
   pp := testEnv(t, true, true)
-  want := []*pb.AddrInfo{
-      &pb.AddrInfo{
+  want := &pb.AddrInfo{
         Id: "A",
         Addrs: []string{"B", "C"},
-    },
-  }
+    }
   // Use assignment topic to avoid having to issue assignment
   _, err := pp.P.Handle(AssignmentTopic, TrustedPeer, &pb.RaftAddrsResponse{
-    Peers: want,
+    AddrInfo: want,
   })
   if err != nil {
     t.Errorf(err.Error())
   }
-  if got := pp.R.peers; !reflect.DeepEqual(got, want) {
+  if len(pp.R.peers) != 1 {
+    t.Errorf("Expected exactly 1 raft peer")
+  }
+  if got := pp.R.peers[0]; !reflect.DeepEqual(got, want) {
     t.Errorf("Want %v got %v", want, got)
   }
 }
@@ -321,7 +322,7 @@ func TestReleaseJobRequestOnPeerLockedJob(t *testing.T) {
 }
 
 func TestState(t *testing.T) {
-  pp := testEnv(t, false, false)
+  pp := withAssignment(testEnv(t, false, false))
   pp.R.l = TrustedPeer
   want := &pb.State{Jobs: map[string]*pb.Job{"foo": &pb.Job{Id: "foo"}}}
   _, err := pp.P.Handle(TestTopic, TrustedPeer, want)
@@ -343,14 +344,14 @@ func TestState(t *testing.T) {
 }
 
 func TestHandleUnknownProto(t *testing.T) {
-  pp := testEnv(t, false, false)
+  pp := withAssignment(testEnv(t, false, false))
   _, err := pp.P.Handle(TestTopic, TrustedPeer, &wrapperspb.StringValue{Value: "what is this even"})
   if err != nil {
     t.Errorf("Expected no error, got %v", err)
   }
 }
 func TestHandleNonLeaderMutationRequest(t *testing.T) {
-  pp := testEnv(t, false, false)
+  pp := withAssignment(testEnv(t, false, false))
   _, err := pp.P.Handle(TestTopic, TrustedPeer, &pb.SetJobRequest{})
   if err != nil {
     t.Errorf("Expected no error, got %v", err)
