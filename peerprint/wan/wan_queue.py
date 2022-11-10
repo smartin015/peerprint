@@ -62,7 +62,7 @@ class PeerPrintQueue():
 
 
     def _update(self, msg):
-        expiry_ts = time.time() - 1*60*60
+        expiry_ts = time.time() - 1*60*60 # TODO encode somewhere. manifest?
         if isinstance(msg, spb.State):
             newjobs = dict()
             for k,v in msg.jobs.items():
@@ -70,12 +70,15 @@ class PeerPrintQueue():
                 newjobs[k]['peer_'] = v.owner
                 if v.lock is not None and v.lock.created > expiry_ts:
                     newjobs[k]['acquired'] = True
-                    newjobs[k]['acquired_by_'] = v.lock.id
-            self._update_cb(ChangeType.JOBS, self._jobs, newjobs)
+                    newjobs[k]['acquired_by_'] = v.lock.peer
             self._jobs = newjobs
+            print("New job data:", self._jobs)
+            if self._update_cb is not None:
+                self._update_cb(ChangeType.JOBS, self._jobs, newjobs)
         elif isinstance(msg, ppb.PeersSummary):
-            self._update_cb(ChangeType.PEERS, self._peers, msg)
             self._peers = msg
+            if self._update_cb is not None:
+                self._update_cb(ChangeType.PEERS, self._peers, msg)
         self._ready = True
 
     def is_ready(self):

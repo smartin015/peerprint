@@ -29,7 +29,11 @@ export PATH=$PATH:$(pwd)/server
 python3 -m peerprint.wan.demo
 ```
 
-You should see something like TODO
+It should start up two servers that connect to each other, then perform several operations on jobs before printing
+
+```
+SUCCESS - all tasks achieved
+```
 
 ## Demo registry fetching with IPFS
 

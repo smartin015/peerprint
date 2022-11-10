@@ -148,9 +148,12 @@ func (t *Server) OnAssignmentResponse(topic string, from string, resp *pb.Assign
     return t.raftAddrsRequest(), nil
   }
 
-  select {
-  case t.roleAssigned<- t.getType():
-  default:
+  // Don't notify ourselves if we're self-assigning (See Server.setup())
+  if from != t.getID() {
+    select {
+    case t.roleAssigned<- t.getType():
+    default:
+    }
   }
   return nil, nil
 }
@@ -184,7 +187,6 @@ func (t *Server) OnSetJobRequest(topic string, from string, req *pb.SetJobReques
       return nil, err
     }
   }
-
   // Ensure lock data is not tampered with
   if j != nil {
     req.GetJob().Lock = j.GetLock()

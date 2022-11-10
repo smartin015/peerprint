@@ -144,7 +144,7 @@ func (t *Server) handshakeRaft(ctx context.Context) {
     select {
     case <-ctx.Done():
       return
-		case <-t.raft.LeaderChan():
+    case <-t.roleAssigned:
       t.l.Println("Raft leader assigned, handshake complete")
       return
     case <-tmr.C:
@@ -169,6 +169,8 @@ func (t *Server) handshakeListener(ctx context.Context) {
     case <-ctx.Done():
       return
     case <-t.roleAssigned:
+      // We use roleAssigned instead of leaderChan as the latter is already
+      // listened on in Loop()
       t.l.Println("Role assigned, request loop complete")
       return
     case <-tmr.C:
@@ -223,6 +225,12 @@ func (t *Server) Loop(ctx context.Context) {
         t.sendPubsub[msg.Topic] <- rep
       }
 		case <-t.raft.LeaderChan():
+      // Used to exit the raft handshake process
+      select {
+      case t.roleAssigned<- t.getType():
+      default:
+      }
+
 			if t.getLeader() == t.getID() {
         t.sendPubsub[t.getTopic()]<-&pb.Leader{
           Id: t.getLeader(),

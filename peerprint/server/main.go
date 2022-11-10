@@ -72,7 +72,7 @@ func main() {
     if err := reggen.GenRegistryFiles(npeer, dest_dir); err != nil {
       log.Fatal(fmt.Errorf("Error writing generated registry to %s: %v", dest_dir, err).Error())
     }
-    fmt.Println("Generated registry YAML file and peer keys in dir %s", dest_dir)
+    fmt.Println("Generated registry YAML file and peer keys in dir", dest_dir)
     return
   }
 

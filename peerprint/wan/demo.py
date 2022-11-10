@@ -1,5 +1,9 @@
 from .wan_queue import PeerPrintQueue
 from .proc import ServerProcessOpts
+from .registry import FileRegistry
+import subprocess
+from threading import Lock
+import tempfile
 import logging
 import time
 import sys
@@ -9,71 +13,100 @@ import json
 print(__file__)
 
 logging.basicConfig(level=logging.DEBUG)
+TEST_JOB = "asdfghjk"
 
-if len(sys.argv) != 4:
-    raise Exception(f"Usage: {sys.argv[0]} <path_to_peerprint_server> <path_to_key_dir_server1> <path_to_key_dir_server2>")
+if len(sys.argv) != 2:
+    raise Exception(f"Usage: {sys.argv[0]} <path_to_peerprint_server>")
+server_path = sys.argv[1]
 
 class JSONCodec():
     @classmethod
     def encode(self, manifest):
-        return (json.dumps(manifest), "json")
+        return (json.dumps(manifest).encode("utf8"), "json")
 
+    @classmethod
     def decode(self, data, protocol):
         assert protocol=="json"
-        return json.loads(data)
+        return json.loads(data.decode("utf8"))
 
+lock = Lock()
 def on_update(changetype, prev, nxt):
     print("on_update")
+    try:
+        lock.release()
+    except RuntimeError:
+        pass
 
-def make_queue(idx):
+def do_get(fn):
+    lock.acquire()
+    fn()
+    lock.acquire()
+    return q1.getJobs()
+
+def make_queue(tdir, idx):
+    reg = FileRegistry(os.path.join(tdir, "registry.yaml"))
+    qname = reg.get_queue_names()[0]
     ppq = PeerPrintQueue(ServerProcessOpts(
-            rendezvous="secret_rendezvouuuuuus",
-            trustedPeers=",".join(["12D3KooWQgJbshwq6rwDigXkkYg46NT3zUsizzHy6H2aHWbaj5PA", "12D3KooWGzEzMqMtjUtmvvJRCA6fzLvUJrUGUUNHX8dfSzgqJjrz"]),
+            rendezvous=reg.get_rendezvous(qname),
+            trustedPeers=",".join(reg.get_trusted_peers(qname)),
             local=True,
             raftPath=f"./peer{idx}.raft",
-    ), JSONCodec, sys.argv[1], on_update, logging.getLogger(f"q{idx}"), sys.argv[2+idx])
+            privkeyfile=os.path.join(tdir, f"trusted_peer_{idx+1}.priv"),
+            pubkeyfile=os.path.join(tdir, f"trusted_peer_{idx+1}.pub"),
+    ), JSONCodec, server_path, on_update if idx == 1 else None, logging.getLogger(f"q{idx}"))
     logging.info(f"Starting connection ({idx})")
     ppq.connect()
     return ppq
 
-q0 = make_queue(0)
-q1 = make_queue(1)
+def make_config(tdir, npeers):
+    assert subprocess.run([server_path, "generate_registry", str(npeers), tdir]).returncode == 0
 
-while not q0.is_ready() or not q1.is_ready():
+def main(q0, q1):
     logging.info("Waiting for queues to be ready...")
-    time.sleep(5)
+    while not q0.is_ready() or not q1.is_ready():
+        time.sleep(1)
 
-input("ready - press enter to query for jobs, locks, peers")
+    print("Querying peers, jobs")
 
-rep = q0.getPeers()
-print(f"q0 {rep.peer_estimate} peers (variance {rep.variance} from a sample of {len(rep.sample)}")
-rep = q0.getJobs()
-print(f"q0: {len(rep)} jobs: {rep}")
-rep = q0.getLocks()
-print(f"q0: {len(rep)} locks: {rep}")
+    rep = q0.getPeers()
+    print(f"q0 {rep.peer_estimate} peers (variance {rep.variance} from a sample of {len(rep.sample)})")
+    rep = q0.getJobs()
+    print(f"q0: {len(rep)} jobs: {rep}")
 
-input("Press any key to upload a dummy job")
+    print("q0: uploading a dummy job")
+    rep = do_get(lambda: q0.setJob(TEST_JOB, dict(man="ifest")))
+    print(f"q1: {len(rep)} jobs: {rep}")
+    if len(rep) != 1:
+        raise Exception(f"Expected 1 job in queue, got {len(rep)}")
 
-q0.setJob("asdfghjk", dict(man="ifest"))
-print("Uploaded")
+    print("q0: acquiring the job")
+    rep = do_get(lambda: q0.acquireJob(TEST_JOB))
+    print("q0: job is now", rep[TEST_JOB])
+    if not rep[TEST_JOB]['acquired'] or rep[TEST_JOB]['acquired_by'] != "12D3KooWQgJbshwq6rwDigXkkYg46NT3zUsizzHy6H2aHWbaj5PA":
+        raise Exception(f"Expected job {TEST_JOB} to be acquired by q1, instead {rep[TEST_JOB]}")
 
-time.sleep(2)
+    print("q0: releasing the job")
+    rep = do_get(lambda: q0.releaseJob(TEST_JOBJOB))
+    if rep[TEST_JOB].acquired:
+        raise Exception(f"Expected job {TEST_JOB} to be not acquired, but it is")
 
-rep = q0.getJobs()
-print(f"q0: {len(rep)} jobs: {rep}")
+    print("q0: removing the job")
+    rep = do_get(lambda: q0.removeJob(TEST_JOB))
+    if rep.get(TEST_JOB):
+        raise Exception(f"Expected job ID {TEST_JOB} to be removed, but it still exists")
 
-input("Press enter to acquire the job")
+    print("SUCCESS - all tasks achieved")
 
-q0.acquireJob("asdfghjk")
 
-input ("Press enter to release the job")
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory() as tdir: 
+        print("Creating config files")
+        make_config(tdir, 2)
+    
+        print("Constructing queues")
+        q0 = make_queue(tdir, 0)
+        q1 = make_queue(tdir, 1)
 
-q0.releaseJob("asdfghjk")
-
-input("Press enter to remove the job")
-
-q0.removeJob("asdfghjk")
-
-input("Press enter to exit")
-
+        print("Running demo")
+        main(q0, q1)
 

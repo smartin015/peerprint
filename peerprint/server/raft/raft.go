@@ -311,7 +311,7 @@ func (ri *RaftImpl) Leader() string {
 }
 
 func (ri *RaftImpl) Commit(s *pb.State) (*pb.State, error) {
-	if ri.actor.IsLeader() {
+	if ri.raft.State() == raft.Leader {
     agreedState, err := ri.consensus.CommitState(&MarshableState{State: s}) // Blocking
 		if err != nil {
 		return nil, err
