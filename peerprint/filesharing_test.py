@@ -2,7 +2,7 @@ import unittest
 import logging
 import tempfile
 from pathlib import Path
-from .filesharing import pack_job, unpack_job, packed_name, TCPFileshare
+from .filesharing import pack_job, unpack_job, packed_name, Fileshare
 
 class TestPackJob(unittest.TestCase):
     def setUp(self):
@@ -75,11 +75,11 @@ class TestPackedName(unittest.TestCase):
                     return True
         self.assertEqual(packed_name("test", P('/base/')), '/base/test (4).gjob') 
 
-class TestTCPFileshare(unittest.TestCase):
+class TestFileshare(unittest.TestCase):
     def setUp(self):
         NUMFS = 2
         self.td = [tempfile.TemporaryDirectory() for i in range(NUMFS)]
-        self.fs = [TCPFileshare("localhost:0", self.td[i].name, logging.getLogger(f"TestFileshare{i}")) for i in range(NUMFS)]
+        self.fs = [Fileshare("localhost:0", self.td[i].name, logging.getLogger(f"TestFileshare{i}")) for i in range(NUMFS)]
         for fs in self.fs:
             fs.connect()
         self.addr = [f"localhost:{fs.httpd.socket.getsockname()[1]}" for fs in self.fs]

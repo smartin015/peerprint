@@ -1,7 +1,7 @@
 import unittest
 import logging
 from unittest.mock import MagicMock, call, patch, ANY
-from .registry import Registry
+from .registry import IPFSRegistry
 import peerprint.server.proto.peers_pb2 as ppb
 import yaml
 import json
@@ -21,7 +21,7 @@ class TestRegistry(unittest.TestCase):
             ])
         with patch('peerprint.wan.registry.IPFS') as fs:
             fs.fetch.side_effect = lambda cid, dest: self._writeReg(reg, dest)
-            r = Registry("testcid")
+            r = IPFSRegistry("testcid")
         
             self.assertEqual(r.get_rendezvous("q2"), reg.queues[1].rendezvous)
             self.assertEqual(r.get_trusted_peers("q1"), reg.queues[0].trustedPeers)

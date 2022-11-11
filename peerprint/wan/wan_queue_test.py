@@ -24,6 +24,7 @@ class TestPeerPrintQueue(unittest.TestCase):
         self.cb = MagicMock()
         self.q = PeerPrintQueue(
                 opts=ServerProcessOpts(),
+                peer_id="foo",
                 codec=ObjectCodec,
                 binary_path="testbinary",
                 update_cb=self.cb,
@@ -31,6 +32,9 @@ class TestPeerPrintQueue(unittest.TestCase):
                 keydir=None,
             )
         self.q._zmqclient = MagicMock()
+
+    def tearDown(self):
+        self.q.destroy()
 
     def testSyncPeer(self):
         self.q.syncPeer(dict(asdf="ghjk"), addr="abc:123")

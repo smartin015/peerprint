@@ -60,7 +60,7 @@ class PeerPrintQueue():
             self._zmqclient.destroy()
         if self._proc is not None:
             self._proc.destroy()
-        self.tmpdir.cleanup(ignore_cleanup_errors=True)
+        self.tmpdir.cleanup()
 
 
     def _update(self, msg):
