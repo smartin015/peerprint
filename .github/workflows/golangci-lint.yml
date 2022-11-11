@@ -23,7 +23,7 @@ jobs:
           cache: true
           cache-dependency-path: peerprint/server/go.sum
       - name: Install dependencies
-          run: cd peerprint/server && go install ./...
+        run: cd peerprint/server && go install ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:

@@ -5,6 +5,8 @@ jobs:
     - language: python
       python:
         - "3.9"
+      before_install:
+        - pip install --upgrade pip
       install:
         - pip install -e .
       script:
