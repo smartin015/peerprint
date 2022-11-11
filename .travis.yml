@@ -12,7 +12,7 @@ jobs:
       go:
         - 1.19.x
       before_install:
-          - sudo apt-get -y install libczmq-dev libzmq5
+          - sudo apt-get -y install libczmq-dev libzmq5 libsodium-dev
       install:
           - cd ./peerprint/server && GO111MODULE=on go install ./...
       before_script:
