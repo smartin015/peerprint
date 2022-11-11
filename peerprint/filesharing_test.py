@@ -1,8 +1,9 @@
 import unittest
+from unittest.mock import patch
 import logging
 import tempfile
 from pathlib import Path
-from .filesharing import pack_job, unpack_job, packed_name, Fileshare
+from .filesharing import pack_job, unpack_job, packed_name, Fileshare, IPFSFileshare
 
 class TestPackJob(unittest.TestCase):
     def setUp(self):
@@ -102,3 +103,21 @@ class TestFileshare(unittest.TestCase):
             with open(Path(dest) / 'a.gcode', 'r') as f:
                 self.assertEqual(f.read(), DATA)
 
+class TestIPFSFileshare(unittest.TestCase):
+    @patch('peerprint.filesharing.IPFS')
+    def testPost(self, tpfs):
+        with tempfile.TemporaryDirectory() as td:
+            tpfs.add.return_value = b"foo"
+            fs = IPFSFileshare(td, logging.getLogger())
+            ret = fs.post(dict(sets=[]), {})
+
+            self.assertEqual(ret, "foo")
+            self.assertTrue((Path(td) / "foo.gjob").exists())
+
+    @patch("peerprint.filesharing.IPFS")
+    def testFetch(self, tpfs):
+        with tempfile.TemporaryDirectory() as td:
+                tpfs.fetch.return_value = True
+                fs = IPFSFileshare(td, logging.getLogger())
+                ret = fs.fetch("foo", unpack=False, overwrite=False)
+                self.assertEqual(ret, Path(td) / "foo.gjob")

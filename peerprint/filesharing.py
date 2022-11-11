@@ -104,7 +104,6 @@ class IPFSFileshare():
             os.rename(tf.name, dest)
             self._logger.info(f"Packed and posted job to {dest} - IPFS id {ipfs_cid}")
             return ipfs_cid
-        pass
 
     def fetch(self, hash_:str, unpack=False, overwrite=False) -> str:
         # Get the equivalent path on disk
@@ -123,7 +122,6 @@ class IPFSFileshare():
             return dest_dir
         else:
             return dest
-        pass
 
 
 class FileshareServer(socketserver.TCPServer):
