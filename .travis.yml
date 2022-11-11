@@ -10,7 +10,7 @@ jobs:
 
     - language: go
       install:
-          - cd ./peerprint/server && go get ./...
+          - cd ./peerprint/server && GO111MODULE=on go install ./...
       before_script:
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.37.1
           - cd ./peerprint/server && go build .
