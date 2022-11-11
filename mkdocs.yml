@@ -1,0 +1,29 @@
+site_name: PeerPrint
+theme:
+  name: material
+  # logo: ./CPQ_white.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+markdown_extensions:
+  - admonition
+# extra_css:
+# - style.css
+nav:
+  - Home: index.md
+  - 'new-queue.md'
+  - 'network-architecture.md'
+  - 'process-architecture.md'
+  - 'contributing.md'

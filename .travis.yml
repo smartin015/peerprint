@@ -1,7 +1,25 @@
-language: python
-python:
-  - "3.9"
-install:
-  - pip install -e .[tests,dev]
-script:
-  - python -m unittest discover -p "*_test.py"
+os: linux
+dist: focal
+jobs:
+  include:
+    - language: python
+      python:
+        - "3.9"
+      before_install:
+        - pip install --upgrade pip
+      install:
+        - pip install -e .
+      script:
+        - python3 -m unittest discover -p "*_test.py"
+
+    - language: go
+      go:
+        - 1.19.x
+      before_install:
+          - sudo apt update && sudo apt-get -y install libczmq-dev libzmq5 libsodium-dev
+      install:
+          - cd ./peerprint/server && GO111MODULE=on go install ./...
+      before_script:
+          - go build .
+      script:
+          - go test -v -race ./...  # Run all the tests with the race detector enabled

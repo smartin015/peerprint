@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+import "proto/jobs.proto";
+
+package state;
+
+// This is the state present in the RAFT logs - it describes the current state
+// of the queue.
+message State {
+  map<string, jobs.Job> jobs = 1;
+  //repeated jobs.Job jobs = 1;
+}
+
+/// Used in response to ZMQ socket commands if those commands fail.
+// This lets us forward error messages to the wrapper which can
+// then display them.
+message Error {
+  string status = 2;
+}
+
+// Used in response to ZMQ socket commands that succeed, but have no
+// output.
+message Ok {}

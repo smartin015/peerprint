@@ -7,6 +7,8 @@ import json
 import time
 import re
 import tempfile
+from .wan.ipfs import IPFS
+from abc import ABC, abstractmethod
 from pathlib import Path
 from .version import __version__ as version
 import http.server
@@ -87,6 +89,40 @@ def unpack_job(path, outdir):
             manifest = json.loads(f.read())
         return manifest, [n for n in zf.namelist() if Path(n).name != 'manifest.json']
 
+class IPFSFileshare():
+    def __init__(self, basedir, logger):
+        self.basedir = basedir
+        self._logger = logger
+        os.makedirs(basedir, exist_ok=True)
+        self.proc = IPFS.start_daemon()
+
+    def post(self, manifest: dict, filepaths: dict) -> str:
+        with tempfile.NamedTemporaryFile(suffix='.gjob', dir=self.basedir, delete=False) as tf:
+            hash_ = pack_job(manifest, filepaths, tf.name)
+            ipfs_cid = IPFS.add(tf.name).decode('utf8')
+            dest = Path(self.basedir) / f"{ipfs_cid}.gjob"
+            os.rename(tf.name, dest)
+            self._logger.info(f"Packed and posted job to {dest} - IPFS id {ipfs_cid}")
+            return ipfs_cid
+
+    def fetch(self, hash_:str, unpack=False, overwrite=False) -> str:
+        # Get the equivalent path on disk
+        name = f"{hash_}.gjob"
+        dest = Path(self.basedir) / name
+        if dest.exists() and not overwrite:
+            self._logger.debug("File already exists - using that one")
+        else:
+            if not IPFS.fetch(hash_, dest):
+                raise Exception("Failed to fetch file {hash_}")
+
+        if unpack:
+            dest_dir = Path(self.basedir) / hash_
+            if not dest_dir.exists() or overwrite:
+                unpack_job(dest, dest_dir)
+            return dest_dir
+        else:
+            return dest
+
 
 class FileshareServer(socketserver.TCPServer):
     allow_reuse_address = True
@@ -163,23 +199,3 @@ class Fileshare:
             return dest_dir
         else:
             return dest
-
-
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    with tempfile.TemporaryDirectory() as basedir:
-        fs = Fileshare("0.0.0.0:5000", basedir, logging.getLogger('fileshare'))
-        fs.connect()
-
-        name = 'test.gjob'
-        fpath = (Path(basedir) / name)
-
-        with open(fpath, 'w') as f:
-            f.write('hello world')
-        fs.post('ABCDEF', str(fpath))
-        fs.fetch('localhost:5000', 'ABCDEF', overwrite=False)
-        fs.getJob('localhost:5000', 'ABCDEF', overwrite=True)
-        fs.destroy()
-        print("Done")
-

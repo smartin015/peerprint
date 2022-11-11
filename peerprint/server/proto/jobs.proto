@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package jobs;
+
+// Lock represents a lease on a resource passed between peers.
+message Lock {
+  // Public ke / ID of the peer holding this lock
+  string peer = 1;
+
+  // Date the lock was established - this may be used to auto-release the lock
+  // in case the peer stops responding.
+  uint64 created = 2;
+}
+
+// Job represents a 3D printer job. 
+message Job {
+  // Typically a UUID, this is unique for every job in the queue.
+  string id = 1;
+
+  // The ID of the peer that "owns" the job.
+  string owner = 2;
+
+  // Indicates which peer holds write access to this job.
+  Lock lock = 3;
+
+  // This indicates method used to serialize job data. This is opaque to PeerPrint and should not be inspected.
+  string protocol = 4;
+
+  // data is the actual metadata surrounding the job (e.g. the material to print, or the number of repeats).
+  // This is opaque to PeerPrint and should not be inspected.
+  bytes data = 5;
+}
+
+// SetJobRequest inserts or overwrites a job with the matching `job.id` in the queue.
+// This request may be rejected if the peer's role or the job's lock state are incorrect.
+message SetJobRequest {
+  Job job = 1;
+}
+
+// DeleteJobRequest deletes the job with the given id. Fails silently if no job exist matching id.
+message DeleteJobRequest {
+  string id = 1;
+}
+// AcquireJobRequest acquires a lock on the job with the given id.
+message AcquireJobRequest {
+  string id = 1;
+}
+
+// ReleaseJobRequest releases a lock on the job with the given id.
+message ReleaseJobRequest {
+  string id = 1;
+}
