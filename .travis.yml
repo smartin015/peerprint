@@ -11,6 +11,8 @@ jobs:
     - language: go
       go:
         - 1.19.x
+      before_install:
+          - sudo apt-get -y install libczmq-dev libzmq5
       install:
           - cd ./peerprint/server && GO111MODULE=on go install ./...
       before_script:
