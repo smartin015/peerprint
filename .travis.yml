@@ -9,6 +9,8 @@ jobs:
         - python3 -m unittest discover -p "*_test.py"
 
     - language: go
+      install:
+          - cd ./peerprint/server && go get ./...
       before_script:
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.37.1
           - cd ./peerprint/server && go build .
