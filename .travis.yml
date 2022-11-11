@@ -9,6 +9,8 @@ jobs:
         - python3 -m unittest discover -p "*_test.py"
 
     - language: go
+      go:
+        - 1.19.x
       install:
           - cd ./peerprint/server && GO111MODULE=on go install ./...
       before_script:
