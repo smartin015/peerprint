@@ -103,6 +103,7 @@ class TestFileshare(unittest.TestCase):
             with open(Path(dest) / 'a.gcode', 'r') as f:
                 self.assertEqual(f.read(), DATA)
 
+
 class TestIPFSFileshare(unittest.TestCase):
     @patch('peerprint.filesharing.IPFS')
     def testPost(self, tpfs):
