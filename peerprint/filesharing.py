@@ -144,15 +144,14 @@ class Fileshare:
         class FileshareRequestHandler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, directory=basedir, **kwargs)
+
         self.httpd = FileshareServer((self.host, self.port), FileshareRequestHandler)
         self.httpd.allow_reuse_address = True
         self.t = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.t.start()
 
-        # Re-assign host & port since some formats (e.g. *:0) auto-assign
+        # Re-assign host & port since some formats (e.g. *:0) auto-assign port
         (self.host, self.port) = self.httpd.socket.getsockname()
-
-        self._logger.info(f"Fileshare listening on {self.host}:{self.port}")
 
     def destroy(self):
         if self.httpd is not None:

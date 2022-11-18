@@ -60,7 +60,9 @@ class P2PDiscovery:
       # For linux hosts all sockets that want to share the same address and port combination must belong to processes that share the same effective user ID!
       # So, on linux(kernel>=3.9) you have to run multiple servers and clients under one user to share the same (host, port).
       # Thanks to @stevenreddie
-      self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+      #
+      # Note also that Windows does not have an SO_REUSEPORT variable - see https://github.com/smartin015/continuousprint/issues/154. Failover is required.
+      self.sock.setsockopt(socket.SOL_SOCKET, getattr(socket, 'SO_REUSEPORT', socket.SO_REUSEADDR), 1)
       self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
       self.sock.bind(("", DISCOVERY_PORT))
       self.sock.settimeout(0.2)
