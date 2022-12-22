@@ -81,6 +81,13 @@ class FileRegistry(Registry):
         with open(self.path, 'r') as f:
             return f.read()
 
+
+class DictRegistry(Registry):
+    def __init__(self, data):
+        super().__init__()
+        self.registry = data
+
+
 if __name__ == "__main__":
     import time
     import sys

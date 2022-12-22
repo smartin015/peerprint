@@ -68,7 +68,7 @@ class PeerPrintQueue():
         if isinstance(msg, spb.State):
             newjobs = dict()
             for k,v in msg.jobs.items():
-                newjobs[k] = self._codec.decode(v.data, v.protocol)
+                newjobs[k] = self._codec.decode(v.data, v.protocol, self._logger)
                 newjobs[k]['peer_'] = v.owner
                 if v.lock is not None and v.lock.created > expiry_ts:
                     newjobs[k]['acquired'] = True
@@ -85,6 +85,8 @@ class PeerPrintQueue():
             self._peers = msg
             if self._update_cb is not None:
                 self._update_cb(ChangeType.PEERS, self._peers, msg)
+        elif isinstance(msg, ppb.SystemSummary):
+            self._system = msg
         self._ready = True
 
     def is_ready(self):
@@ -95,8 +97,10 @@ class PeerPrintQueue():
 
     # ==== Mutation methods ====
 
-    def syncPeer(self, state: dict, addr=None):
-        self._zmqclient.call(ppb.PeerStatus()) #state=state, addr=addr))
+    def syncPeer(self, profile, state):
+        self._zmqclient.call(ppb.PeerStatus(
+            profile=profile, state=state
+        ))
     
     def getPeers(self):
         return self._peers
@@ -123,11 +127,14 @@ class PeerPrintQueue():
         return self._jobs
 
     def removeJob(self, jid: str):
-        self._zmqclient.call(jpb.DeleteJobRequest(id=jid))
+        rep = self._zmqclient.call(jpb.DeleteJobRequest(id=jid))
+        raise NotImplementedError("TODO handle delete response")
 
     def acquireJob(self, jid: str):
         self._zmqclient.call(jpb.AcquireJobRequest(id=jid))
+        raise NotImplementedError("TODO handle acquire response")
 
     def releaseJob(self, jid: str):
         self._zmqclient.call(jpb.ReleaseJobRequest(id=jid))
+        raise NotImplementedError("TODO handle release response")
 

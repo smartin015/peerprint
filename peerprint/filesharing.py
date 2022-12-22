@@ -169,7 +169,7 @@ class Fileshare:
             hash_ = pack_job(manifest, filepaths, tf.name)
             dest = Path(self.basedir) / f"{hash_}.gjob"
             os.rename(tf.name, dest)
-            self._logger.info(f"Packed and posted job to {dest}")
+            self._logger.info(f"Packed and posted job to {dest} ({self.host}:{self.port})")
             return hash_
 
     def fetch(self, peer:str, hash_:str, unpack=False, overwrite=False) -> str:

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 
-package rpc;
+package peers;
 
 enum PeerType {
   UNKNOWN_PEER_TYPE = 0;
@@ -62,6 +62,9 @@ message PeerStatus {
   // Who this peer thinks is the leader. This is used
   // to inspect queue coherency and peer readiness
   string leader = 3;
+
+  // The type of printer this peer has (e.g. Creality CR-30)
+  string profile = 6;
 
   // The role of the peer
   PeerType type = 4;
@@ -136,4 +139,11 @@ message AssignmentResponse {
 
   // Role of the peer on this topic
   PeerType type = 4;
+}
+
+// Summary message sent to wrapper describing IDs, addresses, and other
+// details of the peerprint instance.
+message SystemSummary {
+  AddrInfo pubsub;
+  AddrInfo raft;
 }

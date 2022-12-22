@@ -19,6 +19,46 @@ class ObjectCodec:
         assert protocol=="object"
         return dict()
 
+
+class MockPPQ:
+    def __init__(self, opts, codec, binpath, on_update, logger, keydir):
+        self.opts = opts
+        self.jobs = {}
+
+    def syncPeer(self, profile, state):
+        pass # TODO
+
+    def getPeers(self):
+        return MagicMock(peer_estimate=0, variance=float('inf'), sample=[
+                MagicMock(id="peer1", topic="/", leader="leader", profile="profile", type=1, state=2),
+            ])
+
+    def getJobs(self):
+        return self.jobs
+
+    def setJob(self, jid, j, addr):
+        # Matching behavior of wan_queue.py impl; peer_, acquired, acquired_by_
+        # all set when received from process
+        j['peer_'] = addr or "dummyppq"
+        j['acquired'] = j.get('acquired', False)
+        j['acquired_by_'] = j.get('acquired_by_', None)
+        self.jobs[jid] = j
+
+    def removeJob(self, jid):
+        if not jid in self.jobs:
+            return dict(jobs_deleted=0)
+        del self.jobs[jid]
+        return dict(jobs_deleted=1)
+
+    def acquireJob(self, jid):
+        self.jobs[jid]['acquired'] = True
+        return True
+
+    def releaseJob(self, jid):
+        self.jobs[jid]['acquired'] = False
+        return True
+
+
 class TestPeerPrintQueue(unittest.TestCase):
     def setUp(self):
         self.cb = MagicMock()
