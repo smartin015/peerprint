@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package state;
+
+enum LocationType {
+  UNKNOWN = 0;
+  IPFS_CID = 1;
+}
+
+message Signature {
+  string signer = 1;
+  bytes data = 2;
+}
+
+message SignedRecord {
+  Record record = 1;
+  Signature signature = 2;
+}
+
+message Rank {
+  uint64 num = 1;
+  uint64 den = 2;
+  double gen = 3; // rendered as `num/den`, lossy
+}
+
+message Record {
+  string uuid = 1; // UUID unique to this record
+  repeated string tags = 2; // Tags for qualified search of records without having to fetch each `location`
+
+  LocationType location_type = 3;
+  string location = 4;
+
+  // Always-increasing version number for this record. Increment 
+  // whenever changing `location` to a newer data location.
+  uint64 version = 5; 
+
+  // Unix timestamps
+  int64 created = 6;
+  int64 tombstone = 7;
+
+  Rank rank = 8;
+}
+
+enum GrantType {
+  UNKNOWN_GRANT_TYPE = 0;
+  ADMIN = 1;
+  EDITOR = 2;
+}
+
+message SignedGrant {
+  Grant grant = 1;
+  Signature signature = 2;
+}
+
+// Grant is provided by an `issuer` peer to a `target` peer, 
+// delegating a `role` to them with a limited lifetime (until `expiry`).
+message Grant {
+  string target = 1;
+  int64 expiry = 2;
+  GrantType type = 3;
+  string scope = 4;
+}

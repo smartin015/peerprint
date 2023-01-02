@@ -1,0 +1,320 @@
+// Package transport provides the base communication layer
+package transport
+
+import (
+  "log"
+  "time"
+  "context"
+  "fmt"
+  "math/rand"
+	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/host"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	rpc "github.com/libp2p/go-libp2p-gorpc"
+	"github.com/libp2p/go-libp2p/core/crypto"
+  pb "github.com/smartin015/peerprint/p2pgit/proto"
+	"github.com/smartin015/peerprint/p2pgit/topic"
+	"github.com/smartin015/peerprint/p2pgit/discovery"
+	//"github.com/smartin015/peerprint/p2pgit/repo"
+	"google.golang.org/protobuf/proto"
+)
+
+const (
+  PeerPrintProtocol = "peerprint@0.0.1"
+
+  StatusTopic = "_STATUS"
+
+  // Maximum number of peers to add into the electorate for continuity when
+  // the leader goes offline.
+  MaxElectorate = 5
+
+  // HandshakeStatusPeriodBase is the average handshake message period;
+  // the actual period will be somewhere between 0.5x and 1.5x this value.
+  HandshakeStatusPeriodBase = 2 * time.Second
+)
+
+type Interface interface {
+  Run(context.Context)
+  ID() string
+  AmLeader() bool
+
+  Publish(topic string, msg proto.Message)
+  OnMessage() <-chan topic.TopicMsg
+
+  // BeginLocalSync requests grants and objects from "adjacent" peers in the
+  // pubsub graph. 
+  // To limit load on the system, 
+  // BeginLocalSync(objectStride uint64, objectIdx uint64)
+}
+
+type Opts struct {
+  RaftAddr string
+  PubsubAddr string
+  RaftSnapshotPath string
+  RaftDBPath string
+  Rendezvous string
+  Local bool
+  PrivKey crypto.PrivKey
+  ConnectTimeout time.Duration
+  StatusPeriod time.Duration
+  AccessionDelay time.Duration
+  Topics []string
+}
+
+type Transport struct {
+  // Initial config options
+  opts *Opts
+
+  // For RAFT consensus state sync
+  leader bool
+
+  // Discoverable PubSub transport layer so
+  // consensus can scale
+  discovery *discovery.Discovery
+  host host.Host
+  pubsub *pubsub.PubSub
+  recvChan chan topic.TopicMsg
+  msgChan chan topic.TopicMsg
+  errChan chan error
+  pubChan map[string] chan<- proto.Message
+
+  server *rpc.Server
+
+  // Tickers for periodic network activity
+  publishStatusTicker *time.Ticker
+
+  // Channels used for selecting on transport events
+  onMsg chan *proto.Message
+
+  status *pb.PeerStatus
+
+  l *log.Logger
+}
+
+type PeerPrintService struct {}
+
+func (s *PeerPrintService) GetStateHash(ctx context.Context, req pb.GetStateHashRequest, rep *pb.GetStateHashResponse) error {
+  return &pb.GetStateHashResponse{
+    Hash: "123",
+  }
+}
+
+
+func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error) {
+  pid := libp2p.Identity(opts.PrivKey)
+
+  // Initialize base pubsub infra
+	h, err := libp2p.New(libp2p.ListenAddrStrings(opts.PubsubAddr), pid)
+	if err != nil {
+    return nil, fmt.Errorf("PubSub host creation failure: %w", err)
+	}
+  // TODO switch to using pubsub.WithDiscovery
+	ps, err := pubsub.NewGossipSub(ctx, h)
+	if err != nil {
+    return nil, fmt.Errorf("GossipSub creation failure: %w", err)
+  }
+
+  // Wrap as well in an RPC interface
+  srv := rpc.NewServer(h, PeerPrintProtocol)
+  if err := srv.Register(&PeerPrintService{}); err != nil {
+    return nil, fmt.Errorf("Failed to set up RPC server: %w", err)
+  }
+
+  // Initialize discovery service for pubsub
+	disco := discovery.DHT
+	if opts.Local {
+		disco = discovery.MDNS
+	}
+	d := discovery.New(ctx, disco, h, opts.Rendezvous, logger)
+
+  s := &Transport{
+    opts: opts,
+    publishStatusTicker: time.NewTicker(opts.StatusPeriod),
+    discovery: d,
+    pubsub: ps,
+    host: h,
+    server: srv,
+    recvChan: make(chan topic.TopicMsg),
+    msgChan: make(chan topic.TopicMsg),
+    errChan: make(chan error),
+    pubChan: make(map[string] chan<- proto.Message),
+    status: &pb.PeerStatus{
+      Type: pb.PeerType_UNKNOWN_PEER_TYPE, // Unknown until handshake is complete
+    },
+    l: logger,
+  }
+
+  // Join topics
+  opts.Topics = append(opts.Topics, StatusTopic)
+  for _, t := range(opts.Topics) {
+    c, err := topic.NewTopicChannel(ctx, s.recvChan, s.ID(), ps, t, s.errChan)
+    if err != nil {
+      return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
+    }
+    logger.Printf("Joined topic: %q\n", t)
+    s.pubChan[t] = c
+  }
+
+  return s, nil
+}
+
+func (s *Transport) OnMessage() <-chan topic.TopicMsg {
+  return s.msgChan
+}
+
+func (s *Transport) Publish(topic string, msg proto.Message) {
+  s.pubChan[topic] <- msg
+}
+
+func (s *Transport) Run(ctx context.Context) {
+  s.runDiscovery(ctx)
+  s.runHandshake(ctx)
+  s.runEventLoop(ctx)
+}
+
+func (s *Transport) AmLeader() bool {
+  return s.leader //s.raft.Leader() == s.ID()
+}
+
+func (s *Transport) runDiscovery(ctx context.Context) {
+	s.l.Printf("Discovering pubsub peers (self ID %v, timeout %v)\n", s.ID(), s.opts.ConnectTimeout)
+	connectCtx, cancel := context.WithTimeout(ctx, s.opts.ConnectTimeout)
+	defer cancel()
+
+  go s.discovery.Run()
+	if err := s.discovery.AwaitReady(connectCtx); err != nil {
+		panic(fmt.Errorf("Error connecting to peers: %w", err))
+	} else {
+		s.l.Println("Peers found; initial discovery complete")
+	}
+}
+
+func (s *Transport) ID() string {
+  return s.host.ID().String()
+}
+
+func (s *Transport) sendStatus() {
+  select {
+  case s.pubChan[StatusTopic] <- s.status:
+  default:
+    panic("requestAssignment: channel overflow during request")
+  }
+}
+
+func (s *Transport) betterLeaderFound(peer string, v *pb.PeerStatus) bool {
+  return v.Type == pb.PeerType_UNKNOWN_PEER_TYPE && s.ID() < peer
+}
+
+func (s *Transport) tryAssign(v *pb.AssignPeer) bool {
+  if v.Peer == s.ID() {
+    s.status.Type = v.Type
+  }
+  return s.status.Type != pb.PeerType_UNKNOWN_PEER_TYPE
+}
+
+func (s *Transport) runHandshake(ctx context.Context) {
+  accessionTime := time.Now().Add(s.opts.AccessionDelay)
+  lastBetterLeader := time.UnixMilli(0)
+  s.l.Printf("Beginning handshake loop; accession in %v (at %v)\n", s.opts.AccessionDelay, accessionTime)
+
+  s.sendStatus()
+  tmr := time.NewTimer(HandshakeStatusPeriodBase)
+  for s.status.Type == pb.PeerType_UNKNOWN_PEER_TYPE {
+    select {
+    case <-ctx.Done():
+      panic("Context timeout during handshake")
+    case e := <-s.errChan:
+      s.l.Println(e)
+    case m := <-s.recvChan:
+      if m.Topic == StatusTopic {
+        switch v := m.Msg.(type) {
+        case *pb.PeerStatus:
+          if s.betterLeaderFound(m.Peer, v) {
+            s.l.Println("Found better leader candidate", m.Peer)
+            lastBetterLeader = time.Now()
+          }
+        case *pb.AssignPeer:
+          if s.tryAssign(v) {
+            s.l.Println("Assignment succeeded; type now ", s.status.Type)
+            return
+          }
+        }
+      }
+      case <-tmr.C:
+      if time.Now().After(accessionTime) && lastBetterLeader.Before(time.Now().Add(-s.opts.AccessionDelay)) {
+        s.l.Println("accession period elapsed with no better peer; assuming leadership")
+        s.status.Type = pb.PeerType_ELECTABLE
+        s.leader = true
+        //if err := s.raft.Setup(true); err != nil {
+        //  panic(err)
+        //}
+        return
+      } else {
+        s.sendStatus()
+        millis := (0.5 + rand.Float64()) * float64(HandshakeStatusPeriodBase.Milliseconds())
+        nextStatus := time.Duration(millis) * time.Millisecond
+        tmr = time.NewTimer(nextStatus)
+        s.l.Printf("Sent status; next attempt in %v\n", nextStatus)
+      }
+    }
+  }
+}
+
+func (s *Transport) handlePeerStatus(peer string, ps *pb.PeerStatus) {
+  if s.AmLeader() && ps.Type == pb.PeerType_UNKNOWN_PEER_TYPE {
+    s.pubChan[StatusTopic] <- &pb.AssignPeer {
+      Peer: peer,
+      Type: pb.PeerType_LISTENER,
+    }
+  }
+}
+
+func (s *Transport) handleAssignPeer(peer string, ap *pb.AssignPeer) {
+  // TODO handle self reassignment
+  // Pick up any additional peers in the raft consensus group per assignment
+  /*
+  if s.status.Type == pb.PeerType_ELECTABLE && !s.AmLeader() && len(ap.Electorate) > 0 {
+    for _, e := range ap.Electorate {
+      s.raft.Connect(e)
+    }
+  }
+  */
+}
+
+func (t *Transport) runEventLoop(ctx context.Context) {
+  t.l.Println("Begin transport event loop")
+	for {
+    select {
+    case m := <-t.recvChan:
+      if m.Topic == StatusTopic {
+        switch v := m.Msg.(type) {
+        case *pb.PeerStatus:
+          t.handlePeerStatus(m.Peer, v)
+        case *pb.AssignPeer:
+          t.handleAssignPeer(m.Peer, v)
+        }
+      }
+
+      // TODO remove
+      c := rpc.NewClient(t.host, PeerPrintProtocol)
+      rep := &pb.GetStateHashResponse
+      c.Call(m.Peer, "
+
+      t.msgChan <- m // Forward to parent handler
+    case e := <-t.errChan:
+      t.l.Println(fmt.Errorf("Pubsub Error: %w", e))
+      /*
+    case <-t.raft.StateChan():
+	    s, err := t.raft.Get()
+      if err != nil {
+        t.l.Println(fmt.Errorf("state change handler error: %w", err))
+      } else {
+        t.onState<- s
+      }
+      */
+		case <-ctx.Done():
+			return
+		}
+	}
+
+}
