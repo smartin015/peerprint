@@ -15,9 +15,6 @@ import (
 )
 
 var (
-  // Command flags
-  genPSKFlag = flag.Bool("genPSK", false, "Generate a PSK file and then exit")
-
   // Address flags
 	addrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to host the service")
 
@@ -25,10 +22,10 @@ var (
   dbPathFlag = flag.String("db", "/tmp/raft.db", "Path to database")
 	privkeyfileFlag    = flag.String("privKeyPath", "/tmp/priv.key", "Path to serialized private key (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubKeyPath", "/tmp/pub.key", "Path to serialized public key (if not present, one will be created at that location)")
-  pskFileFlag = flag.String("pskPath", "", "Path to pre-shared key for network security")
 
   // Other network flags
 	rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required)")
+  pskFlag = flag.String("psk", "", "Pre-shared key for secure connection to the p2p network")
 	localFlag          = flag.Bool("local", true, "Use local MDNS (instead of global DHT) for discovery")
 
   // Timing flags
@@ -41,17 +38,6 @@ var (
 
 func main() {
   flag.Parse()
-  if *genPSKFlag {
-    if *pskFileFlag == "" {
-      panic("-genPSK requires -pskPath to be set")
-    }
-    if err := crypto.GenPSKFile(*pskFileFlag); err != nil {
-      panic(err)
-    }
-    logger.Println("Wrote new PSK file to", *pskFileFlag)
-    return
-  }
-
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
 	}
@@ -61,20 +47,21 @@ func main() {
 	}
 
   var psk pnet.PSK
-  if *pskFileFlag == "" {
+  if *pskFlag == "" {
     logger.Println("\n\n\n ================= WARNING =================\n\n",
       "No PSK path is set - your session will be INSECURE\n",
       "It is STRONGLY RECOMMENDED to specify a PSK file with -pskPath\n",
       "or else anybody can become a node in your network\n",
       "\n ================= WARNING =================\n\n\n")
   } else {
-    psk, err = crypto.LoadPSKFile(*pskFileFlag)
-    if err != nil {
-      panic(fmt.Errorf("Error loading PSK: %w", err))
-    }
+    psk = crypto.LoadPSK(*pskFlag)
+    logger.Printf("PSK: %x\n", []byte(psk))
   }
 
-  st := storage.NewInMemory()
+  st, err := storage.NewSqlite3(*dbPathFlag)
+  if err != nil {
+    panic(fmt.Errorf("Error initializing DB: %w", err))
+  }
   t, err := transport.New(&transport.Opts{
     PubsubAddr: *addrFlag,
     Rendezvous: *rendezvousFlag,

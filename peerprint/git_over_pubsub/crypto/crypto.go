@@ -3,36 +3,16 @@ package crypto
 import (
   "fmt"
   "crypto/rand"
+  "crypto/sha256"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/pnet"
   "os"
-	b64 "encoding/base64"
 )
 
-func GenPSKFile(pskFile string) error {
-	// https://github.com/libp2p/specs/blob/master/pnet/Private-Networks-PSK-V1.md
-	f, err := os.OpenFile(pskFile, os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	f.WriteString("/key/swarm/psk/1.0.0/\n") // This is a PSK
-	f.WriteString("/base64/\n") // Encoded with base64
-
-  // Key must be exactly 32 bytes per the spec
-	token := make([]byte, 32)
-  rand.Read(token)
-  f.WriteString(b64.StdEncoding.EncodeToString(token))
-  return nil
-}
-
-func LoadPSKFile(pskFile string) (pnet.PSK, error) {
-	f, err := os.Open(pskFile)
-  if err != nil {
-    return nil, err
-  }
-	return pnet.DecodeV1PSK(f)
+func LoadPSK(phrase string) pnet.PSK {
+  hash := sha256.New()
+  hash.Write([]byte(phrase))
+	return pnet.PSK(hash.Sum(nil))
 }
 
 func GenKeyPairFile(privkeyFile, pubkeyFile string) (crypto.PrivKey, crypto.PubKey, error) {

@@ -29,18 +29,17 @@ message Record {
   string uuid = 1; // UUID unique to this record
   repeated string tags = 2; // Tags for qualified search of records without having to fetch each `location`
 
-  LocationType location_type = 3;
-  string location = 4;
+  string location = 3;
 
   // Always-increasing version number for this record. Increment 
   // whenever changing `location` to a newer data location.
-  uint64 version = 5; 
+  uint64 version = 4; 
 
   // Unix timestamps
-  int64 created = 6;
-  int64 tombstone = 7;
+  int64 created = 5;
+  int64 tombstone = 6;
 
-  Rank rank = 8;
+  Rank rank = 7;
 }
 
 enum GrantType {
