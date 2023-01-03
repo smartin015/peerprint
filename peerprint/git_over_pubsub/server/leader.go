@@ -42,8 +42,6 @@ func (s *leader) Step(ctx context.Context) {
       case *pb.PeerStatus:
         s.handlePeerStatus(tm.Peer, v)
     }
-  case err := <-s.base.t.OnError():
-    s.l.Error("Transport error: %w", err)
   case <-s.ticker.C:
     if err := s.refreshAdminGrants(); err != nil {
       s.l.Error("refresh grants: %w", err)

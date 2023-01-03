@@ -39,7 +39,7 @@ func (s *handshake) tryAssign(v *pb.AssignPeer) bool {
       if err := s.base.s.SetSignedGrant(sg); err != nil {
         s.l.Info("Couldn't store grant %+v: %w", sg, err)
       } else {
-        s.l.Info("Stored grant %+v", sg)
+        s.l.Info("Stored grant from %s", sg.Signature.Signer)
       }
     }
     s.base.status.Type = v.Type
@@ -79,8 +79,6 @@ func (s *handshake) Step(ctx context.Context) {
         }
       }
     }
-  case e := <-s.base.t.OnError():
-    s.l.Info(e)
   case <-s.tmr.C:
     if time.Now().After(s.accessionTime) && s.lastBetterLeader.Before(time.Now().Add(-s.accessionDelay)) {
       s.l.Info("accession period elapsed with no better peer; assuming leadership")

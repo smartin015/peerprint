@@ -33,8 +33,6 @@ func (s *listener) Step(ctx context.Context) {
       case *pb.Record:
         s.base.storeRecord(tm.Peer, v, tm.Signature)
     }
-  case err := <-s.base.t.OnError():
-    s.l.Error("Transport: %w", err)
   case <-s.syncTimer.C:
     s.syncTimer.Reset(SyncPeriod)
     s.base.partialSync()

@@ -16,6 +16,7 @@ import (
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/smartin015/peerprint/p2pgit/topic"
+	"github.com/smartin015/peerprint/p2pgit/cmd"
 	"github.com/smartin015/peerprint/p2pgit/discovery"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,7 +34,9 @@ type Interface interface {
 
   Publish(topic string, msg proto.Message) error
   OnMessage() <-chan topic.TopicMsg
-  OnError() <-chan error
+  OnCommand() <-chan proto.Message
+
+  ReplyCmd(proto.Message) error
 
   GetRandomNeighbor() (peer.ID, error)
   Call(pid peer.ID, method string, req proto.Message, rep proto.Message) error 
@@ -41,6 +44,7 @@ type Interface interface {
 
 type Opts struct {
   PubsubAddr string
+  CmdRepAddr string
   Rendezvous string
   Local bool
   PrivKey crypto.PrivKey
@@ -64,6 +68,8 @@ type Transport struct {
   host host.Host
   pubsub *pubsub.PubSub
   recvChan chan topic.TopicMsg
+  cmdRecv chan proto.Message
+  cmdSend chan<- proto.Message
   errChan chan error
   pubChan map[string] chan<- proto.Message
   protocol protocol.ID
@@ -92,13 +98,20 @@ func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error)
 	}
 	d := discovery.New(ctx, disco, h, opts.Rendezvous, logger)
 
+  // Initialize command service
+	cmdRecv := make(chan proto.Message, 5)
+	errChan := make(chan error, 5)
+	cmdSend := cmd.New(opts.CmdRepAddr, cmdRecv, errChan)
+
   s := &Transport{
     opts: opts,
     discovery: d,
     pubsub: ps,
     host: h,
     recvChan: make(chan topic.TopicMsg),
-    errChan: make(chan error),
+    cmdRecv: cmdRecv,
+    cmdSend: cmdSend,
+    errChan: errChan,
     pubChan: make(map[string] chan<- proto.Message),
     l: logger,
   }
@@ -135,8 +148,18 @@ func (s *Transport) PubKey() crypto.PubKey {
 func (s *Transport) OnMessage() <-chan topic.TopicMsg {
   return s.recvChan
 }
-func (s *Transport) OnError() <-chan error {
-  return s.errChan
+
+func (s *Transport) OnCommand() <-chan proto.Message {
+  return s.cmdRecv
+}
+
+func (s *Transport) ReplyCmd(msg proto.Message) error {
+  select {
+  case s.cmdSend<- msg:
+  default:
+    return fmt.Errorf("ReplyCmd() error: channel full")
+  }
+  return nil
 }
 
 func (s *Transport) Publish(topic string, msg proto.Message) error {

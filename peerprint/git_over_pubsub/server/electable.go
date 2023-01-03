@@ -46,8 +46,6 @@ func (s *electable) Step(ctx context.Context) {
       case *pb.PeerStatus:
         s.handlePeerStatus(tm.Peer, v)
     }
-  case err := <-s.base.t.OnError():
-    s.l.Info("Transport error: %w", err)
   case <-s.watchdog.C:
     s.l.Info("Watchdog elapsed without leader status")
     s.base.handshake.Init()

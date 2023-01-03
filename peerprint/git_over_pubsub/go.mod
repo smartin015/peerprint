@@ -123,5 +123,6 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/tools v0.3.0 // indirect
+	gopkg.in/zeromq/goczmq.v4 v4.1.0 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )

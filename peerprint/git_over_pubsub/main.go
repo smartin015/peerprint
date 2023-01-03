@@ -5,6 +5,7 @@ import (
   "github.com/smartin015/peerprint/p2pgit/storage"
   "github.com/smartin015/peerprint/p2pgit/server"
   "github.com/smartin015/peerprint/p2pgit/crypto"
+  "github.com/smartin015/peerprint/p2pgit/cmd"
 	"github.com/libp2p/go-libp2p/core/pnet"
   "context"
   "flag"
@@ -33,6 +34,10 @@ var (
 	statusPeriodFlag = flag.Duration("statusPeriod", 2*time.Minute, "Time between self-reports of status after initial setup")
   accessionDelayFlag = flag.Duration("accessionDelay", 5*time.Second, "Wait at least this long during handshaking phase before assuming leadership")
 
+  // IPC flags
+	zmqRepFlag         = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+	zmqLogAddrFlag     = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+
   logger = log.New(os.Stderr, "", 0)
 )
 
@@ -41,6 +46,12 @@ func main() {
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
 	}
+	if *zmqLogAddrFlag != "" {
+		var dlog cmd.Destructor
+		logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
+		defer dlog()
+	}
+
 	kpriv, kpub, err := crypto.LoadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
 	if err != nil {
 		panic(fmt.Errorf("Error loading keys: %w", err))
@@ -64,6 +75,7 @@ func main() {
   }
   t, err := transport.New(&transport.Opts{
     PubsubAddr: *addrFlag,
+    CmdRepAddr: *zmqRepFlag,
     Rendezvous: *rendezvousFlag,
     Local: *localFlag,
     PrivKey: kpriv,
@@ -75,6 +87,7 @@ func main() {
   if err != nil {
     panic(fmt.Errorf("Error initializing transport layer: %w", err))
   }
+
   s := server.New(t, st, &server.Opts{
     StatusPeriod: *statusPeriodFlag,
     AccessionDelay: *accessionDelayFlag,

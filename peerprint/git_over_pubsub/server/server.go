@@ -38,9 +38,13 @@ func (l *sublog) Error(args ...interface{}) {
 type Opts struct {
   AccessionDelay time.Duration
   StatusPeriod time.Duration
+  CmdRecv <-chan proto.Message
+  CmdSend chan<- proto.Message
+  CmdPush chan<- proto.Message
 }
 
 type Server struct {
+  opts Opts
   t transport.Interface
   s storage.Interface
   mirror string
@@ -56,7 +60,6 @@ type Server struct {
   listener *listener
   electable *electable
   leader *leader
-
 }
 
 func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Logger) *Server {
@@ -204,7 +207,6 @@ func (s *Server) storeRecord(peer string, r *pb.Record, sig *pb.Signature) bool 
   s.l.Info("Stored record (from %s)", peer)
   return true
 }
-
 
 func (s *Server) Run(ctx context.Context) {
   s.t.Run(ctx)
