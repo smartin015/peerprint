@@ -2,7 +2,7 @@ package server
 
 import (
   "context"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 )
 
 type PeerPrintService struct {

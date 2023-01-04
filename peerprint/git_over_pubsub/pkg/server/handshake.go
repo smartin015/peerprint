@@ -4,7 +4,8 @@ import (
   "time"
   "math/rand"
   "context"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 
 type handshake struct {
   base *Server
-  l *sublog
+  l *log.Sublog
   accessionDelay time.Duration
   accessionTime time.Time
   lastBetterLeader time.Time
@@ -42,7 +43,6 @@ func (s *handshake) tryAssign(v *pb.AssignPeer) bool {
         s.l.Info("Stored grant from %s", sg.Signature.Signer)
       }
     }
-    s.base.status.Type = v.Type
     switch v.Type {
       case pb.PeerType_ELECTABLE:
         s.base.electable.Init()
@@ -55,10 +55,10 @@ func (s *handshake) tryAssign(v *pb.AssignPeer) bool {
 }
 
 func (s *handshake) Init() {
+  s.base.changeRole(pb.PeerType_UNKNOWN_PEER_TYPE)
   s.accessionTime = time.Now().Add(s.accessionDelay)
   s.lastBetterLeader = time.UnixMilli(0)
   s.tmr = time.NewTimer(0)
-  s.base.status.Type = pb.PeerType_UNKNOWN_PEER_TYPE
   s.l.Info("Beginning handshake loop; accession in %v (at %v)\n", s.accessionDelay, s.accessionTime)
   s.base.sendStatus()
 }

@@ -1,7 +1,7 @@
 package storage
 
 import (
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/libp2p/go-libp2p/core/crypto"
   "fmt"
 )

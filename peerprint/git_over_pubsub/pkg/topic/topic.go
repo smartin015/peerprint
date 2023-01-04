@@ -5,7 +5,7 @@ import (
 	"fmt"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"google.golang.org/protobuf/proto"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"

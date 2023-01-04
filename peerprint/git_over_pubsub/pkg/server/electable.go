@@ -3,7 +3,8 @@ package server
 import (
   "time"
   "context"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const (
@@ -12,12 +13,13 @@ const (
 
 type electable struct {
   base *Server
-  l *sublog
+  l *log.Sublog
   watchdog *time.Timer
   syncTimer *time.Timer
 }
 
 func (s *electable) Init() {
+  s.base.changeRole(pb.PeerType_ELECTABLE)
   s.watchdog = time.NewTimer(LeaderTimeout)
   s.syncTimer = time.NewTimer(0)
 }

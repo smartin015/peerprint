@@ -4,7 +4,8 @@ import (
   "time"
   "fmt"
   "context"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const (
@@ -18,12 +19,12 @@ const (
 // - Coordinate with other leaders in the event of a network partition
 type leader struct {
   base *Server
-  l *sublog
+  l *log.Sublog
   ticker *time.Ticker
 }
 
 func (s *leader) Init() {
-  s.base.status.Type = pb.PeerType_LEADER
+  s.base.changeRole(pb.PeerType_LEADER)
 }
 
 func (s *leader) Step(ctx context.Context) {

@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
   // Import custom protos to add them to the global type registry, so anypb can resolve them when unmarshalling
-	_ "github.com/smartin015/peerprint/p2pgit/proto"
+	_ "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 )
 
 type Zmq struct {

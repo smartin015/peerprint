@@ -1,11 +1,11 @@
 package main
 
 import (
-  "github.com/smartin015/peerprint/p2pgit/transport"
-  "github.com/smartin015/peerprint/p2pgit/storage"
-  "github.com/smartin015/peerprint/p2pgit/server"
-  "github.com/smartin015/peerprint/p2pgit/crypto"
-  "github.com/smartin015/peerprint/p2pgit/cmd"
+  "github.com/smartin015/peerprint/p2pgit/pkg/transport"
+  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "github.com/smartin015/peerprint/p2pgit/pkg/server"
+  "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
+  "github.com/smartin015/peerprint/p2pgit/pkg/cmd"
 	"github.com/libp2p/go-libp2p/core/pnet"
   "context"
   "flag"
@@ -75,7 +75,6 @@ func main() {
   }
   t, err := transport.New(&transport.Opts{
     PubsubAddr: *addrFlag,
-    CmdRepAddr: *zmqRepFlag,
     Rendezvous: *rendezvousFlag,
     Local: *localFlag,
     PrivKey: kpriv,
@@ -95,5 +94,23 @@ func main() {
   if err := t.Register(server.PeerPrintProtocol, s.GetService()); err != nil {
     panic(fmt.Errorf("Failed to register RPC server: %w", err))
   }
-  s.Run(context.Background())
+  go s.Run(context.Background())
+
+  // Initialize command service if specified
+  if *zmqRepFlag != "" {
+    s.cmdRecv = make(chan proto.Message, 5)
+    s.errChan = make(chan error, 5)
+	  s.cmdSend = cmd.New(*zmqRepFlag, s.cmdRecv, s.errChan)
+  }
+}
+
+
+
+func (s *Transport) ReplyCmd(msg proto.Message) error {
+  select {
+  case s.cmdSend<- msg:
+  default:
+    return fmt.Errorf("ReplyCmd() error: channel full")
+  }
+  return nil
 }

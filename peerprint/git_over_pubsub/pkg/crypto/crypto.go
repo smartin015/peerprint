@@ -15,6 +15,10 @@ func LoadPSK(phrase string) pnet.PSK {
 	return pnet.PSK(hash.Sum(nil))
 }
 
+func GenKeyPair() (crypto.PrivKey, crypto.PubKey, error) {
+	return crypto.GenerateEd25519Key(rand.Reader)
+}
+
 func GenKeyPairFile(privkeyFile, pubkeyFile string) (crypto.PrivKey, crypto.PubKey, error) {
 		priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
 		if err != nil {

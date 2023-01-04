@@ -1,0 +1,34 @@
+package log
+
+import (
+  "time"
+  "fmt"
+)
+
+type withprintln interface {
+  Println(...any)
+}
+
+type Sublog struct {
+  n string
+  l withprintln
+}
+
+func New(name string, l withprintln) (*Sublog) {
+  return &Sublog{l: l, n: name}
+}
+
+func (l *Sublog) log(prefix string, args []interface{}, suffix string) {
+  l.l.Println(fmt.Sprintf("%v %s(%s): ", time.Now().Format(time.RFC3339), prefix, l.n) + fmt.Sprintf(args[0].(string), args[1:]...))
+}
+func (l *Sublog) Info(args ...interface{}) {
+  l.log("\033[0mI", args, "\033[0m")
+}
+func (l *Sublog) Error(args ...interface{}) {
+  l.log("\033[31mE", args, "\033[0m")
+}
+func (l *Sublog) Println(v ...any) {
+  v = append([]any{fmt.Sprintf("%s: ", l.n)}, v...)
+  l.l.Println(v...)
+}
+

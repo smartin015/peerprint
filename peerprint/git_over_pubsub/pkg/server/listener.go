@@ -3,16 +3,18 @@ package server
 import (
   "context"
   "time"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 type listener struct {
   base *Server
-  l *sublog
+  l *log.Sublog
   syncTimer *time.Timer
 }
 
 func (s *listener) Init() {
+  s.base.changeRole(pb.PeerType_LISTENER)
   s.syncTimer = time.NewTimer(0)
 }
 

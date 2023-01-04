@@ -2,13 +2,13 @@ package server
 
 import (
   "context"
-  "log"
   "time"
   "fmt"
   "google.golang.org/protobuf/proto"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
-	"github.com/smartin015/peerprint/p2pgit/transport"
-	"github.com/smartin015/peerprint/p2pgit/storage"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+	"github.com/smartin015/peerprint/p2pgit/pkg/transport"
+	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
+	"github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const (
@@ -19,28 +19,18 @@ const (
   TargetAdminCount = 3
 )
 
-type sublog struct {
-  n string
-  l *log.Logger
-}
-func (l *sublog) log(prefix string, args []interface{}, suffix string) {
-  l.l.Println(fmt.Sprintf("%v %s(%s): ", time.Now().Format(time.RFC3339), prefix, l.n) + fmt.Sprintf(args[0].(string), args[1:]...))
-}
-func (l *sublog) Info(args ...interface{}) {
-  l.log("\033[0mI", args, "\033[0m")
-}
-func (l *sublog) Error(args ...interface{}) {
-  l.log("\033[31mE", args, "\033[0m")
-}
-
-
-
 type Opts struct {
   AccessionDelay time.Duration
   StatusPeriod time.Duration
-  CmdRecv <-chan proto.Message
-  CmdSend chan<- proto.Message
-  CmdPush chan<- proto.Message
+}
+
+type Interface interface {
+  GetService() interface{}
+  Run(context.Context)
+  WaitUntilReady()
+  SetRecord(r *pb.Record) error
+  SetGrant(g *pb.Grant) error
+  ID() string
 }
 
 type Server struct {
@@ -48,8 +38,8 @@ type Server struct {
   t transport.Interface
   s storage.Interface
   mirror string
-  logger *log.Logger
-  l *sublog
+  l *log.Sublog
+  roleChanged chan struct{}
 
   // Tickers for periodic network activity
   publishStatusTicker *time.Ticker
@@ -62,12 +52,12 @@ type Server struct {
   leader *leader
 }
 
-func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Logger) *Server {
+func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) *Server {
   srv := &Server{
     t: t,
     s: s,
-    logger: l,
-    l: &sublog{l: l, n: "Base"},
+    l: l,
+    roleChanged: make(chan struct{}),
     publishStatusTicker: time.NewTicker(opts.StatusPeriod),
     status: &pb.PeerStatus{
       Type: pb.PeerType_UNKNOWN_PEER_TYPE, // Unknown until handshake is complete
@@ -76,20 +66,20 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Logger) 
   srv.handshake = &handshake{
     base: srv,
     accessionDelay: opts.AccessionDelay,
-    l: &sublog{l: l, n: "Handshake"},
+    l: log.New("Handshake", l),
   }
   srv.listener = &listener{
     base: srv,
-    l: &sublog{l: l, n: "Listener"},
+    l: log.New("Listener", l),
   }
   srv.electable = &electable{
     base: srv,
-    l: &sublog{l: l, n: "Electable"},
+    l: log.New("Electable", l),
   }
   srv.leader = &leader{
     base: srv,
     ticker: time.NewTicker(Heartbeat),
-    l: &sublog{l: l, n: "Leader"},
+    l: log.New("Leader", l),
   }
 
   if err := s.SetPubKey(t.ID(), t.PubKey()); err != nil {
@@ -99,18 +89,34 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Logger) 
   return srv
 }
 
-func (s *Server) GetService() *PeerPrintService {
+func (s *Server) GetService() interface{} {
   return &PeerPrintService{
     base: s,
   }
 }
 
-func (s *Server) Ready() bool {
-  return s.status.Type != pb.PeerType_UNKNOWN_PEER_TYPE
+func (s *Server) ID() string {
+  return s.t.ID()
+}
+
+func (s *Server) SetGrant(g *pb.Grant) error {
+  return fmt.Errorf("todo SetGrant")
+}
+
+func (s *Server) SetRecord(r *pb.Record) error {
+  return fmt.Errorf("todo SetRecord")
 }
 
 func (s *Server) sendStatus() error {
   return s.t.Publish(StatusTopic, s.status)
+}
+
+func (s *Server) changeRole(t pb.PeerType) {
+  s.status.Type = t
+  select {
+  case s.roleChanged<- struct{}{}:
+  default:
+  }
 }
 
 func (s *Server) partialSync() {
@@ -225,6 +231,17 @@ func (s *Server) Run(ctx context.Context) {
       s.listener.Step(ctx)
     default:
       panic("Unknown status type")
+    }
+  }
+}
+
+func (s *Server) WaitUntilReady() {
+  for {
+    select {
+    case <-s.roleChanged:
+      if s.status.Type != pb.PeerType_UNKNOWN_PEER_TYPE {
+        return
+      }
     }
   }
 }

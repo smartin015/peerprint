@@ -12,10 +12,10 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
-  pb "github.com/smartin015/peerprint/p2pgit/proto"
-	"github.com/smartin015/peerprint/p2pgit/topic"
-	"github.com/smartin015/peerprint/p2pgit/discovery"
-	//"github.com/smartin015/peerprint/p2pgit/repo"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
+	"github.com/smartin015/peerprint/p2pgit/pkg/topic"
+	"github.com/smartin015/peerprint/p2pgit/pkg/discovery"
+	//"github.com/smartin015/peerprint/p2pgit/pkg/repo"
 	"google.golang.org/protobuf/proto"
 )
 
