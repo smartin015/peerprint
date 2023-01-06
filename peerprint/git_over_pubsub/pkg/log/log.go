@@ -3,6 +3,8 @@ package log
 import (
   "time"
   "fmt"
+  "log"
+  "os"
 )
 
 type withprintln interface {
@@ -12,6 +14,13 @@ type withprintln interface {
 type Sublog struct {
   n string
   l withprintln
+}
+
+func NewBasic() (*Sublog) {
+  return &Sublog{
+    n: "",
+    l: log.New(os.Stderr, "", 0),
+  }
 }
 
 func New(name string, l withprintln) (*Sublog) {

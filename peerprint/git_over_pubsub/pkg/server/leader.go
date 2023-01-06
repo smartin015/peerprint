@@ -10,6 +10,8 @@ import (
 
 const (
   Heartbeat = 2 * time.Second
+  DefaultGrantTTL = 5 * time.Minute
+  GrantDeadlineAdvanceRefresh = 1*time.Minute
 )
 
 // Leader's job is to
@@ -44,7 +46,11 @@ func (s *leader) Step(ctx context.Context) {
         s.handlePeerStatus(tm.Peer, v)
     }
   case <-s.ticker.C:
-    if err := s.refreshAdminGrants(); err != nil {
+    grants, err := s.base.s.GetSignedGrants()
+    if err != nil {
+      s.l.Error("GetSignedGrants: %w", err)
+    }
+    if err := s.refreshAdminGrants(grants); err != nil {
       s.l.Error("refresh grants: %w", err)
     }
     if err := s.base.sendStatus(); err != nil {
@@ -74,29 +80,53 @@ func (s *leader) issueGrant(g *pb.Grant) (*pb.SignedGrant, error) {
   return sg, nil
 }
 
-func (s *leader) refreshAdminGrants() error {
-  grants, err := s.base.s.GetSignedGrants()
-  if err != nil {
-    return fmt.Errorf("GetSignedGrants: %w", err)
+// refreshAdminGrants takes a list of grants and refreshes
+// any grants that are about to expire.
+// If there is no self-leadership grant, it is added
+func (s *leader) refreshAdminGrants(grants []*pb.SignedGrant) error {
+  // We wish to reauthorize grants for any admins that are about to expire
+  // and that are directly or indirectly granted by us.
+  // We can do this with a union-find of edges
+  relAuth := NewUnionFind(s.base.ID())
+  maxExpiry := NewMaxSet()
+  admin := false
+  now := time.Now().Unix()
+  for _, g := range grants {
+    if g.Grant.Type == pb.GrantType_ADMIN && g.Grant.Expiry > now {
+      relAuth.Add(g.Grant.Target, g.Signature.Signer)
+      maxExpiry.Add(g.Grant.Target, g.Grant.Expiry)
+      admin = admin || g.Grant.Target == s.base.ID()
+    }
   }
 
-  admin := false
+  // Build a new map so we only issue one grant for each target
+  expiryThresh := time.Now().Add(GrantDeadlineAdvanceRefresh).Unix()
+  renewals := make(map[string]struct{})
   for _, g := range grants {
-    if g.Grant.Type != pb.GrantType_ADMIN {
+    if g.Grant.Type != pb.GrantType_ADMIN || g.Grant.Expiry < now {
       continue
     }
-    if g.Signature.Signer == s.base.t.ID() {
-      g.Grant.Expiry = time.Now().Add(DefaultGrantTTL).Unix()
-      if err := s.base.s.SetSignedGrant(g); err != nil {
-        return fmt.Errorf("Extend grant %+v: %w", g.Grant, err)
-      }
-      if g.Grant.Target == s.base.t.ID() {
-        admin = true
-      }
+    if _, ok := renewals[g.Grant.Target]; ok {
+      continue // Already renewing
+    }
+
+    signer := relAuth.Find(g.Signature.Signer)
+    exp := maxExpiry.Get(g.Grant.Target)
+    if signer == s.base.ID() && exp < expiryThresh {
+        renewals[g.Grant.Target] = struct{}{}
     }
   }
 
-  // Reapply self-signed grant if not found
+  for t, _ := range renewals {
+    if _, err := s.issueGrant(&pb.Grant {
+      Target: t,
+      Type: pb.GrantType_ADMIN,
+    }); err != nil {
+      return fmt.Errorf("Reissue grant for %s: %w", t, err)
+    }
+  }
+
+  // Issue our own self-signed grant if not found
   if !admin {
     s.l.Info("Issuing self grant")
     _, err := s.issueGrant(&pb.Grant {

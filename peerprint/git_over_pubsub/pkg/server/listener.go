@@ -31,9 +31,13 @@ func (s *listener) Step(ctx context.Context) {
     }
     switch v := tm.Msg.(type) {
       case *pb.Grant:
-        s.base.storeGrant(tm.Peer, v, tm.Signature)
+        if err := s.base.storeGrant(tm.Peer, v, tm.Signature); err != nil {
+          s.l.Error(err)
+        }
       case *pb.Record:
-        s.base.storeRecord(tm.Peer, v, tm.Signature)
+        if err := s.base.storeRecord(tm.Peer, v, tm.Signature); err != nil {
+          s.l.Error(err)
+        }
     }
   case <-s.syncTimer.C:
     s.syncTimer.Reset(SyncPeriod)

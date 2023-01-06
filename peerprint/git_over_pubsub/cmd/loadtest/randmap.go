@@ -42,12 +42,12 @@ func (m *randmap[K,V]) Count() int {
 func (m *randmap[K,V]) Unset(k K) {
   if i, ok := m.keyindex[k]; ok {
     delete(m.keyindex, k)
-    last := len(m.keys) -1 == i
-    m.keys[i] = m.keys[len(m.keys)-1]
-    m.keys = m.keys[:len(m.keys)-1]
+    last := (len(m.keys) -1) == i
+    m.keys[i] = m.keys[len(m.keys)-1] // Copy last into index
+    m.keys = m.keys[:len(m.keys)-1] // Pop last
     if !last {
-        other := m.keys[i]
-        m.keyindex[other] = i
+        otherK := m.keys[i] 
+        m.keyindex[otherK] = i
     }
     delete(m.Container, k)
   }

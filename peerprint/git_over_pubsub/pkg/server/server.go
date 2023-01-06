@@ -14,7 +14,6 @@ import (
 const (
   PeerPrintProtocol = "peerprint@0.0.1"
   DefaultTopic = "default"
-  DefaultGrantTTL = 5 * time.Minute
   SyncPeriod = 5 * time.Second
   TargetAdminCount = 3
 )
@@ -100,11 +99,25 @@ func (s *Server) ID() string {
 }
 
 func (s *Server) SetGrant(g *pb.Grant) error {
-  return fmt.Errorf("todo SetGrant")
+  if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
+    if sig, err := s.sign(g); err != nil {
+      return err
+    } else if err := s.storeGrant(s.ID(), g, sig); err != nil {
+      return err
+    }
+  }
+  return s.t.Publish(DefaultTopic, g)
 }
 
 func (s *Server) SetRecord(r *pb.Record) error {
-  return fmt.Errorf("todo SetRecord")
+  if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
+    if sig, err := s.sign(r); err != nil {
+      return err
+    } else if err := s.storeRecord(s.ID(), r, sig); err != nil {
+      return err
+    }
+  }
+  return s.t.Publish(DefaultTopic, r)
 }
 
 func (s *Server) sendStatus() error {
@@ -176,42 +189,38 @@ func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
   return k.Verify(b, sig.Data)
 }
 
-func (s *Server) storeGrant(peer string, g *pb.Grant, sig *pb.Signature) bool {
+func (s *Server) storeGrant(peer string, g *pb.Grant, sig *pb.Signature) error {
   if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
-    s.l.Error("IsAdmin error: %w", err)
-    return false
+    return fmt.Errorf("IsAdmin error: %w", err)
   } else if !peerAdmin {
     s.l.Info("Ignoring grant from non-admin peer %s", peer)
-    return false
+    return nil
   }
   if err := s.s.SetSignedGrant(&pb.SignedGrant{
     Grant: g,
     Signature: sig,
   }); err != nil {
-    s.l.Error("SetSignedGrant error: %w", err)
-    return false
+    return fmt.Errorf("SetSignedGrant error: %w", err)
   }
   s.l.Info("Stored grant (from %s)", peer)
-  return true
+  return nil
 }
 
-func (s *Server) storeRecord(peer string, r *pb.Record, sig *pb.Signature) bool {
+func (s *Server) storeRecord(peer string, r *pb.Record, sig *pb.Signature) error {
   if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
-    s.l.Error("IsAdmin error: %w", err)
-    return false
+    return fmt.Errorf("IsAdmin error: %w", err)
   } else if !peerAdmin {
     s.l.Info("Ignoring grant from non-admin peer %s", peer)
-    return false
+    return nil
   }
   if err := s.s.SetSignedRecord(&pb.SignedRecord{
     Record: r,
     Signature: sig,
   }); err != nil {
-    s.l.Error("SetSignedRecord error: %w", err)
-    return false
+    return fmt.Errorf("SetSignedRecord error: %w", err)
   }
   s.l.Info("Stored record (from %s)", peer)
-  return true
+  return nil
 }
 
 func (s *Server) Run(ctx context.Context) {

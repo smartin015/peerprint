@@ -24,6 +24,11 @@ var (
   logger = log.New(os.Stderr, "", 0)
 )
 
+func dlog(fmt string, args ...any) {
+  // Magenta, then fmt string, then reset colors
+  logger.Printf("\u001b[35m" + fmt + "\u001b[0m", args...)
+}
+
 func main() {
   flag.Parse()
   servers := []server.Interface{}
@@ -32,7 +37,7 @@ func main() {
   if err != nil {
     panic(fmt.Errorf("MkdirTemp: %w", err))
   } else {
-    log.Println("Using temporary directory for sqlite databases:", dataDir)
+    dlog("Using temporary directory for sqlite databases: %s", dataDir)
   }
   for i := 0; i < *numServersFlag; i++ {
     name := fmt.Sprintf("srv%d", i)
@@ -75,10 +80,10 @@ func main() {
     servers = append(servers, s)
   }
 
-  log.Printf("Created %d servers; starting load test driver\n", *numServersFlag)
+  dlog("Created %d servers; starting load test driver", *numServersFlag)
   d := NewDriver(servers, *numRecordsFlag)
   d.Run(*durationFlag, *qpsFlag)
 
-  log.Printf("Verifying consistent state")
+  dlog("Verifying consistent state")
   d.Verify()
 }
