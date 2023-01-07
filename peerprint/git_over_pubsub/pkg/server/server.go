@@ -102,7 +102,7 @@ func (s *Server) SetGrant(g *pb.Grant) error {
   if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
     if sig, err := s.sign(g); err != nil {
       return err
-    } else if err := s.storeGrant(s.ID(), g, sig); err != nil {
+    } else if err := s.storeGrantFromPeer(s.ID(), g, sig); err != nil {
       return err
     }
   }
@@ -113,7 +113,7 @@ func (s *Server) SetRecord(r *pb.Record) error {
   if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
     if sig, err := s.sign(r); err != nil {
       return err
-    } else if err := s.storeRecord(s.ID(), r, sig); err != nil {
+    } else if err := s.storeRecordFromPeer(s.ID(), r, sig); err != nil {
       return err
     }
   }
@@ -189,7 +189,7 @@ func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
   return k.Verify(b, sig.Data)
 }
 
-func (s *Server) storeGrant(peer string, g *pb.Grant, sig *pb.Signature) error {
+func (s *Server) storeGrantFromPeer(peer string, g *pb.Grant, sig *pb.Signature) error {
   if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
     return fmt.Errorf("IsAdmin error: %w", err)
   } else if !peerAdmin {
@@ -206,11 +206,11 @@ func (s *Server) storeGrant(peer string, g *pb.Grant, sig *pb.Signature) error {
   return nil
 }
 
-func (s *Server) storeRecord(peer string, r *pb.Record, sig *pb.Signature) error {
+func (s *Server) storeRecordFromPeer(peer string, r *pb.Record, sig *pb.Signature) error {
   if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
     return fmt.Errorf("IsAdmin error: %w", err)
   } else if !peerAdmin {
-    s.l.Info("Ignoring grant from non-admin peer %s", peer)
+    s.l.Info("Ignoring record from non-admin peer %s", peer)
     return nil
   }
   if err := s.s.SetSignedRecord(&pb.SignedRecord{

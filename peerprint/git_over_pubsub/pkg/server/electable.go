@@ -42,9 +42,9 @@ func (s *electable) Step(ctx context.Context) {
     }
     switch v := tm.Msg.(type) {
       case *pb.Grant:
-        s.base.storeGrant(tm.Peer, v, tm.Signature)
+        s.base.storeGrantFromPeer(tm.Peer, v, tm.Signature)
       case *pb.Record:
-        s.base.storeRecord(tm.Peer, v, tm.Signature)
+        s.base.storeRecordFromPeer(tm.Peer, v, tm.Signature)
       case *pb.PeerStatus:
         s.handlePeerStatus(tm.Peer, v)
     }

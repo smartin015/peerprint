@@ -4,6 +4,7 @@ import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/libp2p/go-libp2p/core/crypto"
   "database/sql"
+  "strings"
   "fmt"
   "time"
   _ "github.com/mattn/go-sqlite3"
@@ -38,12 +39,13 @@ func (s *sqlite3) migrateSchema() error {
   }
 
   if _, err := tx.Exec(`
-  CREATE TABLE tags (
-    tag TEXT NOT NULL,
-    record TEXT NOT NULL
-    PRIMARY KEY (tag, record)
+  CREATE TABLE recordtags (
+    name TEXT NOT NULL,
+    record TEXT NOT NULL,
+    version INT NOT NULL,
+    PRIMARY KEY (name, record, version)
   );`); err != nil {
-    fmt.Errorf("create tags table: %w", err)
+    return fmt.Errorf("create recordtags table: %w", err)
   }
 
   if _, err := tx.Exec(`
@@ -60,12 +62,16 @@ func (s *sqlite3) migrateSchema() error {
 
     signer BLOB NOT NULL,
     signature BLOB NOT NULL
-  );
+  );`); err != nil {
+    return fmt.Errorf("create records table: %w", err)
+  }
+
+  if _, err := tx.Exec(`
   CREATE TABLE pubkeys (
     peer TEXT NOT NULL PRIMARY KEY,
     key BLOB NOT NULL
   );`); err != nil {
-    fmt.Errorf("create records table: %w", err)
+    fmt.Errorf("create pubkeys table: %w", err)
   }
   return tx.Commit()
 }
@@ -78,17 +84,18 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
   defer tx.Rollback()
 
   // Wipe out and repopulate tags
-  if _, err := s.db.Exec(`DELETE FROM tags WHERE record=$1`, r.Record.Uuid); err != nil {
-    return err
+  if _, err := tx.Exec(`DELETE FROM recordtags WHERE record=$1 AND version=$2`, r.Record.Uuid, r.Record.Version); err != nil {
+    return fmt.Errorf("delete tags: %w", err)
   }
-   stmt, err := s.db.Prepare("INSERT INTO tags (tag, record) VALUES ($1, $2) ON CONFLICT IGNORE")
-   defer stmt.Close()
+
+  stmt, err := tx.Prepare(`INSERT INTO recordtags (name, record, version) VALUES (?, ?, ?)`)
   if err != nil {
-    return err
+    return fmt.Errorf("prepare tags: %w", err)
   }
+  defer stmt.Close()
   for _, tag := range r.Record.Tags {
-    if _, err := stmt.Exec(tag, r.Record.Uuid); err != nil {
-      return err
+    if _, err := stmt.Exec(tag, r.Record.Uuid, r.Record.Version); err != nil {
+      return fmt.Errorf("insert tag %s: %w", tag, err)
     }
   }
 
@@ -96,11 +103,10 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
     INSERT INTO records (uuid, location, version, created, tombstone, num, den, gen, signer, signature)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
   `, r.Record.Uuid, r.Record.Location, r.Record.Version, r.Record.Created, r.Record.Tombstone, r.Record.Rank.Num, r.Record.Rank.Den, r.Record.Rank.Gen, r.Signature.Signer, r.Signature.Data); err != nil {
-    return err
+    return fmt.Errorf("insert into records: %w", err)
   }
 
   // TODO garbage collect other records of similar type
-
   return tx.Commit()
 }
 
@@ -136,15 +142,38 @@ func scanSignedGrant(r scannable, result *pb.SignedGrant) error {
 }
 
 func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
-  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM records WHERE uuid=$1 AND tombstone IS NOT NULL ORDER BY version LIMIT 1;`), result); err != nil {
-    return err
+  // Init with empty objects to prevent segfault
+  result.Signature= &pb.Signature{}
+  result.Record= &pb.Record{
+    Rank: &pb.Rank{},
+    Tags: []string{},
   }
+  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM records WHERE uuid=$1 AND tombstone=0 ORDER BY version DESC LIMIT 1;`, uuid), result); err != nil {
+    if err == sql.ErrNoRows {
+      return err // Allow for comparison upstream
+    }
+    return fmt.Errorf("select record: %w", err)
+  }
+
+  // Import tags now that we have a version
+  if rows, err := s.db.Query(`SELECT name FROM recordtags WHERE record=$1 AND version=$2`, uuid, result.Record.Version); err != nil {
+    return fmt.Errorf("fetch tags: %w", err)
+  } else {
+    tag := ""
+    for rows.Next() {
+      if err := rows.Scan(&tag); err != nil {
+        return fmt.Errorf("fetch single tag: %w", err)
+      }
+      result.Record.Tags = append(result.Record.Tags, tag)
+    }
+  }
+
   return nil
 }
 
 func (s *sqlite3) GetSignedRecords() ([]*pb.SignedRecord, error) {
   result := []*pb.SignedRecord{}
-  rows, err := s.db.Query(`SELECT * FROM records WHERE tombstone IS NOT NULL GROUP BY uuid HAVING version=MAX(version);`)
+  rows, err := s.db.Query(`SELECT * FROM records WHERE tombstone=0 GROUP BY uuid HAVING version=MAX(version);`)
   if err != nil {
     return nil, fmt.Errorf("GetSignedRecords SELECT: %w", err)
   }
@@ -166,11 +195,38 @@ func (s *sqlite3) SetSignedGrant(g *pb.SignedGrant) error {
   return err
 }
 
-func (s *sqlite3) GetSignedGrants() ([]*pb.SignedGrant, error) {
+func (s *sqlite3) GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error) {
   result := []*pb.SignedGrant{}
-  rows, err := s.db.Query(`SELECT * FROM grants WHERE expiry > $1;`, time.Now().Unix())
+  expired := false
+  where := []string{}
+  args := []any{}
+  q := "SELECT * FROM grants"
+  for _, opt := range opts {
+    switch v := opt.(type) {
+      case WithTarget:
+        where = append(where, "target=?")
+        args = append(args, string(v))
+      case WithScope:
+        where = append(where, "scope=?")
+        args = append(args, string(v))
+      case IncludeExpired:
+        expired =  bool(v)
+      default:
+        return nil, fmt.Errorf("GetSignedGrants received invalid option: %v", opt)
+    }
+  }
+  if !expired {
+    where = append(where, "expiry > ?")
+    args = append(args, time.Now().Unix())
+  }
+  if len(where) > 0 {
+    q += " WHERE " + strings.Join(where, " AND ")
+  }
+  q += ";"
+  rows, err := s.db.Query(q, args...)
+
   if err != nil {
-    return nil, fmt.Errorf("GetSignedGrants SELECT: %w", err)
+    return nil, fmt.Errorf("%s: %w", q, err)
   }
   for rows.Next() {
     sr := &pb.SignedGrant{Grant: &pb.Grant{}, Signature: &pb.Signature{}}
@@ -198,7 +254,7 @@ func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
 
 func (s *sqlite3) GetPubKey(peer string) (crypto.PubKey, error) {
   var b []byte
-  if err := s.db.QueryRow(`SELECT key FROM pubkeys WHERE peer=$1 LIMIT 1;`).Scan(&b); err != nil {
+  if err := s.db.QueryRow(`SELECT key FROM pubkeys WHERE peer=$1 LIMIT 1;`, peer).Scan(&b); err != nil {
     return nil, err
   }
   return crypto.UnmarshalPublicKey(b)

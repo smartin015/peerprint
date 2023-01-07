@@ -31,11 +31,11 @@ func (s *listener) Step(ctx context.Context) {
     }
     switch v := tm.Msg.(type) {
       case *pb.Grant:
-        if err := s.base.storeGrant(tm.Peer, v, tm.Signature); err != nil {
+        if err := s.base.storeGrantFromPeer(tm.Peer, v, tm.Signature); err != nil {
           s.l.Error(err)
         }
       case *pb.Record:
-        if err := s.base.storeRecord(tm.Peer, v, tm.Signature); err != nil {
+        if err := s.base.storeRecordFromPeer(tm.Peer, v, tm.Signature); err != nil {
           s.l.Error(err)
         }
     }

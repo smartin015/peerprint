@@ -165,16 +165,18 @@ func (d *driver) Run(duration time.Duration, qps float64) {
 
   dlog("Making random changes at a rate of %f QPS", qps)
   ticker := time.NewTicker(time.Duration(int(1000.0/qps)) * time.Millisecond)
+  
   for {
     select {
     case <-ticker.C:
       typ, err := d.MakeRandomChange()
       if err != nil {
         d.errors[err.Type] += 1
+        dlog("%24s -> %s", typ, err.Error())
       } else {
         d.successes += 1
+        dlog("%24s -> ok", typ)
       }
-      dlog("%24s -> successes: %4d, errors: %v", typ, d.successes, d.errors)
     case <-ctx.Done():
       dlog("Finishing run")
       return

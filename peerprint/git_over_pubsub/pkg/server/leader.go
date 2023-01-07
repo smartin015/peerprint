@@ -6,6 +6,7 @@ import (
   "context"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/log"
+  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
 )
 
 const (
@@ -39,9 +40,9 @@ func (s *leader) Step(ctx context.Context) {
     }
     switch v := tm.Msg.(type) {
       case *pb.Grant:
-        s.base.storeGrant(tm.Peer, v, tm.Signature)
+        s.base.handleGrantRequest(tm.Peer, v, tm.Signature)
       case *pb.Record:
-        s.base.storeRecord(tm.Peer, v, tm.Signature)
+        s.base.handleRecordRequest(tm.Peer, v, tm.Signature)
       case *pb.PeerStatus:
         s.handlePeerStatus(tm.Peer, v)
     }
@@ -59,6 +60,41 @@ func (s *leader) Step(ctx context.Context) {
   case <-ctx.Done():
     return
   }
+}
+
+func (s *Server) handleGrantRequest(peer string, g *pb.Grant, sig *pb.Signature) error {
+  // Check if no other peer has the grant for this target
+  if gg, err := s.s.GetSignedGrants(storage.WithTarget(g.Target)); err != nil {
+    return fmt.Errorf("GetSignedGrants(target=%s): %w", g.Target, err)
+  } else if len(gg) > 0 {
+    
+  }
+
+  if err := s.s.SetSignedGrant(&pb.SignedGrant{
+    Grant: g,
+    Signature: sig,
+  }); err != nil {
+    return fmt.Errorf("SetSignedGrant error: %w", err)
+  }
+  s.l.Info("Stored grant (from %s)", peer)
+  return nil
+}
+
+func (s *Server) handleRecordRequest(peer string, r *pb.Record, sig *pb.Signature) error {
+  if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
+    return fmt.Errorf("IsAdmin error: %w", err)
+  } else if !peerAdmin {
+    s.l.Info("Ignoring record from non-admin peer %s", peer)
+    return nil
+  }
+  if err := s.s.SetSignedRecord(&pb.SignedRecord{
+    Record: r,
+    Signature: sig,
+  }); err != nil {
+    return fmt.Errorf("SetSignedRecord error: %w", err)
+  }
+  s.l.Info("Stored record (from %s)", peer)
+  return nil
 }
 
 func (s *leader) issueGrant(g *pb.Grant) (*pb.SignedGrant, error) {

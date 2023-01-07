@@ -5,6 +5,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 )
 
+type WithTarget string
+type WithPeer string
+type WithScope string
+type IncludeExpired bool
+
 type Interface interface {
   // StreamRecords(tags []string, results chan<- *pb.Record) error
 
@@ -13,7 +18,7 @@ type Interface interface {
   GetSignedRecords() ([]*pb.SignedRecord, error)
 
   SetSignedGrant(g *pb.SignedGrant) error
-  GetSignedGrants() ([]*pb.SignedGrant, error)
+  GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error)
 
   SetPubKey(peer string, pubkey crypto.PubKey) error
   GetPubKey(peer string) (crypto.PubKey, error)
