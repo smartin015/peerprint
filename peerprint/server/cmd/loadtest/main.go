@@ -6,6 +6,7 @@ import (
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
   "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
+	"github.com/libp2p/go-libp2p/core/peer"
   "context"
   "flag"
   "fmt"
@@ -40,7 +41,16 @@ func main() {
     dlog("Using temporary directory for sqlite databases: %s", dataDir)
   }
   for i := 0; i < *numServersFlag; i++ {
-    name := fmt.Sprintf("srv%d", i)
+    kpriv, kpub, err := crypto.GenKeyPair()
+    if err != nil {
+      panic(fmt.Errorf("Error generating keys: %w", err))
+    }
+    id, err := peer.IDFromPublicKey(kpub)
+    if err != nil {
+      panic(fmt.Errorf("IDFromPublicKey: %w", err))
+    }
+    name := id.Pretty()
+    name = name[len(name)-4:]
 
     if *fakeFlag {
       servers = append(servers, &fakeServer{Id: name})
@@ -50,11 +60,6 @@ func main() {
     st, err := storage.NewSqlite3(filepath.Join(dataDir, name))
     if err != nil {
       panic(fmt.Errorf("Error initializing DB: %w", err))
-    }
-
-    kpriv, kpub, err := crypto.GenKeyPair()
-    if err != nil {
-      panic(fmt.Errorf("Error generating keys: %w", err))
     }
 
     t, err := transport.New(&transport.Opts{

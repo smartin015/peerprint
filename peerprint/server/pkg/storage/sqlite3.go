@@ -14,6 +14,15 @@ type sqlite3 struct {
   db *sql.DB
 }
 
+func clearSignedRecord(rec *pb.SignedRecord) {
+  // Init with empty objects to prevent segfault
+  rec.Signature= &pb.Signature{}
+  rec.Record= &pb.Record{
+    Rank: &pb.Rank{},
+    Tags: []string{},
+  }
+}
+
 func (s *sqlite3) Close() {
   s.db.Close()
 }
@@ -33,7 +42,9 @@ func (s *sqlite3) migrateSchema() error {
     scope TEXT NOT NULL,
 
     signer BLOB NOT NULL,
-    signature BLOB NOT NULL
+    signature BLOB NOT NULL,
+
+    PRIMARY KEY (target, type, scope, signer)
   );`); err != nil {
     return fmt.Errorf("create grants table: %w", err)
   }
@@ -141,14 +152,21 @@ func scanSignedGrant(r scannable, result *pb.SignedGrant) error {
   );
 }
 
-func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
-  // Init with empty objects to prevent segfault
-  result.Signature= &pb.Signature{}
-  result.Record= &pb.Record{
-    Rank: &pb.Rank{},
-    Tags: []string{},
+func (s *sqlite3) GetRandomRecord() (*pb.SignedRecord, error) {
+  result := &pb.SignedRecord{}
+  clearSignedRecord(result)
+  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE tombstone=0 ORDER BY RANDOM() LIMIT 1;`), result); err != nil {
+    if err == sql.ErrNoRows {
+      return nil, err // Allow for comparison upstream
+    }
+    return nil, fmt.Errorf("get random record: %w", err)
   }
-  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM records WHERE uuid=$1 AND tombstone=0 ORDER BY version DESC LIMIT 1;`, uuid), result); err != nil {
+  return result, nil
+}
+
+func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
+  clearSignedRecord(result)
+  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE uuid=$1 AND tombstone=0 ORDER BY version DESC LIMIT 1;`, uuid), result); err != nil {
     if err == sql.ErrNoRows {
       return err // Allow for comparison upstream
     }
@@ -156,43 +174,79 @@ func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
   }
 
   // Import tags now that we have a version
-  if rows, err := s.db.Query(`SELECT name FROM recordtags WHERE record=$1 AND version=$2`, uuid, result.Record.Version); err != nil {
+  rows, err := s.db.Query(`SELECT name FROM recordtags WHERE record=$1 AND version=$2`, uuid, result.Record.Version)
+  if err != nil {
     return fmt.Errorf("fetch tags: %w", err)
   } else {
     tag := ""
     for rows.Next() {
       if err := rows.Scan(&tag); err != nil {
+        rows.Close()
         return fmt.Errorf("fetch single tag: %w", err)
       }
       result.Record.Tags = append(result.Record.Tags, tag)
     }
+    rows.Close()
   }
 
   return nil
 }
 
-func (s *sqlite3) GetSignedRecords() ([]*pb.SignedRecord, error) {
+func (s *sqlite3) GetSignedRecords(opts ...any) ([]*pb.SignedRecord, error) {
   result := []*pb.SignedRecord{}
-  rows, err := s.db.Query(`SELECT * FROM records WHERE tombstone=0 GROUP BY uuid HAVING version=MAX(version);`)
+  where := []string{}
+  args := []any{}
+  for _, opt := range opts {
+    switch v := opt.(type) {
+    case WithUUID:
+      where = append(where,  "uuid=?")
+      args = append(args, string(v))
+    default:
+        return nil, fmt.Errorf("GetSignedRecords received invalid option: %v", opt)
+    }
+  }
+  q := `SELECT * FROM "records" WHERE tombstone=0 `
+  if len(where) > 0 {
+    q += strings.Join(where, " AND ")
+  }
+  q += "GROUP BY uuid HAVING version=MAX(version);"
+  rows, err := s.db.Query(q, args...)
   if err != nil {
     return nil, fmt.Errorf("GetSignedRecords SELECT: %w", err)
   }
+  
   for rows.Next() {
     sr := &pb.SignedRecord{Signature: &pb.Signature{}, Record: &pb.Record{Rank: &pb.Rank{}}}
     if err := scanSignedRecord(rows, sr); err != nil {
+      rows.Close()
       return nil, fmt.Errorf("GetSignedRecords scan: %w", err)
     }
     result = append(result, sr)
   }
+  rows.Close()
   return result, nil
 }
 
 func (s *sqlite3) SetSignedGrant(g *pb.SignedGrant) error {
+  // Going out on a limb here and saying if this grant is being issued here,
+  // it's got a later expiry than any other grants of the same type etc.
+  // This means we can use INSERT OR REPLACE here
   _, err := s.db.Exec(`
-    INSERT INTO grants (target, expiry, type, scope, signer, signature)
+    INSERT OR REPLACE INTO "grants" (target, expiry, type, scope, signer, signature)
     VALUES ($1, $2, $3, $4, $5, $6);
   `, g.Grant.Target, g.Grant.Expiry, g.Grant.Type, g.Grant.Scope, g.Signature.Signer, g.Signature.Data)
   return err
+}
+
+func (s *sqlite3) GetRandomGrantWithScope() (*pb.SignedGrant, error) {
+  result := &pb.SignedGrant{Signature: &pb.Signature{}, Grant: &pb.Grant{}}
+  if err := scanSignedGrant(s.db.QueryRow(`SELECT * FROM "grants" WHERE scope != "" ORDER BY RANDOM() LIMIT 1;`), result); err != nil {
+    if err == sql.ErrNoRows {
+      return nil, err // Allow for comparison upstream
+    }
+    return nil, fmt.Errorf("get random record: %w", err)
+  }
+  return result, nil
 }
 
 func (s *sqlite3) GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error) {
@@ -200,18 +254,20 @@ func (s *sqlite3) GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error) {
   expired := false
   where := []string{}
   args := []any{}
-  q := "SELECT * FROM grants"
   for _, opt := range opts {
     switch v := opt.(type) {
-      case WithTarget:
-        where = append(where, "target=?")
-        args = append(args, string(v))
-      case WithScope:
-        where = append(where, "scope=?")
-        args = append(args, string(v))
-      case IncludeExpired:
-        expired =  bool(v)
-      default:
+    case WithType:
+      where = append(where,  "type=?")
+      args = append(args, int(v))
+    case WithTarget:
+      where = append(where, "target=?")
+      args = append(args, string(v))
+    case WithScope:
+      where = append(where, "scope=?")
+      args = append(args, string(v))
+    case IncludeExpired:
+      expired =  bool(v)
+    default:
         return nil, fmt.Errorf("GetSignedGrants received invalid option: %v", opt)
     }
   }
@@ -219,22 +275,24 @@ func (s *sqlite3) GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error) {
     where = append(where, "expiry > ?")
     args = append(args, time.Now().Unix())
   }
+  q := `SELECT * FROM "grants"`
   if len(where) > 0 {
     q += " WHERE " + strings.Join(where, " AND ")
   }
   q += ";"
   rows, err := s.db.Query(q, args...)
-
   if err != nil {
     return nil, fmt.Errorf("%s: %w", q, err)
   }
   for rows.Next() {
     sr := &pb.SignedGrant{Grant: &pb.Grant{}, Signature: &pb.Signature{}}
     if err := scanSignedGrant(rows, sr); err != nil {
+      rows.Close()
       return nil, fmt.Errorf("GetSignedGrants scan: %w", err)
     }
     result = append(result, sr)
   }
+  rows.Close()
   return result, nil
 }
 
@@ -244,7 +302,7 @@ func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
     return fmt.Errorf("Unwrap key: %w", err)
   }
   if _, err = s.db.Exec(`
-    INSERT OR REPLACE INTO pubkeys (peer, key)
+    INSERT OR REPLACE INTO "pubkeys" (peer, key)
     VALUES ($1, $2);
   `, peer, b); err != nil {
     return fmt.Errorf("SetPubKey: %w", err)
@@ -254,7 +312,7 @@ func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
 
 func (s *sqlite3) GetPubKey(peer string) (crypto.PubKey, error) {
   var b []byte
-  if err := s.db.QueryRow(`SELECT key FROM pubkeys WHERE peer=$1 LIMIT 1;`, peer).Scan(&b); err != nil {
+  if err := s.db.QueryRow(`SELECT key FROM "pubkeys" WHERE peer=$1 LIMIT 1;`, peer).Scan(&b); err != nil {
     return nil, err
   }
   return crypto.UnmarshalPublicKey(b)
@@ -262,19 +320,25 @@ func (s *sqlite3) GetPubKey(peer string) (crypto.PubKey, error) {
 
 func (s *sqlite3) IsAdmin(peer string) (bool, error) {
   admin := false
-  err := s.db.QueryRow(`SELECT COUNT(*)=1 FROM grants WHERE target=$1 AND expiry > $2 AND type=$3;`, peer, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&admin)
+  err := s.db.QueryRow(`SELECT COUNT(*)>0 FROM "grants" WHERE target=$1 AND expiry > $2 AND type=$3;`, peer, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&admin)
   return admin, err
 }
 
-func (s *sqlite3) CountAdmins() (int, error) {
-  num := 0 
-  err := s.db.QueryRow(`SELECT COUNT(*) FROM grants WHERE expiry > $1 AND type=$2 GROUP BY target;`, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&num)
+func (s *sqlite3) CountAdmins() (int64, error) {
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(*) FROM "grants" WHERE expiry > $1 AND type=$2 GROUP BY target;`, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&num)
+  return num, err
+}
+
+func (s *sqlite3) CountRecords() (int64, error) {
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" WHERE tombstone=0;`).Scan(&num)
   return num, err
 }
 
 func (s *sqlite3) ValidGrants() (bool, error) {
   anyValid := false
-  err := s.db.QueryRow(`SELECT COUNT(*)>0 FROM grants WHERE expiry > $1;`, time.Now().Unix()).Scan(&anyValid)
+  err := s.db.QueryRow(`SELECT COUNT(*)>0 FROM "grants" WHERE expiry > $1;`, time.Now().Unix()).Scan(&anyValid)
   return anyValid, err
 }
 
@@ -283,6 +347,7 @@ func NewSqlite3(path string) (*sqlite3, error) {
   if err != nil {
     return nil, fmt.Errorf("failed to open db at %s: %w", path, err)
   }
+  db.SetMaxOpenConns(1) // TODO verify needed for non-inmemory
   s := &sqlite3{
     db: db,
   }

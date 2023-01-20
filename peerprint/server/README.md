@@ -1,90 +1,92 @@
-# go-libp2p-pubsub chat with rendezvous example
+# Base architecture
 
-This example project allows multiple peers to chat among each other using go-libp2p-pubsub. 
-
-Peers are discovered using a DHT, so no prior information (other than the rendezvous name) is required for each peer.
-
-## Install
+Data structure:
 
 ```
-virtualenv venv
-source venv/bin/activate
-pip3 install --upgrade protobuf pyzmq libczmq-dev
-sudo apt-get install libczmq-dev libzmq5
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-protoc --go_out=. --go_opt=paths=source_relative proto/*.proto
-go build .
+message Object:
+  string uuid
+  uint64 version
+  string cid
+  string owner
+  uint64 deleted_ts
+  repeated string tags // Used for "search"
+  string signature // Signed hash of the UUID, version, CID, owner, and deletion timestamp by someone with a Grant.
+
+enum Role:
+  EDIT_TARGET
+
+message Grant:
+  string grantee
+  string target
+  string signature
+  uint64 expiration
+
+message Mutation:
+  Object obj
+
+rpc GetObjects
+rpc GetGrants
+rpc GetStateHash
 ```
 
-## Build
+Database:
 
-```
-cd server && go build .
-```
+* `Objects` stores all objects on the network. There may be more than one uuid/version of object present in the DB, and possibly even conflicting versions
+  that would require merging before action is taken. However, there are never exact duplicates.
+  * Note that mutations just change the cid of the job, all actual data is stored in ipfs
+* `ACLs` stores all grants seen on the network - including a set of root grants that allow granting roles. When joining the queue for the first time (or when the table is empty due to expirations) local peers in the pubsub graph are queried for the set of ACLs available.
 
-## Demo
+Startup behavior:
 
-In a separate console, run 
+* Start discovery of peers for pubsub via MDNS or DHT discovery strategy (using rendezvous string)
+* When one or more peers are found, connect to the pubsub network and announce ourselves as uninitialized (UNKNOWN type)
+* If we're not handed a role by some leader and there are no better candidates (i.e. UNKNOWN peers with a lexicographically smaller ID), assume leadership by publishing a self-signed Grant with the ability to grant access. As leader, begin sending heartbeat publish messages so folks know you're alive.
+* Conscript any UNKNOWN peers by delegating grantability to them and give them ELECTABLE type so they fight it out for leadership if the leader host goes offline. The leader must keep the ACLs table relatively full so mutations can be made.
+* Peers must periodically refresh their own grants before they expire, otherwise they lose the ACL. 
+* Also offer a direct database-copy approach for brand new peers to catch up quickly via adjacent peers
 
-```
-ipfs init
-ipfs add example_registry.yaml
-ipfs daemon
-```
+Syncing:
 
-Make a note of the CID of the published registry.
+* Periodically directly fetch state from peers to synchronize DBs. This prevents jobs that haven't been mentioned in awhile from falling off the radar.
 
-```
-./peerprint_server -registry $IPFS_REGISTRY_CID
-```
+Try to do this by mesing with go-libp2p-gorpc - specifically the Stream() handler, see https://pkg.go.dev/github.com/libp2p/go-libp2p-gorpc#Client.Stream
 
+Can use e.g. `GetStateHash` to get a hash describing the current state. If the same, no syncing needed.
 
-## Modified RAFT consensus
+When syncing grants on empty state, allow only if the majority of peers have the grant.
+When syncing jobs, reject if their grant makes no sense and always take jobs with newer versions if possible. Note that this means non-mutated jobs eventually stop propagating to new nodes if the signer of its most recent state was offline for long enough that the grant expired.
 
-The consensus model established by RAFT relies on N^2 network connections for N peers in the network. This does not scale well up to thousands (or hundreds of thousands) of distributed nodes, which may become needed in a global print queue environment.
+Retries:
 
-To address this, we scale the consensus group logarithmically with the size of the cluster. The size of the cluster can be estimated in a number of ways while keeping bandwidth low (see https://www.researchgate.net/publication/220717323_Peer_to_peer_size_estimation_in_large_and_dynamic_networks_A_comparative_study). Could also have the census query for different statuses to get an understanding of "fraction busy" etc.
+* Non-leader Mutations are attempted N times with random exp backoff, after which if no echoed mutation happens the peer falls into an UNKNOWN type state and attempts to reaquire leadership
 
-Peer status messages should also only be provided upon leader request, and include similar census/estimation tactics. This keeps bandwidth from getting out of hand.
+To edit/create an object:
 
-For a given cluster size, the consensus group size is `2 + floor(ln(num_peers))`. For a cluster with 1M peers, there would be only 15 elected nodes. This is quite high redundancy assuming the nodes are geographically well distributed.
+* Peer publishes a `Mutation` request. If the peer has correct ACLs, other peers receive the mutation and store it in the `Objects` DB, otherwise it's ignored.
+* The leader node has special mirroring behavior - if it sees a mutation that's not part of the electorate, it checks to see if the mutation is allowed and repeats it with its own signature verifying the change.
 
-If some nodes in the consensus are regularly flaky to respond, new consensus nodes can be fetched by asking for all nodes to respond with their IDs with some probability that yields a small number of usable nodes (e.g. for 1M nodes, ask peers to ping back with P=0.000005 to get ~50 new candidates.
+To find useful work:
 
-Elections happen on a separate topic from queue and status messages, so they don't cause lots of unnecessary computation on non-candidate nodes for processing.
+* Every object has tags for filtering what's printable for a given printer. Finding useful work is a search using these tags.
 
-Updates to the log (i.e. from the elected leader) are broadcast to all nodes on the "main" topic.
+To delete an object:
+  
+* Set the `deleted_ts` timestamp. These can be safely garbage collected after some period of time syncing (e.g. 4h)
 
-What does a 1M node print queue even look like? Is it really a linear queue still? What if the queue had 1M entries? How do old entries get cleaned up / garbage collected? Individual nodes could keep a cached view of compatible jobs to refer to, to prevent them from continually reprocessing unrunnable jobs.
+When the leader is lost:
 
+Remaining peers with delegated electability grants compete for leadership. The leader reissues all leadership grants to all electable nodes so that the chain of authority remains unbroken.
 
-## Running
+To resolve conflicts in the case of a network partition event:
 
-Clone this repo, then `cd` into the `examples/pubsub/basic-chat-with-rendezvous` directory:
+* Leaders of the two partitions resolve leadership amongst themselves. Leadership grants are reissued
+* V0: object and grant conflicts are resolved in favor of whichever partition's leader remains the leader.
+* Future: completed prints are summed in a way that balances out
 
-```shell
-git clone https://github.com/libp2p/go-libp2p
-cd go-libp2p/examples/pubsub/basic-chat-with-rendezvous
-```
+Bootstrapping after a long outage:
 
-Now you can either run with `go run`, or build and run the binary:
+Consider a network with nodes A, B, and C - A is the leader, and B/C are electable. There's job J1 signed by A in the objects DB for each node, and several grants (A electable by A, B electable by A, C electable by A). 
 
-```shell
-go run .
+Then all nodes go offline. For a year. 
 
-# or, build and run separately
-go build .
-./chat
-```
-
-To change the topic name, use the `-topic` flag:
-
-```shell
-go run . -topic=adifferenttopic
-```
-
-Try opening several terminals, each running the app. When you type a message and hit enter in one, it
-should appear in all others that are connected to the same topic.
-
-To quit, hit `Ctrl-C`.
-
+Then B and C come online without A, and B gains leadership. J1 is still in their tables, but with a dangling cert. When they act again on J1, it's then signed by B and life continues. 

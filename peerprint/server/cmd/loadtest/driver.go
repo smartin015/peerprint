@@ -6,6 +6,7 @@ import (
   "context"
   "time"
   "sync"
+  "fmt"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
 )
@@ -97,13 +98,13 @@ func (d *driver) MakeRandomChange() (string, *DriverErr) {
   // We become less likely to add a record as we approach the target
   pAdd := float32(d.targetRecords-d.records.Count())/float32(d.targetRecords)
   if rec == nil || rand.Float32() < pAdd {
-    return "addRecord", d.addRecord(srv)
+    return fmt.Sprintf("addRecord(%s)", srv.ShortID()), d.addRecord(srv)
   }
 
   // Precondition: we have a record and a server, but maybe not a grant.
   if rand.Float32() < 0.9 {
     if g == nil {
-      return "requestGrant", d.requestGrant(srv, rec)
+      return fmt.Sprintf("requestGrant(%s, _)", srv.ShortID()), d.requestGrant(srv, rec)
     } else {
       rec := d.records.Get(g.Scope)
       if rec == nil {
@@ -118,11 +119,11 @@ func (d *driver) MakeRandomChange() (string, *DriverErr) {
   }
 
   if p := rand.Float32(); p < 0.1 {
-    return "rmRecord", d.rmRecord(srv, rec)
+    return fmt.Sprintf("rmRecord(%s, _)", srv.ShortID()), d.rmRecord(srv, rec)
   } else if p < 0.3 {
-    return "requestGrant", d.requestGrant(srv, rec)
+    return fmt.Sprintf("requestGrant(%s, _)", srv.ShortID()), d.requestGrant(srv, rec)
   } else {
-    return "mutateRecord", d.mutateRecord(srv, rec)
+    return fmt.Sprintf("mutateRecord(%s, _)", srv.ShortID()), d.mutateRecord(srv, rec)
   }
 }
 
@@ -156,7 +157,7 @@ func (d *driver) Run(duration time.Duration, qps float64) {
     go func (srv server.Interface) {
       defer wg.Done()
       srv.WaitUntilReady()
-      dlog("Server %s ready", srv.ID())
+      dlog("Server %s ready", srv.ShortID())
     }(s)
   }
 
@@ -166,17 +167,24 @@ func (d *driver) Run(duration time.Duration, qps float64) {
   dlog("Making random changes at a rate of %f QPS", qps)
   ticker := time.NewTicker(time.Duration(int(1000.0/qps)) * time.Millisecond)
   
+  mu := &sync.Mutex{}
   for {
     select {
     case <-ticker.C:
-      typ, err := d.MakeRandomChange()
-      if err != nil {
-        d.errors[err.Type] += 1
-        dlog("%24s -> %s", typ, err.Error())
-      } else {
-        d.successes += 1
-        dlog("%24s -> ok", typ)
-      }
+      go func(){
+        typ, err := d.MakeRandomChange()
+        if err != nil {
+          mu.Lock()
+          d.errors[err.Type] += 1
+          mu.Unlock()
+          dlog("%24s -> %s", typ, err.Error())
+        } else {
+          mu.Lock()
+          d.successes += 1
+          mu.Unlock()
+          dlog("%24s -> ok", typ)
+        }
+      }()
     case <-ctx.Done():
       dlog("Finishing run")
       return

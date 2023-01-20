@@ -38,7 +38,7 @@ func (s *electable) Step(ctx context.Context) {
   case tm := <-s.base.t.OnMessage():
     // Attempt to store the public key of the sender so we can later verify messages
     if err := s.base.s.SetPubKey(tm.Peer, tm.PubKey); err != nil {
-      s.l.Info("SetPubKey error: %w", err)
+      s.l.Info("OnMessage: %v", err)
     }
     switch v := tm.Msg.(type) {
       case *pb.Grant:

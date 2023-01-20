@@ -14,6 +14,9 @@ type fakeServer struct {
 func (s *fakeServer) ID() string {
   return s.Id
 }
+func (s *fakeServer) ShortID() string {
+  return s.Id
+}
 
 func (s *fakeServer) GetService() interface{} {
   return nil

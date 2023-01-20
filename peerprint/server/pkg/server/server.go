@@ -30,6 +30,7 @@ type Interface interface {
   SetRecord(r *pb.Record) error
   SetGrant(g *pb.Grant) error
   ID() string
+  ShortID() string
 }
 
 type Server struct {
@@ -98,24 +99,54 @@ func (s *Server) ID() string {
   return s.t.ID()
 }
 
-func (s *Server) SetGrant(g *pb.Grant) error {
-  if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
-    if sig, err := s.sign(g); err != nil {
-      return err
-    } else if err := s.storeGrantFromPeer(s.ID(), g, sig); err != nil {
-      return err
+func pretty(i interface{}) string {
+  switch v := i.(type) {
+  case *pb.SignedGrant:
+    status := "live"
+    if v.Grant.Expiry == 0 {
+      status = "unset"
+    } else if v.Grant.Expiry < time.Now().Unix() {
+      status = "expired"
     }
+    return fmt.Sprintf("Grant{signer %s: %s=%v (%s)}", shorten(v.Signature.Signer), shorten(v.Grant.Target), v.Grant.Type, status)
+  case *pb.Grant:
+    status := "live"
+    if v.Expiry == 0 {
+      status = "unset"
+    } else if v.Expiry < time.Now().Unix() {
+      status = "expired"
+    }
+    return fmt.Sprintf("Grant{%s=%v (%s)}", shorten(v.Target), v.Type, status)
+  case *pb.Record:
+    return fmt.Sprintf("Record{%sv%d->%s (%d tags)}", shorten(v.Uuid), v.Version, shorten(v.Location), len(v.Tags))
+  case *pb.SignedRecord:
+    return fmt.Sprintf("Record{signer %s: %sv%d->%s (%d tags)}", shorten(v.Signature.Signer), shorten(v.Record.Uuid), v.Record.Version, shorten(v.Record.Location), len(v.Record.Tags))
+  default:
+    return fmt.Sprintf("%+v", i)
   }
-  return s.t.Publish(DefaultTopic, g)
+}
+
+func shorten(s string) string {
+  return s[len(s)-4:]
+}
+
+func (s *Server) ShortID() string {
+  return shorten(s.ID())
+}
+
+func (s *Server) SetGrant(g *pb.Grant) error {
+  if s.status.Type == pb.PeerType_LEADER {
+    _, err := s.leader.issueGrant(g)
+    return err
+  } else {
+    return s.t.Publish(DefaultTopic, g)
+  }
 }
 
 func (s *Server) SetRecord(r *pb.Record) error {
-  if ok, err := s.s.IsAdmin(s.ID()); err != nil && ok {
-    if sig, err := s.sign(r); err != nil {
-      return err
-    } else if err := s.storeRecordFromPeer(s.ID(), r, sig); err != nil {
-      return err
-    }
+  if s.status.Type == pb.PeerType_LEADER {
+    _, err := s.leader.issueRecord(r)
+    return err
   }
   return s.t.Publish(DefaultTopic, r)
 }
@@ -190,36 +221,38 @@ func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
 }
 
 func (s *Server) storeGrantFromPeer(peer string, g *pb.Grant, sig *pb.Signature) error {
-  if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
-    return fmt.Errorf("IsAdmin error: %w", err)
-  } else if !peerAdmin {
-    s.l.Info("Ignoring grant from non-admin peer %s", peer)
-    return nil
-  }
-  if err := s.s.SetSignedGrant(&pb.SignedGrant{
+  sg := &pb.SignedGrant{
     Grant: g,
     Signature: sig,
-  }); err != nil {
-    return fmt.Errorf("SetSignedGrant error: %w", err)
   }
-  s.l.Info("Stored grant (from %s)", peer)
+  if admin, err := s.s.IsAdmin(sg.Signature.Signer); err != nil {
+    return fmt.Errorf("IsAdmin error: %w", err)
+  } else if !admin {
+    s.l.Info("Ignoring %s (signer is not admin)", pretty(sg))
+    return nil
+  }
+  if err := s.s.SetSignedGrant(sg); err != nil {
+    return fmt.Errorf("SetSignedGrant(%s): %w", pretty(sg), err)
+  }
+  s.l.Info("Stored %s", pretty(sg))
   return nil
 }
 
 func (s *Server) storeRecordFromPeer(peer string, r *pb.Record, sig *pb.Signature) error {
-  if peerAdmin, err := s.s.IsAdmin(peer); err != nil {
-    return fmt.Errorf("IsAdmin error: %w", err)
-  } else if !peerAdmin {
-    s.l.Info("Ignoring record from non-admin peer %s", peer)
-    return nil
-  }
-  if err := s.s.SetSignedRecord(&pb.SignedRecord{
+  sr := &pb.SignedRecord{
     Record: r,
     Signature: sig,
-  }); err != nil {
+  }
+  if admin, err := s.s.IsAdmin(sr.Signature.Signer); err != nil {
+    return fmt.Errorf("IsAdmin error: %w", err)
+  } else if !admin {
+    s.l.Info("Ignoring %s (signer is not admin)", pretty(sr))
+    return nil
+  }
+  if err := s.s.SetSignedRecord(sr); err != nil {
     return fmt.Errorf("SetSignedRecord error: %w", err)
   }
-  s.l.Info("Stored record (from %s)", peer)
+  s.l.Info("Stored %s", pretty(sr))
   return nil
 }
 
@@ -246,11 +279,11 @@ func (s *Server) Run(ctx context.Context) {
 
 func (s *Server) WaitUntilReady() {
   for {
+    if s.status.Type != pb.PeerType_UNKNOWN_PEER_TYPE {
+      return
+    }
     select {
     case <-s.roleChanged:
-      if s.status.Type != pb.PeerType_UNKNOWN_PEER_TYPE {
-        return
-      }
     }
   }
 }

@@ -38,9 +38,9 @@ func (s *handshake) tryAssign(v *pb.AssignPeer) bool {
   if v.Peer == s.base.t.ID() {
     for _, sg := range v.Grants {
       if err := s.base.s.SetSignedGrant(sg); err != nil {
-        s.l.Info("Couldn't store grant %+v: %w", sg, err)
+        s.l.Info("Couldn't store %s: %w", pretty(sg), err)
       } else {
-        s.l.Info("Stored grant from %s", sg.Signature.Signer)
+        s.l.Info("Stored %s", pretty(sg))
       }
     }
     switch v.Type {
@@ -70,7 +70,6 @@ func (s *handshake) Step(ctx context.Context) {
       switch v := m.Msg.(type) {
       case *pb.PeerStatus:
         if s.betterLeaderFound(m.Peer, v) {
-          s.l.Info("Found better leader candidate: %s", m.Peer)
           s.lastBetterLeader = time.Now()
         }
       case *pb.AssignPeer:
@@ -89,7 +88,7 @@ func (s *handshake) Step(ctx context.Context) {
       millis := (0.5 + rand.Float64()) * float64(HandshakeStatusPeriodBase.Milliseconds())
       nextStatus := time.Duration(millis) * time.Millisecond
       s.tmr = time.NewTimer(nextStatus)
-      s.l.Info("Sent status; next attempt in %v", nextStatus)
+      s.l.Info("Sent status; next attempt in %v (last better leader: %s ago)", nextStatus, time.Now().Sub(s.lastBetterLeader))
     }
   }
 }

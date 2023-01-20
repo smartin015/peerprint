@@ -4,7 +4,6 @@ import (
   "testing"
   "fmt"
   "strings"
-  "database/sql"
   "time"
   "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
@@ -44,7 +43,7 @@ func rSetGetEq(db *sqlite3, r *pb.SignedRecord, want *pb.SignedRecord) error {
     return fmt.Errorf("SetSignedRecord: %v", err)
   }
   if err := db.GetSignedRecord(r.Record.Uuid, got); err != nil {
-    if err == sql.ErrNoRows && want == nil {
+    if err == ErrNoRows && want == nil {
       return nil
     }
     return fmt.Errorf("GetSignedRecord(): %v", err)
@@ -132,6 +131,7 @@ func TestSignedGrantsSetGet(t *testing.T) {
       Signature: sig,
       Grant: &pb.Grant{
         Target: "peer1",
+        Type: pb.GrantType_ADMIN,
         Expiry: time.Now().Add(10*time.Minute).Unix(),
         Scope: "foo",
       },
@@ -140,6 +140,7 @@ func TestSignedGrantsSetGet(t *testing.T) {
       Signature: sig,
       Grant: &pb.Grant{
         Target: "peer1",
+        Type: pb.GrantType_EDITOR,
         Expiry: time.Now().Add(-10*time.Minute).Unix(),
         Scope: "bar",
       },
@@ -148,6 +149,7 @@ func TestSignedGrantsSetGet(t *testing.T) {
       Signature: sig,
       Grant: &pb.Grant{
         Target: "peer2",
+        Type: pb.GrantType_EDITOR,
         Expiry: time.Now().Add(10*time.Minute).Unix(),
         Scope: "baz",
       },
@@ -191,10 +193,66 @@ func TestSignedGrantsSetGet(t *testing.T) {
       t.Errorf("GetSignedGrants() = %v, want %v", got, want)
     }
   }
+
+  // Lookup Editor type
+  if gg, err := db.GetSignedGrants(WithType(pb.GrantType_EDITOR)); err != nil {
+    t.Errorf("GetSignedGrants(): %v", err)
+  } else {
+    got := summarizeGrants(gg)
+    want := "peer2: baz (live)" // Expired removed by default
+    if got != want {
+      t.Errorf("GetSignedGrants() = %v, want %v", got, want)
+    }
+  }
 }
 
 func TestIsAdmin(t *testing.T) {
-  t.Errorf("TODO")
+  db := testingDB()
+  sig := &pb.Signature{
+    Signer: "foo",
+    Data: []byte{1,2,3},
+  }
+  for _, g := range []*pb.SignedGrant{
+    &pb.SignedGrant{
+      Signature: sig,
+      Grant: &pb.Grant{
+        Target: "peer1",
+        Type: pb.GrantType_ADMIN,
+        Expiry: time.Now().Add(10*time.Minute).Unix(),
+      },
+    },
+    &pb.SignedGrant{
+      Signature: sig,
+      Grant: &pb.Grant{
+        Target: "peer2",
+        Type: pb.GrantType_EDITOR,
+        Expiry: time.Now().Add(10*time.Minute).Unix(),
+      },
+    },
+    &pb.SignedGrant{
+      Signature: sig,
+      Grant: &pb.Grant{
+        Target: "peer3",
+        Type: pb.GrantType_ADMIN,
+        Expiry: time.Now().Add(-10*time.Minute).Unix(),
+      },
+    },
+  } {
+    if err := db.SetSignedGrant(g); err != nil {
+      t.Errorf("SetSignedGrant(%v): %v", g, err)
+      return
+    }
+  }
+
+  if admin, err := db.IsAdmin("peer1"); !admin || err != nil {
+    t.Errorf("IsAdmin(peer1) = %v, %v; want true, nil", admin, err)
+  }
+  if admin, err := db.IsAdmin("peer2"); admin || err != nil {
+    t.Errorf("IsAdmin(peer3) = %v, %v; want false, nil", admin, err)
+  }
+  if admin, err := db.IsAdmin("peer3"); admin || err != nil {
+    t.Errorf("IsAdmin(peer3) = %v, %v; want false, nil", admin, err)
+  }
 }
 
 func TestCountAdmins(t *testing.T) {
