@@ -98,11 +98,11 @@ func TestPush(t *testing.T) {
 
   m, err := e.PullSock.RecvMessage()
   if err != nil {
-    t.Fatal(err)
+    t.Fatalf("RecvMessage: %v", err)
   }
   got, err := Deserialize(m)
   if err != nil {
-    t.Fatal(err)
+    t.Fatalf("Deserialize: %v", err)
   }
 
   if !proto.Equal(got, want) {

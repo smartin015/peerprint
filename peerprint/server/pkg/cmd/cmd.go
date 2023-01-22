@@ -17,20 +17,24 @@ type Zmq struct {
   recvChan chan<- proto.Message
   errChan chan<- error
   sendChan chan proto.Message
+  pushChan chan proto.Message
 }
 
 type Destructor func()
 
-func New(rep_addr string, recvChan chan<- proto.Message, errChan chan<- error) chan<- proto.Message {
+func New(rep_addr string, push_addr string, recvChan chan<- proto.Message, errChan chan<- error) (chan<- proto.Message, chan<- proto.Message) {
   z := &Zmq {
     c: goczmq.NewRepChanneler(rep_addr), // will Bind() by default
+    p: goczmq.NewPushChanneler(push_addr), // will Bind() by default
     sendChan: make(chan proto.Message, 5),
+    pushChan: make(chan proto.Message, 5),
     recvChan: recvChan,
     errChan: errChan,
  }
  go z.receiver()
  go z.pipe(z.sendChan, z.c)
- return z.sendChan
+ go z.pipe(z.pushChan, z.p)
+ return z.sendChan, z.pushChan
 }
 
 // Returns a logger and its destructor

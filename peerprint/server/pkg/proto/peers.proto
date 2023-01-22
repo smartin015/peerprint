@@ -15,17 +15,12 @@ message AddrInfo {
   repeated string addrs = 2;
 }
 
+// RPC sent to neighbor peers to retrieve their neighbors
+// This allows us to crawl the whole network to understand how many
+// peers there are.
+// See also CrawlPeersCommand/Response in command.proto
 message GetPeersRequest {}
 message GetPeersResponse {
   repeated AddrInfo Addresses = 1;
 }
 
-message CrawlPeersCommand {
-  bool restart = 1; // Whether or not to start crawling anew or reuse existing peer set
-  int64 max_connections = 2;
-}
-
-message CrawlPeersResponse {
-  int64 num = 1; // Total number of peers seen
-  int64 new = 2; // Peers retrieved on this crawl
-}

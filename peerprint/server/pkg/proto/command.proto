@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package command;
+
+// Send along the PUSH channel to the wrapper to inform it of
+// changes happening on the network
+message StateUpdate {}
+
+// Catch-all error message for when commands cannot be carried out by the server process.
+message Error {
+  string reason = 1; 
+}
+

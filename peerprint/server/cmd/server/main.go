@@ -1,12 +1,13 @@
 package main
 
 import (
+  "google.golang.org/protobuf/proto"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
   "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
-  "github.com/smartin015/peerprint/p2pgit/pkg/automation"
 	lp2p_crypto "github.com/libp2p/go-libp2p/core/crypto"
   "github.com/smartin015/peerprint/p2pgit/pkg/cmd"
 	"github.com/libp2p/go-libp2p/core/pnet"
@@ -28,10 +29,9 @@ var (
 	addrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to host the service")
 
   // Data flags
-  inmemFlag     = flag.Bool("inmem", false, "use volatile/inmemory storage of keys and data. This overrides all other data flags")
-  dbPathFlag = flag.String("db", "/tmp/raft.db", "Path to database")
-	privkeyfileFlag    = flag.String("privKeyPath", "/tmp/priv.key", "Path to serialized private key (if not present, one will be created at that location)")
-	pubkeyfileFlag     = flag.String("pubKeyPath", "/tmp/pub.key", "Path to serialized public key (if not present, one will be created at that location)")
+  dbPathFlag = flag.String("db", ":memory:", "Path to database (use :memory: for ephemeral, inmemory DB")
+	privkeyfileFlag    = flag.String("privKeyPath", "", "Path to serialized private key - default inmemory (if not present, one will be created at that location)")
+	pubkeyfileFlag     = flag.String("pubKeyPath", "", "Path to serialized public key - default inmemory (if not present, one will be created at that location)")
 
   // Other network flags
 	rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required)")
@@ -44,14 +44,18 @@ var (
 	statusPeriodFlag = flag.Duration("statusPeriod", 2*time.Minute, "Time between self-reports of status after initial setup")
   syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
 
-  // Safety flags
+  // Safety and cleanup flags
   maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 100, "Maximum number of records to allow each peer to store in our DB")
   maxCompletionsPerPeerFlag = flag.Int64("maxCompletionsPerPeer", 100, "Maximum number of completions to record from neighboring peers")
   maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
-  
+  trustCleanupThresholdFlag = flag.Float64("trustCleanupThreshold", 2.0, "Trust value to consider a peer as 'trusted' when cleaning up DB entries")
+  trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 10*time.Day, "Amount of time before peers are considered for removal")
+  trustedPeersFlag = flag.String("trustedPeers", "", "peer IDs to trust implicitly")
+
   // IPC flags
-	zmqRepFlag         = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
-	zmqLogAddrFlag     = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
+	zmqRepFlag         = flag.String("zmq", "", "zmq server REP address (can be IPC, socket, etc.), required")
+	zmqPushFlag         = flag.String("zmqPush", "", "zmq server PUSH address (can be IPC, socket, etc.), required")
+	zmqLogAddrFlag     = flag.String("zmqLog", "", "zmq server PUSH address (can be IPC, socket, etc.) defaults to none")
 
   logger = log.New(os.Stderr, "", 0)
 )
@@ -61,6 +65,12 @@ func main() {
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
 	}
+  if *zmqRepFlag == "" {
+    panic("-zmq must be specified!")
+  }
+  if *zmqPushFlag == "" {
+    panic("-zmqPush must be specified!")
+  }
 	if *zmqLogAddrFlag != "" {
 		var dlog cmd.Destructor
 		logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
@@ -71,25 +81,21 @@ func main() {
   var kpub lp2p_crypto.PubKey
   var st storage.Interface
   var err error
-  if *inmemFlag {
+  if *privkeyfileFlag == "" && *pubkeyfileFlag == "" {
     kpriv, kpub, err = crypto.GenKeyPair()
     if err != nil {
       panic(fmt.Errorf("Error generating ephemeral keys: %w", err))
-    }
-    st, err = storage.NewSqlite3(":memory:")
-    if err != nil {
-      panic(fmt.Errorf("Error initializing inmemory DB: %w", err))
     }
   } else {
     kpriv, kpub, err = crypto.LoadOrGenerateKeys(*privkeyfileFlag, *pubkeyfileFlag)
     if err != nil {
       panic(fmt.Errorf("Error loading keys: %w", err))
     }
+  }
 
-    st, err = storage.NewSqlite3(*dbPathFlag)
-    if err != nil {
-      panic(fmt.Errorf("Error initializing DB: %w", err))
-    }
+  st, err = storage.NewSqlite3(*dbPathFlag)
+  if err != nil {
+    panic(fmt.Errorf("Error initializing DB: %w", err))
   }
 
   var psk pnet.PSK
@@ -130,28 +136,39 @@ func main() {
     MaxTrackedPeers: *maxTrackedPeersFlag,
   }, pplog.New(name, logger))
   go s.Run(context.Background())
+  loopZMQ(s)
+}
 
-  // Initialize command service if specified
-  if *zmqRepFlag != "" {
-    /*
-    s.cmdRecv = make(chan proto.Message, 5)
-    s.errChan = make(chan error, 5)
-	  s.cmdSend = cmd.New(*zmqRepFlag, s.cmdRecv, s.errChan)
-    */
-    panic("TODO handle ZMQ control")
-  } else if *testQPSFlag > 0.0 {
-    a := automation.NewLoadTester(*testQPSFlag, *testRecordsFlag, s, st)
-    a.Run(context.Background())
+func loopZMQ(s server.Interface) {
+  cmdRecv := make(chan proto.Message, 5)
+  errChan := make(chan error, 5)
+  cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecv, errChan)
+  for {
+    select {
+    case <-s.OnUpdate():
+      logger.Println("Pushing update notification")
+      cmdPush<- &pb.StateUpdate{}
+    case e := <-errChan:
+      logger.Println(e.Error())
+    case c := <-cmdRecv:
+      logger.Println("Handling command")
+      rep, err := handleCommand(c)
+      if err != nil {
+        cmdSend<- &pb.Error{Reason: err.Error()}
+      } else {
+        cmdSend<- rep
+      }
+    }
   }
 }
 
-/*
-func (s *Transport) ReplyCmd(msg proto.Message) error {
-  select {
-  case s.cmdSend<- msg:
+func handleCommand(c proto.Message) (proto.Message, error) {
+  switch v := c.(type) {
+  case *pb.Record:
+    return nil, fmt.Errorf("TODO implement Record setting: %v", v)
+  case *pb.Completion:
+    return nil, fmt.Errorf("TODO implement Completion setting: %v", v)
   default:
-    return fmt.Errorf("ReplyCmd() error: channel full")
+    return nil, fmt.Errorf("Unrecognized command")
   }
-  return nil
 }
-*/

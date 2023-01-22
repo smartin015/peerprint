@@ -80,6 +80,14 @@ func (s *sqlite3) migrateSchema() error {
   }
 
   if _, err := tx.Exec(`
+  CREATE TABLE census (
+    timestamp INT NOT NULL,
+    peer TEXT NOT NULL PRIMARY KEY,
+  );`); err != nil {
+    return fmt.Errorf("create census table: %w", err)
+  }
+
+  if _, err := tx.Exec(`
   CREATE TABLE completions (
     uuid TEXT NOT NULL,
     completer TEXT NOT NULL,

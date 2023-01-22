@@ -34,11 +34,12 @@ type Interface interface {
   ShortID() string
   GetService() interface{}
 
-  IssueRecord(r *pb.Record) error
-  IssueCompletion(g *pb.Completion) error
+  IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
+  IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
   Sync(context.Context)
 
   Run(context.Context)
+  OnUpdate() <-chan struct{}
 }
 
 type Server struct {
@@ -46,6 +47,8 @@ type Server struct {
   t transport.Interface
   s storage.Interface
   l *log.Sublog
+
+  updateChan chan struct{}
 
   // Tickers for periodic network activity
   publishStatusTicker *time.Ticker
@@ -58,6 +61,7 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     t: t,
     s: s,
     l: l,
+    updateChan: make(chan struct{}),
     publishStatusTicker: time.NewTicker(opts.StatusPeriod),
     syncTicker: time.NewTicker(opts.SyncPeriod),
     status: &pb.PeerStatus{
@@ -75,6 +79,11 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
 
 func (s *Server) ID() string {
   return s.t.ID()
+}
+
+
+func (s *Server) OnUpdate() <-chan struct{} {
+  return s.updateChan
 }
 
 func pretty(i interface{}) string {
@@ -261,7 +270,9 @@ func (s *Server) Run(ctx context.Context) {
   s.Sync(ctx)
 
   s.l.Info("Running server main loop")
+  s.notify()
   go func() {
+    defer close(s.updateChan)
     for {
       select {
       case tm := <-s.t.OnMessage():
@@ -288,8 +299,16 @@ func (s *Server) Run(ctx context.Context) {
       case <-ctx.Done():
         return
       }
+      s.notify()
     }
   }()
+}
+
+func (s *Server) notify() {
+  select {
+  case s.updateChan<- struct{}{}:
+  default:
+  }
 }
 
 func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signature) {

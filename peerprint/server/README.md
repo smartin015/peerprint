@@ -1,92 +1,124 @@
-# Base architecture
+# libp2p Network Implementation
 
-Data structure:
+## At a High Level
 
-```
-message Object:
-  string uuid
-  uint64 version
-  string cid
-  string owner
-  uint64 deleted_ts
-  repeated string tags // Used for "search"
-  string signature // Signed hash of the UUID, version, CID, owner, and deletion timestamp by someone with a Grant.
+`Peers` join a distributed pubsub network, share `Records` describing work they want to do, and issuing `Completions` for successfully delivered physical goods which earns them `Trust`. Other `Peers` do work on the network, selecting `Records` with high `Trust` and `Workability`, and accumulating `Completions` to raise their own `Trust` level.
 
-enum Role:
-  EDIT_TARGET
+## Definitions & Terms
 
-message Grant:
-  string grantee
-  string target
-  string signature
-  uint64 expiration
+A `Peer` is a network device that has joined the distributed network. 
 
-message Mutation:
-  Object obj
+A `Record` has
 
-rpc GetObjects
-rpc GetGrants
-rpc GetStateHash
-```
+* a unique universal ID (a "UUID") to identify it
+* a URL or other reference to a `Manifest` describing the work in detail
+* an approver, the ID of the peer that issues the `Completion` for finished work
+* other criterion that producer `Peers` can use to determine whether to take the job, such as
+  * estimated print time
+  * approx. destination for shipping
+  * minimum required `Trust` of the working peer that the approver will permit
 
-Database:
+A `Completion` has
 
-* `Objects` stores all objects on the network. There may be more than one uuid/version of object present in the DB, and possibly even conflicting versions
-  that would require merging before action is taken. However, there are never exact duplicates.
-  * Note that mutations just change the cid of the job, all actual data is stored in ipfs
-* `ACLs` stores all grants seen on the network - including a set of root grants that allow granting roles. When joining the queue for the first time (or when the table is empty due to expirations) local peers in the pubsub graph are queried for the set of ACLs available.
+* the UUID of the completed `Record`
+* the ID of the approver that signed off (plus their signature)
+* the ID of the completer of the work
+* a timestamp when it was issued
 
-Startup behavior:
+A `Manifest` has additional printing information, such as
 
-* Start discovery of peers for pubsub via MDNS or DHT discovery strategy (using rendezvous string)
-* When one or more peers are found, connect to the pubsub network and announce ourselves as uninitialized (UNKNOWN type)
-* If we're not handed a role by some leader and there are no better candidates (i.e. UNKNOWN peers with a lexicographically smaller ID), assume leadership by publishing a self-signed Grant with the ability to grant access. As leader, begin sending heartbeat publish messages so folks know you're alive.
-* Conscript any UNKNOWN peers by delegating grantability to them and give them ELECTABLE type so they fight it out for leadership if the leader host goes offline. The leader must keep the ACLs table relatively full so mutations can be made.
-* Peers must periodically refresh their own grants before they expire, otherwise they lose the ACL. 
-* Also offer a direct database-copy approach for brand new peers to catch up quickly via adjacent peers
+* Links to the 3D models that require manufacturing
+* Extra conditions for completion (e.g. a form of payment for the work)
 
-Syncing:
+`Trust` is a calculated value based on verifiable `Completions` issued by other `Peers` in the network. 
+It can also be set manually if certain `Peers` are known to be trustworthy. Operations on the network typically aim to keep `Peers` and `Records` around that have a high `Trust`.
 
-* Periodically directly fetch state from peers to synchronize DBs. This prevents jobs that haven't been mentioned in awhile from falling off the radar.
+`Workability` is a metric used to rank `Records` 
 
-Try to do this by mesing with go-libp2p-gorpc - specifically the Stream() handler, see https://pkg.go.dev/github.com/libp2p/go-libp2p-gorpc#Client.Stream
+## Behavior
 
-Can use e.g. `GetStateHash` to get a hash describing the current state. If the same, no syncing needed.
+**On startup & Sync**
 
-When syncing grants on empty state, allow only if the majority of peers have the grant.
-When syncing jobs, reject if their grant makes no sense and always take jobs with newer versions if possible. Note that this means non-mutated jobs eventually stop propagating to new nodes if the signer of its most recent state was offline for long enough that the grant expired.
+1. On startup, your server will look for peers on the network via some rendezvous method (DHT if gobal, or MDNS if local network).
+2. After some time spent looking for peers, the server will attempt to sync its state across these peers by doing the following for each peer `P`:
+   * Fetching up to `maxRecordsPerPeer` `Records`
+   * Fetching up to `maxCompletionsPerPeer` `Completions` where `completer=P`
+   * Also bounding the above by `maxTrackedPeers`
+3. The server will also run a cleanup routine to ensure it does not run out of storage, by doing the following for each peer `P` in the DB:
+   * Computing the `Trust` of `P`
+   * Computing `tFirst`, the earliest timestamp of a record mentioning `P`
+   * Computing `tLast`, the latest timestamp of a record mentioning `P`
+   * Consider the peer `P` as a candidate for cleanup if either
+     * `Trust` > `trustCleanupThreshold` and `tLast` more than `trustCleanupTTL` ago, or
+     * `Trust` <= `trustCleanupThreshold` and `tFirst` more than `trustCleanupTTL` ago
+   * Randomly order peers by candidacy, favoring older peers first, then delete records until there are at most `maxTrackedPeers` remaining.
+4. Sync and cleanup periodically, every `syncPeriod` amount of time.
 
-Retries:
+Functionally, this tries to keep the state of the network somewhat in sync while also preventing unbounded database growth. When peers are removed, those that haven't acted recently are considered first for removal. 
 
-* Non-leader Mutations are attempted N times with random exp backoff, after which if no echoed mutation happens the peer falls into an UNKNOWN type state and attempts to reaquire leadership
+**Acting as a Consumer**
 
-To edit/create an object:
+To ask for work and successfully get it fulfilled:
 
-* Peer publishes a `Mutation` request. If the peer has correct ACLs, other peers receive the mutation and store it in the `Objects` DB, otherwise it's ignored.
-* The leader node has special mirroring behavior - if it sees a mutation that's not part of the electorate, it checks to see if the mutation is allowed and repeats it with its own signature verifying the change.
+1. Publish a `Record` describing the work to be done
+2. When physical goods have been received, publish a signed `Completion` that names the completing peer as its completer. 
+   * Note: this may happen multiple times if other peers speculatively print your order despite someone else working on it.
+3. To help reduce redundant work from ocurring, keep watch for peers you consider trusted submitting a matching `Completion` without a timestamp (see "Acting as a producer" below). If you see this, re-publish it with your own signature so it is verifiable by other peers looking for work; they will then skip over it as it is already underway.
 
-To find useful work:
+**Acting as a Producer**
 
-* Every object has tags for filtering what's printable for a given printer. Finding useful work is a search using these tags.
+To find work to do and get rewarded for doing it:
 
-To delete an object:
-  
-* Set the `deleted_ts` timestamp. These can be safely garbage collected after some period of time syncing (e.g. 4h)
+1. Listen for new `Records` via pubsub. Allow records into your DB, but reject them if:
+   * It would put you over `maxRecordsPerPeer` or `maxTrackedPeers` based on the `Record's` `approver` field. 
+   * The signature of the `Record` doesn't match the `approver` field
+2. When idling, pick a `Record` from the DB, preferring those with more `Trust` and `Workability` (but not necessarily strictly ordering; more of a "top N")
+3. Fetch and validate the manifest of candidate records to ensure you'd want to produce them. Cache validity info so you don't have to re-run it for that manifest.
+4. Republish the `Record` under your own signature, but with its `worker` and other worker stats set to your ID.
+5. Insert a `Completion` into the DB, with `uuid`, `approver`, and `completer` set as expected but with a null `timestamp`. 
+   * "Incomplete" entries reduce the `Trust` of their `approver` until they are truly completed (with a set timestamp). This prevents a consumer from ghosting the poducer after they receive their part.
+6. Do the work, periodically re-publishing the `Record` when stats change
+7. Deliver the physical goods via the means provided in the `manifest`
+8. Overwrite the `Completion` when sent and signed by the approver.
 
-When the leader is lost:
+## Delivery & PII
 
-Remaining peers with delegated electability grants compete for leadership. The leader reissues all leadership grants to all electable nodes so that the chain of authority remains unbroken.
+As this is a strategy for distributed manufacturing of physical goods, there must be a delivery component which has the potential to expose personally identifying information. If untrusted print networks are joined, users are strongly recommended to use some intermediary for delivering shipped goods such as a P.O. box or USPS "general delivery" to a post office, rather than using a regular mailing address.
 
-To resolve conflicts in the case of a network partition event:
+## Network discovery
 
-* Leaders of the two partitions resolve leadership amongst themselves. Leadership grants are reissued
-* V0: object and grant conflicts are resolved in favor of whichever partition's leader remains the leader.
-* Future: completed prints are summed in a way that balances out
+Network discovery is done via a rendezvous string (and optionally a PSK for permitting access). These networks can themselves be published on forums, in IPFS "registries", or by word of mouth to grow usership. 
 
-Bootstrapping after a long outage:
+Smaller networks with self-governance may also publish a list of peers to trust implicitly (settable with the `trustedPeers` flag). This bypasses the need to build trust over time. 
 
-Consider a network with nodes A, B, and C - A is the leader, and B/C are electable. There's job J1 signed by A in the objects DB for each node, and several grants (A electable by A, B electable by A, C electable by A). 
+## Validation
 
-Then all nodes go offline. For a year. 
+Producers must validate `Records` before they are attempted; otherwise a `Record` might be started that is incompatible with the printer or machine available to manufacture it. Validation should aspire to be automated wherever possible, but manual options may be desired. Some other validation may be optional but preferred by the user offering their manufacturing to the network.
 
-Then B and C come online without A, and B gains leadership. J1 is still in their tables, but with a dangling cert. When they act again on J1, it's then signed by B and life continues. 
+**Required validation:**
+
+* The manifest parses correctly
+* The completed part(s) fit within the volume of the printer/machine
+* The material requested is compatible with the printer/machine
+
+**Optional validation:**
+
+* Minimum `Trust` level for consumers
+* Maximum time limit for printing
+* Max material usage
+* Require specific form of payment
+* Require manual sign-off (e.g. push notification to phone) before running
+* Require a specific print format (e.g. STL to prevent malicious GCODE injection)
+* Require minimum estimated print time on the `Record` 
+* Validate based on allow/deny lists of certain peers
+
+## Trust
+
+Trust 
+
+## Workability
+
+## Other ideas
+
+* Add picture verification when a producer is ready to ship their part - the consumer can then OK a shipping label to be created for them.
+* 

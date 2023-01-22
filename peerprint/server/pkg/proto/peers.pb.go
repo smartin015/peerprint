@@ -124,6 +124,10 @@ func (x *AddrInfo) GetAddrs() []string {
 	return nil
 }
 
+// RPC sent to neighbor peers to retrieve their neighbors
+// This allows us to crawl the whole network to understand how many
+// peers there are.
+// See also CrawlPeersCommand/Response in command.proto
 type GetPeersRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -209,116 +213,6 @@ func (x *GetPeersResponse) GetAddresses() []*AddrInfo {
 	return nil
 }
 
-type CrawlPeersCommand struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Restart        bool  `protobuf:"varint,1,opt,name=restart,proto3" json:"restart,omitempty"` // Whether or not to start crawling anew or reuse existing peer set
-	MaxConnections int64 `protobuf:"varint,2,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
-}
-
-func (x *CrawlPeersCommand) Reset() {
-	*x = CrawlPeersCommand{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *CrawlPeersCommand) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CrawlPeersCommand) ProtoMessage() {}
-
-func (x *CrawlPeersCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CrawlPeersCommand.ProtoReflect.Descriptor instead.
-func (*CrawlPeersCommand) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *CrawlPeersCommand) GetRestart() bool {
-	if x != nil {
-		return x.Restart
-	}
-	return false
-}
-
-func (x *CrawlPeersCommand) GetMaxConnections() int64 {
-	if x != nil {
-		return x.MaxConnections
-	}
-	return 0
-}
-
-type CrawlPeersResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Num int64 `protobuf:"varint,1,opt,name=num,proto3" json:"num,omitempty"` // Total number of peers seen
-	New int64 `protobuf:"varint,2,opt,name=new,proto3" json:"new,omitempty"` // Peers retrieved on this crawl
-}
-
-func (x *CrawlPeersResponse) Reset() {
-	*x = CrawlPeersResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *CrawlPeersResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CrawlPeersResponse) ProtoMessage() {}
-
-func (x *CrawlPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CrawlPeersResponse.ProtoReflect.Descriptor instead.
-func (*CrawlPeersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *CrawlPeersResponse) GetNum() int64 {
-	if x != nil {
-		return x.Num
-	}
-	return 0
-}
-
-func (x *CrawlPeersResponse) GetNew() int64 {
-	if x != nil {
-		return x.New
-	}
-	return 0
-}
-
 var File_proto_peers_proto protoreflect.FileDescriptor
 
 var file_proto_peers_proto_rawDesc = []byte{
@@ -334,19 +228,10 @@ var file_proto_peers_proto_rawDesc = []byte{
 	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2d, 0x0a, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73,
 	0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x70, 0x65, 0x65, 0x72, 0x73,
 	0x2e, 0x41, 0x64, 0x64, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65,
-	0x73, 0x73, 0x65, 0x73, 0x22, 0x56, 0x0a, 0x11, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x50, 0x65, 0x65,
-	0x72, 0x73, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73,
-	0x74, 0x61, 0x72, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x72, 0x65, 0x73, 0x74,
-	0x61, 0x72, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x6d, 0x61, 0x78, 0x5f, 0x63, 0x6f, 0x6e, 0x6e, 0x65,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0e, 0x6d, 0x61,
-	0x78, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0x38, 0x0a, 0x12,
-	0x43, 0x72, 0x61, 0x77, 0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x6e, 0x75, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
-	0x03, 0x6e, 0x75, 0x6d, 0x12, 0x10, 0x0a, 0x03, 0x6e, 0x65, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x03, 0x6e, 0x65, 0x77, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
-	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f,
-	0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62,
-	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x73, 0x65, 0x73, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
+	0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65,
+	0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -361,14 +246,12 @@ func file_proto_peers_proto_rawDescGZIP() []byte {
 	return file_proto_peers_proto_rawDescData
 }
 
-var file_proto_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_peers_proto_goTypes = []interface{}{
-	(*PeerStatus)(nil),         // 0: peers.PeerStatus
-	(*AddrInfo)(nil),           // 1: peers.AddrInfo
-	(*GetPeersRequest)(nil),    // 2: peers.GetPeersRequest
-	(*GetPeersResponse)(nil),   // 3: peers.GetPeersResponse
-	(*CrawlPeersCommand)(nil),  // 4: peers.CrawlPeersCommand
-	(*CrawlPeersResponse)(nil), // 5: peers.CrawlPeersResponse
+	(*PeerStatus)(nil),       // 0: peers.PeerStatus
+	(*AddrInfo)(nil),         // 1: peers.AddrInfo
+	(*GetPeersRequest)(nil),  // 2: peers.GetPeersRequest
+	(*GetPeersResponse)(nil), // 3: peers.GetPeersResponse
 }
 var file_proto_peers_proto_depIdxs = []int32{
 	1, // 0: peers.GetPeersResponse.Addresses:type_name -> peers.AddrInfo
@@ -433,30 +316,6 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CrawlPeersCommand); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_peers_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CrawlPeersResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -464,7 +323,7 @@ func file_proto_peers_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_peers_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
