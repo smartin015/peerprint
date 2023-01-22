@@ -21,14 +21,14 @@ import (
 
 var (
   // Testing flags
-  inmemFlag     = flag.Bool("inmem", false, "use volatile/inmemory storage of keys and data. This overrides all path flags")
   testQPSFlag   = flag.Float64("testQPS", 0, "set nonzero to automatically generate traffic")
-  testRecordsFlag = flag.Int64("testRecordTarget", 100, "set target number of records to have active in the queue")
+  testRecordsFlag = flag.Int64("testRecordTarget", 100, "set target number of records to contribute to the queue")
 
   // Address flags
 	addrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to host the service")
 
-  // Path flags
+  // Data flags
+  inmemFlag     = flag.Bool("inmem", false, "use volatile/inmemory storage of keys and data. This overrides all other data flags")
   dbPathFlag = flag.String("db", "/tmp/raft.db", "Path to database")
 	privkeyfileFlag    = flag.String("privKeyPath", "/tmp/priv.key", "Path to serialized private key (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubKeyPath", "/tmp/pub.key", "Path to serialized public key (if not present, one will be created at that location)")
@@ -37,12 +37,18 @@ var (
 	rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required)")
   pskFlag = flag.String("psk", "", "Pre-shared key for secure connection to the p2p network")
 	localFlag          = flag.Bool("local", true, "Use local MDNS (instead of global DHT) for discovery")
+  displayNameFlag = flag.String("displayName", "", "Human-readable name for this node")
 
   // Timing flags
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
 	statusPeriodFlag = flag.Duration("statusPeriod", 2*time.Minute, "Time between self-reports of status after initial setup")
-  accessionDelayFlag = flag.Duration("accessionDelay", 5*time.Second, "Wait at least this long during handshaking phase before assuming leadership")
+  syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
 
+  // Safety flags
+  maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 100, "Maximum number of records to allow each peer to store in our DB")
+  maxCompletionsPerPeerFlag = flag.Int64("maxCompletionsPerPeer", 100, "Maximum number of completions to record from neighboring peers")
+  maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
+  
   // IPC flags
 	zmqRepFlag         = flag.String("zmq", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
 	zmqLogAddrFlag     = flag.String("zmqlog", "", "zmq server PAIR address (can be IPC, socket, etc.) defaults to none")
@@ -117,11 +123,12 @@ func main() {
   name = name[len(name)-4:]
   s := server.New(t, st, &server.Opts{
     StatusPeriod: *statusPeriodFlag,
-    AccessionDelay: *accessionDelayFlag,
+    SyncPeriod: *syncPeriodFlag,
+    DisplayName: *displayNameFlag,
+    MaxRecordsPerPeer: *maxRecordsPerPeerFlag,
+    MaxCompletionsPerPeer: *maxCompletionsPerPeerFlag,
+    MaxTrackedPeers: *maxTrackedPeersFlag,
   }, pplog.New(name, logger))
-  if err := t.Register(server.PeerPrintProtocol, s.GetService()); err != nil {
-    panic(fmt.Errorf("Failed to register RPC server: %w", err))
-  }
   go s.Run(context.Background())
 
   // Initialize command service if specified

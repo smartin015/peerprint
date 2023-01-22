@@ -27,37 +27,29 @@ message Rank {
 
 message Record {
   string uuid = 1; // UUID unique to this record
-  repeated string tags = 2; // Tags for qualified search of records without having to fetch each `location`
+  string approver = 2; // Who to go to for a Completion
 
-  string location = 3;
+  repeated string tags = 3; // Tags for qualified search of records without having to fetch each `location`
 
-  // Always-increasing version number for this record. Increment 
-  // whenever changing `location` to a newer data location.
-  uint64 version = 4; 
+  Rank rank = 4;
+  string location = 5;
 
   // Unix timestamps
-  int64 created = 5;
-  int64 tombstone = 6;
+  int64 created = 6;
+  int64 tombstone = 7;
 
-  Rank rank = 7;
+  // Active state information
+  string worker = 8;
+  bytes worker_state = 9;
 }
 
-enum GrantType {
-  UNKNOWN_GRANT_TYPE = 0;
-  ADMIN = 1;
-  EDITOR = 2;
-}
-
-message SignedGrant {
-  Grant grant = 1;
+message SignedCompletion {
+  Completion completion = 1;
   Signature signature = 2;
 }
 
-// Grant is provided by an `issuer` peer to a `target` peer, 
-// delegating a `role` to them with a limited lifetime (until `expiry`).
-message Grant {
-  string target = 1;
-  int64 expiry = 2;
-  GrantType type = 3;
-  string scope = 4;
+message Completion {
+  string uuid = 1;  
+  string completer = 3;
+  int64 timestamp = 4;
 }

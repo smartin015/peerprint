@@ -11,10 +11,9 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-from proto import state_pb2 as proto_dot_state__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/peers.proto\x12\x05peers\x1a\x11proto/state.proto\"O\n\nPeerStatus\x12\x1d\n\x04type\x18\x01 \x01(\x0e\x32\x0f.peers.PeerType\x12\"\n\traft_addr\x18\x02 \x01(\x0b\x32\x0f.peers.AddrInfo\"%\n\x08\x41\x64\x64rInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\t\"]\n\nAssignPeer\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\x1d\n\x04type\x18\x02 \x01(\x0e\x32\x0f.peers.PeerType\x12\"\n\x06grants\x18\x03 \x03(\x0b\x32\x12.state.SignedGrant*J\n\x08PeerType\x12\x15\n\x11UNKNOWN_PEER_TYPE\x10\x00\x12\x0c\n\x08LISTENER\x10\x02\x12\r\n\tELECTABLE\x10\x03\x12\n\n\x06LEADER\x10\x04\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/peers.proto\x12\x05peers\"\x1a\n\nPeerStatus\x12\x0c\n\x04name\x18\x01 \x01(\t\"%\n\x08\x41\x64\x64rInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\t\"\x11\n\x0fGetPeersRequest\"6\n\x10GetPeersResponse\x12\"\n\tAddresses\x18\x01 \x03(\x0b\x32\x0f.peers.AddrInfo\"=\n\x11\x43rawlPeersCommand\x12\x0f\n\x07restart\x18\x01 \x01(\x08\x12\x17\n\x0fmax_connections\x18\x02 \x01(\x03\".\n\x12\x43rawlPeersResponse\x12\x0b\n\x03num\x18\x01 \x01(\x03\x12\x0b\n\x03new\x18\x02 \x01(\x03\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.peers_pb2', globals())
@@ -22,12 +21,16 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   DESCRIPTOR._serialized_options = b'Z,github.com/smartin015/peerprint/pubsub/proto'
-  _PEERTYPE._serialized_start=262
-  _PEERTYPE._serialized_end=336
-  _PEERSTATUS._serialized_start=47
-  _PEERSTATUS._serialized_end=126
-  _ADDRINFO._serialized_start=128
-  _ADDRINFO._serialized_end=165
-  _ASSIGNPEER._serialized_start=167
-  _ASSIGNPEER._serialized_end=260
+  _PEERSTATUS._serialized_start=28
+  _PEERSTATUS._serialized_end=54
+  _ADDRINFO._serialized_start=56
+  _ADDRINFO._serialized_end=93
+  _GETPEERSREQUEST._serialized_start=95
+  _GETPEERSREQUEST._serialized_end=112
+  _GETPEERSRESPONSE._serialized_start=114
+  _GETPEERSRESPONSE._serialized_end=168
+  _CRAWLPEERSCOMMAND._serialized_start=170
+  _CRAWLPEERSCOMMAND._serialized_end=231
+  _CRAWLPEERSRESPONSE._serialized_start=233
+  _CRAWLPEERSRESPONSE._serialized_end=279
 # @@protoc_insertion_point(module_scope)

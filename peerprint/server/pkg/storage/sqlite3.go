@@ -3,10 +3,11 @@ package storage
 import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/libp2p/go-libp2p/core/crypto"
+  "context"
   "database/sql"
   "strings"
   "fmt"
-  "time"
+  "log"
   _ "github.com/mattn/go-sqlite3"
 )
 
@@ -27,6 +28,10 @@ func (s *sqlite3) Close() {
   s.db.Close()
 }
 
+func (s *sqlite3) Cleanup() error {
+  return fmt.Errorf("Not implemented")
+}
+
 func (s *sqlite3) migrateSchema() error {
   tx, err := s.db.Begin()
   if err != nil {
@@ -35,26 +40,11 @@ func (s *sqlite3) migrateSchema() error {
   defer tx.Rollback()
 
   if _, err := tx.Exec(`
-  CREATE TABLE grants (
-    target TEXT NOT NULL,
-    expiry INT NOT NULL,
-    type INT NOT NULL,
-    scope TEXT NOT NULL,
-
-    signer BLOB NOT NULL,
-    signature BLOB NOT NULL,
-
-    PRIMARY KEY (target, type, scope, signer)
-  );`); err != nil {
-    return fmt.Errorf("create grants table: %w", err)
-  }
-
-  if _, err := tx.Exec(`
   CREATE TABLE recordtags (
     name TEXT NOT NULL,
     record TEXT NOT NULL,
-    version INT NOT NULL,
-    PRIMARY KEY (name, record, version)
+    signer TEXT NOT NULL,
+    PRIMARY KEY (name, record, signer)
   );`); err != nil {
     return fmt.Errorf("create recordtags table: %w", err)
   }
@@ -62,14 +52,17 @@ func (s *sqlite3) migrateSchema() error {
   if _, err := tx.Exec(`
   CREATE TABLE records (
     uuid TEXT NOT NULL,
+    approver TEXT NOT NULL,
     location TEXT NOT NULL,
-    version INT NOT NULL,
     created INT NOT NULL,
     tombstone INT,
   
     num INT NOT NULL,
     den INT NOT NULL,
     gen REAL NOT NULL,
+
+    worker TEXT,
+    worker_state TEXT,
 
     signer BLOB NOT NULL,
     signature BLOB NOT NULL
@@ -78,16 +71,39 @@ func (s *sqlite3) migrateSchema() error {
   }
 
   if _, err := tx.Exec(`
-  CREATE TABLE pubkeys (
+  CREATE TABLE peers (
     peer TEXT NOT NULL PRIMARY KEY,
-    key BLOB NOT NULL
+    pubkey BLOB NOT NULL,
+    trust REAL NOT NULL DEFAULT 0
   );`); err != nil {
-    fmt.Errorf("create pubkeys table: %w", err)
+    return fmt.Errorf("create pubkeys table: %w", err)
   }
+
+  if _, err := tx.Exec(`
+  CREATE TABLE completions (
+    uuid TEXT NOT NULL,
+    completer TEXT NOT NULL,
+    timestamp INT NOT NULL,
+
+    signer TEXT NOT NULL,
+    signature BLOB NOT NULL,
+    PRIMARY KEY (uuid, signer)
+  );`); err != nil {
+    return fmt.Errorf("create completions table: %w", err)
+  }
+
   return tx.Commit()
 }
 
+func (s *sqlite3) GetPeerTrust(peer string) (float64, error) {
+  return 0, fmt.Errorf("Unimplemented")
+}
+
 func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
+  if r.Record == nil || r.Signature == nil || r.Record.Rank == nil {
+    return fmt.Errorf("One or more message fields are nil")
+  }
+
   tx, err := s.db.Begin()
   if err != nil {
     return err
@@ -95,29 +111,39 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
   defer tx.Rollback()
 
   // Wipe out and repopulate tags
-  if _, err := tx.Exec(`DELETE FROM recordtags WHERE record=$1 AND version=$2`, r.Record.Uuid, r.Record.Version); err != nil {
+  if _, err := tx.Exec(`DELETE FROM recordtags WHERE record=$1;`, r.Record.Uuid); err != nil {
     return fmt.Errorf("delete tags: %w", err)
   }
 
-  stmt, err := tx.Prepare(`INSERT INTO recordtags (name, record, version) VALUES (?, ?, ?)`)
+  stmt, err := tx.Prepare(`INSERT INTO recordtags (name, record, signer) VALUES (?, ?, ?)`)
   if err != nil {
     return fmt.Errorf("prepare tags: %w", err)
   }
   defer stmt.Close()
   for _, tag := range r.Record.Tags {
-    if _, err := stmt.Exec(tag, r.Record.Uuid, r.Record.Version); err != nil {
+    if _, err := stmt.Exec(tag, r.Record.Uuid, r.Signature.Signer); err != nil {
       return fmt.Errorf("insert tag %s: %w", tag, err)
     }
   }
 
   if _, err = tx.Exec(`
-    INSERT INTO records (uuid, location, version, created, tombstone, num, den, gen, signer, signature)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-  `, r.Record.Uuid, r.Record.Location, r.Record.Version, r.Record.Created, r.Record.Tombstone, r.Record.Rank.Num, r.Record.Rank.Den, r.Record.Rank.Gen, r.Signature.Signer, r.Signature.Data); err != nil {
+    INSERT INTO records (uuid, approver, location, created, tombstone, worker, worker_state, num, den, gen, signer, signature)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  `,
+    r.Record.Uuid,
+    r.Record.Approver,
+    r.Record.Location,
+    r.Record.Created,
+    r.Record.Tombstone,
+    r.Record.Worker,
+    r.Record.WorkerState,
+    r.Record.Rank.Num,
+    r.Record.Rank.Den,
+    r.Record.Rank.Gen,
+    r.Signature.Signer,
+    r.Signature.Data); err != nil {
     return fmt.Errorf("insert into records: %w", err)
   }
-
-  // TODO garbage collect other records of similar type
   return tx.Commit()
 }
 
@@ -127,26 +153,29 @@ type scannable interface {
 }
 
 func scanSignedRecord(r scannable, result *pb.SignedRecord) error {
+  // Order must match that of CREATE TABLE statement in migrateSchema()
   return r.Scan(
     &result.Record.Uuid,
+    &result.Record.Approver,
     &result.Record.Location,
-    &result.Record.Version,
     &result.Record.Created,
     &result.Record.Tombstone,
     &result.Record.Rank.Num,
     &result.Record.Rank.Den,
     &result.Record.Rank.Gen,
+    &result.Record.Worker,
+    &result.Record.WorkerState,
     &result.Signature.Signer,
     &result.Signature.Data,
   );
 }
 
-func scanSignedGrant(r scannable, result *pb.SignedGrant) error {
+func scanSignedCompletion(r scannable, result *pb.SignedCompletion) error {
+  // Order must match that of CREATE TABLE statement in migrateSchema()
   return r.Scan(
-    &result.Grant.Target,
-    &result.Grant.Expiry,
-    &result.Grant.Type,
-    &result.Grant.Scope,
+    &result.Completion.Uuid,
+    &result.Completion.Completer,
+    &result.Completion.Timestamp,
     &result.Signature.Signer,
     &result.Signature.Data,
   );
@@ -166,15 +195,15 @@ func (s *sqlite3) GetRandomRecord() (*pb.SignedRecord, error) {
 
 func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
   clearSignedRecord(result)
-  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE uuid=$1 AND tombstone=0 ORDER BY version DESC LIMIT 1;`, uuid), result); err != nil {
+  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE uuid=$1 AND tombstone=0 LIMIT 1;`, uuid), result); err != nil {
     if err == sql.ErrNoRows {
       return err // Allow for comparison upstream
     }
     return fmt.Errorf("select record: %w", err)
   }
 
-  // Import tags now that we have a version
-  rows, err := s.db.Query(`SELECT name FROM recordtags WHERE record=$1 AND version=$2`, uuid, result.Record.Version)
+  // Import tags now that we have a signature
+  rows, err := s.db.Query(`SELECT name FROM recordtags WHERE record=$1 AND signer=$2`, uuid, result.Signature.Signer)
   if err != nil {
     return fmt.Errorf("fetch tags: %w", err)
   } else {
@@ -192,8 +221,7 @@ func (s *sqlite3) GetSignedRecord(uuid string, result *pb.SignedRecord) error {
   return nil
 }
 
-func (s *sqlite3) GetSignedRecords(opts ...any) ([]*pb.SignedRecord, error) {
-  result := []*pb.SignedRecord{}
+func (s *sqlite3) GetSignedRecords(ctx context.Context, cur chan<- *pb.SignedRecord, opts ...any) error {
   where := []string{}
   args := []any{}
   for _, opt := range opts {
@@ -202,98 +230,89 @@ func (s *sqlite3) GetSignedRecords(opts ...any) ([]*pb.SignedRecord, error) {
       where = append(where,  "uuid=?")
       args = append(args, string(v))
     default:
-        return nil, fmt.Errorf("GetSignedRecords received invalid option: %v", opt)
+        return fmt.Errorf("GetSignedRecords received invalid option: %v", opt)
     }
   }
   q := `SELECT * FROM "records" WHERE tombstone=0 `
   if len(where) > 0 {
     q += strings.Join(where, " AND ")
   }
-  q += "GROUP BY uuid HAVING version=MAX(version);"
+  q += "GROUP BY uuid;"
   rows, err := s.db.Query(q, args...)
   if err != nil {
-    return nil, fmt.Errorf("GetSignedRecords SELECT: %w", err)
+    return fmt.Errorf("GetSignedRecords SELECT: %w", err)
   }
-  
+  defer rows.Close()
+
   for rows.Next() {
-    sr := &pb.SignedRecord{Signature: &pb.Signature{}, Record: &pb.Record{Rank: &pb.Rank{}}}
-    if err := scanSignedRecord(rows, sr); err != nil {
-      rows.Close()
-      return nil, fmt.Errorf("GetSignedRecords scan: %w", err)
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
     }
-    result = append(result, sr)
+
+    sr := &pb.SignedRecord{
+      Signature: &pb.Signature{},
+      Record: &pb.Record{Rank: &pb.Rank{}},
+    }
+    log.Println("Scanning record")
+    if err := scanSignedRecord(rows, sr); err != nil {
+      return fmt.Errorf("GetSignedRecords scan: %w", err)
+    }
+    cur<- sr
   }
-  rows.Close()
-  return result, nil
+  return nil
 }
 
-func (s *sqlite3) SetSignedGrant(g *pb.SignedGrant) error {
-  // Going out on a limb here and saying if this grant is being issued here,
-  // it's got a later expiry than any other grants of the same type etc.
-  // This means we can use INSERT OR REPLACE here
+func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
+  if g.Completion == nil || g.Signature == nil {
+    return fmt.Errorf("One or more message fields are nil")
+  }
   _, err := s.db.Exec(`
-    INSERT OR REPLACE INTO "grants" (target, expiry, type, scope, signer, signature)
-    VALUES ($1, $2, $3, $4, $5, $6);
-  `, g.Grant.Target, g.Grant.Expiry, g.Grant.Type, g.Grant.Scope, g.Signature.Signer, g.Signature.Data)
+    INSERT OR REPLACE INTO "completions" (uuid, completer, timestamp, signer, signature)
+    VALUES (?, ?, ?, ?, ?);
+  `, g.Completion.Uuid, g.Completion.Completer, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
   return err
 }
 
-func (s *sqlite3) GetRandomGrantWithScope() (*pb.SignedGrant, error) {
-  result := &pb.SignedGrant{Signature: &pb.Signature{}, Grant: &pb.Grant{}}
-  if err := scanSignedGrant(s.db.QueryRow(`SELECT * FROM "grants" WHERE scope != "" ORDER BY RANDOM() LIMIT 1;`), result); err != nil {
-    if err == sql.ErrNoRows {
-      return nil, err // Allow for comparison upstream
-    }
-    return nil, fmt.Errorf("get random record: %w", err)
-  }
-  return result, nil
-}
-
-func (s *sqlite3) GetSignedGrants(opts ...any) ([]*pb.SignedGrant, error) {
-  result := []*pb.SignedGrant{}
-  expired := false
+func (s *sqlite3) GetSignedCompletions(ctx context.Context, cur chan<- *pb.SignedCompletion, opts ...any) error {
   where := []string{}
   args := []any{}
   for _, opt := range opts {
     switch v := opt.(type) {
-    case WithType:
-      where = append(where,  "type=?")
-      args = append(args, int(v))
-    case WithTarget:
-      where = append(where, "target=?")
+    case WithSigner:
+      where = append(where,  "signer=?")
       args = append(args, string(v))
-    case WithScope:
-      where = append(where, "scope=?")
+    case WithUUID:
+      where = append(where, "uuid=?")
       args = append(args, string(v))
-    case IncludeExpired:
-      expired =  bool(v)
     default:
-        return nil, fmt.Errorf("GetSignedGrants received invalid option: %v", opt)
+        return fmt.Errorf("GetSignedCompletions received invalid option: %v", opt)
     }
   }
-  if !expired {
-    where = append(where, "expiry > ?")
-    args = append(args, time.Now().Unix())
-  }
-  q := `SELECT * FROM "grants"`
+  q := `SELECT * FROM "completions"`
   if len(where) > 0 {
     q += " WHERE " + strings.Join(where, " AND ")
   }
   q += ";"
   rows, err := s.db.Query(q, args...)
   if err != nil {
-    return nil, fmt.Errorf("%s: %w", q, err)
+    return fmt.Errorf("%s: %w", q, err)
   }
+  defer rows.Close()
   for rows.Next() {
-    sr := &pb.SignedGrant{Grant: &pb.Grant{}, Signature: &pb.Signature{}}
-    if err := scanSignedGrant(rows, sr); err != nil {
-      rows.Close()
-      return nil, fmt.Errorf("GetSignedGrants scan: %w", err)
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
     }
-    result = append(result, sr)
+    sg := &pb.SignedCompletion{Completion: &pb.Completion{}, Signature: &pb.Signature{}}
+    if err := scanSignedCompletion(rows, sg); err != nil {
+      return fmt.Errorf("GetSignedCompletions scan: %w", err)
+    }
+    cur<- sg
   }
-  rows.Close()
-  return result, nil
+  return nil
 }
 
 func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
@@ -302,8 +321,8 @@ func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
     return fmt.Errorf("Unwrap key: %w", err)
   }
   if _, err = s.db.Exec(`
-    INSERT OR REPLACE INTO "pubkeys" (peer, key)
-    VALUES ($1, $2);
+    INSERT OR REPLACE INTO "peers" (peer, pubkey)
+    VALUES (?, ?);
   `, peer, b); err != nil {
     return fmt.Errorf("SetPubKey: %w", err)
   }
@@ -312,34 +331,16 @@ func (s *sqlite3) SetPubKey(peer string, pubkey crypto.PubKey) error {
 
 func (s *sqlite3) GetPubKey(peer string) (crypto.PubKey, error) {
   var b []byte
-  if err := s.db.QueryRow(`SELECT key FROM "pubkeys" WHERE peer=$1 LIMIT 1;`, peer).Scan(&b); err != nil {
+  if err := s.db.QueryRow(`SELECT pubkey FROM "peers" WHERE peer=? LIMIT 1;`, peer).Scan(&b); err != nil {
     return nil, err
   }
   return crypto.UnmarshalPublicKey(b)
 }
 
-func (s *sqlite3) IsAdmin(peer string) (bool, error) {
-  admin := false
-  err := s.db.QueryRow(`SELECT COUNT(*)>0 FROM "grants" WHERE target=$1 AND expiry > $2 AND type=$3;`, peer, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&admin)
-  return admin, err
-}
-
-func (s *sqlite3) CountAdmins() (int64, error) {
+func (s *sqlite3) CountRecordUUIDs() (int64, error) {
   num := int64(0)
-  err := s.db.QueryRow(`SELECT COUNT(*) FROM "grants" WHERE expiry > $1 AND type=$2 GROUP BY target;`, time.Now().Unix(), pb.GrantType_ADMIN).Scan(&num)
+  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" WHERE tombstone=0 GROUP BY uuid;`).Scan(&num)
   return num, err
-}
-
-func (s *sqlite3) CountRecords() (int64, error) {
-  num := int64(0)
-  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" WHERE tombstone=0;`).Scan(&num)
-  return num, err
-}
-
-func (s *sqlite3) ValidGrants() (bool, error) {
-  anyValid := false
-  err := s.db.QueryRow(`SELECT COUNT(*)>0 FROM "grants" WHERE expiry > $1;`, time.Now().Unix()).Scan(&anyValid)
-  return anyValid, err
 }
 
 func NewSqlite3(path string) (*sqlite3, error) {

@@ -2,27 +2,10 @@ syntax = "proto3";
 
 option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 
-import "proto/state.proto";
-
 package peers;
 
-enum PeerType {
-  UNKNOWN_PEER_TYPE = 0;
-  LISTENER = 2; // Not involved in consensus
-  ELECTABLE = 3; // A potential LEADER
-  LEADER = 4; // Handles all authorization-requiring activity on the network
-}
-
-// PeerStatus is sent by a peer to indicate its role and addresses
-// When type is UNKNOWN, the RAFT leader is supposed to assign a role.
-// Note the ID of the peer is passed along and signed cryptographically
-// as part of the underlying pubsub implementation
 message PeerStatus {
-  // The role of the peer
-  PeerType type = 1;
-
-  // Raft hosting address
-  AddrInfo raft_addr = 2;
+  string name = 1; // Human-readable name of this peer
 }
 
 // Matches https://pkg.go.dev/github.com/libp2p/go-libp2p/core/peer#AddrInfo
@@ -32,15 +15,17 @@ message AddrInfo {
   repeated string addrs = 2;
 }
 
-// A directive sent by the leader of the topic to tell the peer how to collaborate
-message AssignPeer {
-  // ID of the target peer
-  string peer = 1;
+message GetPeersRequest {}
+message GetPeersResponse {
+  repeated AddrInfo Addresses = 1;
+}
 
-  // Role of the peer on this topic
-  PeerType type = 2;
+message CrawlPeersCommand {
+  bool restart = 1; // Whether or not to start crawling anew or reuse existing peer set
+  int64 max_connections = 2;
+}
 
-  // All grants necessary for bootstrapping authority
-  // These are copied from the current leader's DB
-  repeated state.SignedGrant grants = 3;
+message CrawlPeersResponse {
+  int64 num = 1; // Total number of peers seen
+  int64 new = 2; // Peers retrieved on this crawl
 }
