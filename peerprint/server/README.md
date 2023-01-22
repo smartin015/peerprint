@@ -114,11 +114,37 @@ Producers must validate `Records` before they are attempted; otherwise a `Record
 
 ## Trust
 
-Trust 
+Trust is a computed value based on `Completions` resident in the DB. As peer `p0`,
+
+Let `comp1` be the number of `Completions` where `completer=p1` and `approver=p0`
+
+Let `hearsay1` be same, but where `approver != p1`
+
+Let `incomp1` be the number completions where `completer=p1`, `approver=0`, and `timestamp=null`
+
+Let `max_hearsay` be the max `hearsay` value for all peers other than `p0`.
+
+`trust1 = comp1 + hearsay1/(max_hearsay + 1) - incomp1`
+
+In this way, any completion that `p0` has directly provided outweighs any hearsay from any other peer. Similarly, incomplete prints reduces the trust by a similar amount until the timestamp is set by the approver.
+
+For `trust0`, the value is infinite (we trust ourself).
 
 ## Workability
 
+Workability aims to be more efficient and less redundant, while preventing malicious actors from claiming to be already working on everything and bringing the network to a halt. For a record `R`:
+
+`Twork` is the sum of completer `Trust` for `Completions` where `uuid=R`
+
+`P(not_working) = 1/(4^(Twork+1))`, or `0` if there's a `Completion` signed by `R.approver`
+
+A record is marked workable if a uniform random number `r in [0,1)` is generated such that `r < P(not_working)`. This avoids jobs that are very likely
+being worked on, but still allows for some speculative working if we don't see any work that would avoid overlapping with untrusted peers.
+
 ## Other ideas
 
+* Include print time as a measure of trust?
+* Create a consumer-only implementation that can run on a phone or in a browser
+* Include fancier worker metadata such as an in-progress webcam picture, completion percentage, approximate location.
 * Add picture verification when a producer is ready to ship their part - the consumer can then OK a shipping label to be created for them.
-* 
+* Create a visualization of peers & records - their physical location globally, the state over time, busyness etc.
