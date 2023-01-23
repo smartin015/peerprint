@@ -32,15 +32,12 @@ message Record {
   repeated string tags = 3; // Tags for qualified search of records without having to fetch each `location`
 
   Rank rank = 4;
-  string location = 5;
-
-  // Unix timestamps
+  string manifest = 5;
   int64 created = 6;
-  int64 tombstone = 7;
 
-  // Active state information
-  string worker = 8;
-  bytes worker_state = 9;
+  // TODO min trust accepted
+  // Estimated time to complete
+  // Approx destination for shipping
 }
 
 message SignedCompletion {
@@ -52,4 +49,8 @@ message Completion {
   string uuid = 1;  
   string completer = 3;
   int64 timestamp = 4;
+
+  // Active state information
+  string worker = 8;
+  bytes worker_state = 9;
 }

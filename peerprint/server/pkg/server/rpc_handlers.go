@@ -17,13 +17,11 @@ func (s *Server) GetService() interface{} {
 }
 
 func (s *PeerPrintService) GetSignedRecords(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedRecord) error {
-  defer close(repChan)
-  return s.base.s.GetSignedRecords(ctx, repChan)
+  return s.base.s.GetSignedRecords(ctx, repChan, WithLimit(1000)) // repChan closed by impl
 }
 
 func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedCompletion) error {
-  defer close(repChan)
-  return s.base.s.GetSignedCompletions(ctx, repChan)
+  return s.base.s.GetSignedCompletions(ctx, repChan, WithSigner(s.base.ID()), WithLimit(1000)) // repChan closed by impl
 }
 
 func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest, rep *pb.GetPeersResponse) error {
