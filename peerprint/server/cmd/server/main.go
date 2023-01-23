@@ -7,6 +7,7 @@ import (
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
+  "github.com/smartin015/peerprint/p2pgit/pkg/www"
   "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
 	lp2p_crypto "github.com/libp2p/go-libp2p/core/crypto"
   "github.com/smartin015/peerprint/p2pgit/pkg/cmd"
@@ -27,6 +28,7 @@ var (
 
   // Address flags
 	addrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to host the service")
+  wwwFlag      = flag.String("www", "localhost:0", "Address for hosting status page - set empty to disable")
 
   // Data flags
   dbPathFlag = flag.String("db", ":memory:", "Path to database (use :memory: for ephemeral, inmemory DB")
@@ -41,7 +43,6 @@ var (
 
   // Timing flags
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
-	statusPeriodFlag = flag.Duration("statusPeriod", 2*time.Minute, "Time between self-reports of status after initial setup")
   syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
 
   // Safety and cleanup flags
@@ -49,7 +50,7 @@ var (
   maxCompletionsPerPeerFlag = flag.Int64("maxCompletionsPerPeer", 100, "Maximum number of completions to record from neighboring peers")
   maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
   trustCleanupThresholdFlag = flag.Float64("trustCleanupThreshold", 2.0, "Trust value to consider a peer as 'trusted' when cleaning up DB entries")
-  trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 10*time.Day, "Amount of time before peers are considered for removal")
+  trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 24*10*time.Hour, "Amount of time before peers are considered for removal")
   trustedPeersFlag = flag.String("trustedPeers", "", "peer IDs to trust implicitly")
 
   // IPC flags
@@ -93,11 +94,6 @@ func main() {
     }
   }
 
-  st, err = storage.NewSqlite3(*dbPathFlag)
-  if err != nil {
-    panic(fmt.Errorf("Error initializing DB: %w", err))
-  }
-
   var psk pnet.PSK
   if *pskFlag == "" {
     logger.Println("\n\n\n ================= WARNING =================\n\n",
@@ -118,7 +114,7 @@ func main() {
     PubKey: kpub,
     PSK: psk,
     ConnectTimeout: *connectTimeoutFlag,
-    Topics: []string{server.DefaultTopic, server.StatusTopic},
+    Topics: []string{server.DefaultTopic},
   }, context.Background(), logger)
   if err != nil {
     panic(fmt.Errorf("Error initializing transport layer: %w", err))
@@ -127,14 +123,26 @@ func main() {
   id, err := peer.IDFromPublicKey(kpub)
   name := id.Pretty()
   name = name[len(name)-4:]
+
+  st, err = storage.NewSqlite3(*dbPathFlag, id.String())
+  if err != nil {
+    panic(fmt.Errorf("Error initializing DB: %w", err))
+  }
+
   s := server.New(t, st, &server.Opts{
-    StatusPeriod: *statusPeriodFlag,
     SyncPeriod: *syncPeriodFlag,
     DisplayName: *displayNameFlag,
     MaxRecordsPerPeer: *maxRecordsPerPeerFlag,
     MaxCompletionsPerPeer: *maxCompletionsPerPeerFlag,
     MaxTrackedPeers: *maxTrackedPeersFlag,
   }, pplog.New(name, logger))
+
+  if *wwwFlag != "" {
+    wsrv := www.New(pplog.New("www", logger), s, st)
+    go wsrv.Serve(*wwwFlag, context.Background())
+  }
+
+
   go s.Run(context.Background())
   loopZMQ(s)
 }

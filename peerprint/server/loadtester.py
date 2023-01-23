@@ -20,6 +20,7 @@ opts = ServerProcessOpts(
     testRecordTarget=10,
     rendezvous="testing",
     psk="12345",
+    www="0.0.0.0:5000",
     local=True,
     displayName="Test server",
 )
@@ -54,9 +55,9 @@ def rmRecord():
 
 def addCompletion():
     rep = q.set(spb.Completion(
-        completer: q.get_id(),
-        approver: "todo",
-        timestamp: int(time.time()),
+        completer=q.get_id(),
+        approver="todo",
+        timestamp=int(time.time()),
         )
       )
     ldebug(em(f"addCompletion(): {rep}"))
@@ -66,7 +67,8 @@ successes = 0
 errors = {}
 while True:
     time.sleep((1.0/opts.testQPS) + opts.testQPS*(0.2*random()-0.1))
-
+    
+    """
     nrec, _ := l.s.CountRecords()
     // We become less likely to add a record as we approach the target
     pAdd := float32(l.targetRecords-nrec)/float32(l.targetRecords)

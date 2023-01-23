@@ -23,5 +23,16 @@ type Interface interface {
   ComputePeerTrust(peer string) (float64, error)
   ComputeRecordWorkability(r *pb.Record) (float64, error)
   Cleanup() error
+
+  GetSummary() *Summary
 }
 
+type Summary struct {
+  Location string
+  TotalRecords int64
+  TotalCompletions int64
+  LastCleanup int64
+  MedianTrust int64
+  MedianWorkability int64
+  Stats sql.DBStats
+}

@@ -16,12 +16,10 @@ import (
 const (
   PeerPrintProtocol = "peerprint@0.0.1"
   DefaultTopic = "default"
-  StatusTopic = "status"
 )
 
 type Opts struct {
   SyncPeriod time.Duration
-  StatusPeriod time.Duration
   DisplayName string
 
   MaxRecordsPerPeer int64
@@ -40,6 +38,8 @@ type Interface interface {
 
   Run(context.Context)
   OnUpdate() <-chan struct{}
+
+  GetSummary() *Summary
 }
 
 type Server struct {
@@ -51,9 +51,12 @@ type Server struct {
   updateChan chan struct{}
 
   // Tickers for periodic network activity
-  publishStatusTicker *time.Ticker
   syncTicker *time.Ticker
-  status *pb.PeerStatus
+
+  connStr string // Indicate stage of connection
+  lastSyncStart time.Time
+  lastSyncEnd time.Time
+  lastMsg time.Time
 }
 
 func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) *Server {
@@ -62,14 +65,11 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     s: s,
     l: l,
     updateChan: make(chan struct{}),
-    publishStatusTicker: time.NewTicker(opts.StatusPeriod),
     syncTicker: time.NewTicker(opts.SyncPeriod),
-    status: &pb.PeerStatus{
-      Name: opts.DisplayName,
-    },
-  }
-  if err := s.SetPubKey(t.ID(), t.PubKey()); err != nil {
-    panic(fmt.Errorf("Failed to store our pubkey: %w", err))
+    connStr: "Initializing",
+    lastSyncStart: time.Unix(0,0),
+    lastSyncEnd: time.Unix(0,0),
+    lastMsg: time.Unix(0,0),
   }
   if err := t.Register(PeerPrintProtocol, srv.GetService()); err != nil {
     panic(fmt.Errorf("Failed to register RPC server: %w", err))
@@ -154,10 +154,6 @@ func (s *Server) IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, erro
   return sr, nil
 }
 
-func (s *Server) sendStatus() error {
-  return s.t.Publish(StatusTopic, s.status)
-}
-
 func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
   req := make(chan struct{}); close(req)
   rep := make(chan *pb.SignedRecord, 5) // Closed by Stream
@@ -215,6 +211,13 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
 }
 
 func (s *Server) Sync(ctx context.Context) {
+  s.connStr = "Syncing"
+  s.lastSyncStart = time.Now()
+  s.lastSyncEnd = time.Unix(0,0)
+  defer func() {
+    s.connStr = "Synced"
+    s.lastSyncEnd = time.Now()
+  }()
   var wg sync.WaitGroup
   for _, p := range s.t.GetPeers() {
     if p.String() == s.ID() {
@@ -250,20 +253,9 @@ func (s *Server) sign(m proto.Message) (*pb.Signature, error) {
   }
 }
 
-func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
-  k, err := s.s.GetPubKey(sig.Signer)
-  if err != nil {
-    return false, fmt.Errorf("verify() get key error: %w", err)
-  }
-  b, err := proto.Marshal(m)
-  if err != nil {
-    return false, fmt.Errorf("verify() marshal error: %w", err)
-  }
-  return k.Verify(b, sig.Data)
-}
-
 func (s *Server) Run(ctx context.Context) {
   // Run will return when there are peers to connect to
+  s.connStr = "Searching for peers"
   s.t.Run(ctx)
 
   s.l.Info("Completing initial sync")
@@ -276,17 +268,12 @@ func (s *Server) Run(ctx context.Context) {
     for {
       select {
       case tm := <-s.t.OnMessage():
-        // Attempt to store the public key of the sender so we can later verify messages
-        if err := s.s.SetPubKey(tm.Peer, tm.PubKey); err != nil {
-          s.l.Error("SetPubKey: %v", err)
-        }
+        s.lastMsg = time.Now()
         switch v := tm.Msg.(type) {
           case *pb.Completion:
             s.handleCompletion(tm.Peer, v, tm.Signature)
           case *pb.Record:
             s.handleRecord(tm.Peer, v, tm.Signature)
-          case *pb.PeerStatus:
-            s.handlePeerStatus(tm.Peer, v)
         }
       case <-s.syncTicker.C:
         if err := s.s.Cleanup(); err != nil {
@@ -294,8 +281,6 @@ func (s *Server) Run(ctx context.Context) {
           return
         }
         go s.Sync(ctx)
-      case <- s.publishStatusTicker.C:
-        go s.sendStatus()
       case <-ctx.Done():
         return
       }
@@ -329,7 +314,3 @@ func (s *Server) handleRecord(peer string, c *pb.Record, sig *pb.Signature) {
   // Otherwise accept. Work selection is handled by the wrapper
 }
 
-func (s *Server) handlePeerStatus(peer string, c *pb.PeerStatus) {
-  s.l.Error("TODO handlePeerStatus")
-  // Reject if peer would put us over MaxPeers
-}

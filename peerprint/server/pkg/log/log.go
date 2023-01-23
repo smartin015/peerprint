@@ -9,6 +9,7 @@ import (
 
 type withprintln interface {
   Println(...any)
+  Fatal(...any)
 }
 
 type Sublog struct {
@@ -35,6 +36,9 @@ func (l *Sublog) Info(args ...interface{}) {
 }
 func (l *Sublog) Error(args ...interface{}) {
   l.log("\033[31mE", args, "\033[0m")
+}
+func (l *Sublog) Fatal(args ...interface{}) {
+  l.Fatal(args...)
 }
 func (l *Sublog) Println(v ...any) {
   v = append([]any{fmt.Sprintf("%s: ", l.n)}, v...)

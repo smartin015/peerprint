@@ -2,11 +2,13 @@ package storage
 
 import (
   "context"
+  "math"
   "testing"
   "fmt"
   "strings"
   "time"
   "sync"
+  "github.com/google/uuid"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "google.golang.org/protobuf/proto"
 )
@@ -107,92 +109,116 @@ func completionSlice(db *sqlite3) ([]*pb.SignedCompletion, error) {
   return got, nil
 }
 
+func mustAddSC(db *sqlite3, signer, completer string) *pb.SignedCompletion {
+  return mustAddSCT(db, uuid.New().String(), signer, completer, true)
+}
+func mustAddSCT(db *sqlite3, uuid, signer, completer string, with_timestamp bool) *pb.SignedCompletion {
+  ts := int64(0)
+  if with_timestamp {
+    ts = time.Now().Unix()
+  }
+  sc := &pb.SignedCompletion{
+      Signature: &pb.Signature{
+        Signer: signer,
+        Data: []byte{1,2,3},
+      },
+      Completion: &pb.Completion{
+        Uuid: uuid,
+        Completer: completer,
+        Timestamp: ts,
+      },
+  }
+  if err := db.SetSignedCompletion(sc); err != nil {
+    panic(err)
+  }
+  return sc
+}
+
 func TestSignedCompletionsSetGet(t *testing.T) {
   db := testingDB()
   if got, err := cmpGet(db); err != nil || len(got) > 0 {
     t.Errorf("GetSignedCompletions = %v, %v want len() == 0, nil", got, err)
   }
-
-  want := &pb.SignedCompletion{
-      Signature: &pb.Signature{
-        Signer: "foo",
-        Data: []byte{1,2,3},
-      },
-      Completion: &pb.Completion{
-        Uuid: "foo",
-        Completer: "peer1",
-        Timestamp: time.Now().Unix(),
-      },
-  }
+  var want *pb.SignedCompletion
   for i := 0; i < 2; i++ {
-    want.Signature.Signer = fmt.Sprintf("signer%d", i)
-    want.Completion.Uuid = fmt.Sprintf("uuid%d", i)
-    if err := db.SetSignedCompletion(want); err != nil {
-      t.Errorf("SetSignedCompletion(%v): %v", want, err)
-      return
-    }
+    want = mustAddSC(db, fmt.Sprintf("signer%d", i), fmt.Sprintf("completer%d", i))
   }
-
   // Restrict signer lookup
-  if got, err := cmpGet(db, WithSigner(want.Signature.Signer)); err != nil || len(got) != 1 || !proto.Equal(got[0], want) {
+  if got, err := cmpGet(db, WithSigner("signer1")); err != nil || len(got) != 1 || !proto.Equal(got[0], want) {
     t.Errorf("Get: %v, %v, want %v, nil", got, err, want)
   }
-
-  // Lookup target peer1 including expired
-  /*
-  if gg, err := db.GetSignedCompletions(WithTarget("peer1"), IncludeExpired(true)); err != nil {
-    t.Errorf("GetSignedCompletions(): %v", err)
-  } else {
-    got := summarizeCompletions(gg)
-    want := "peer1: foo (live), peer1: bar (expired)"
-    if got != want {
-      t.Errorf("GetSignedCompletions() = %v, want %v", got, want)
-    }
-  }
-
-  // Lookup peer1 excluding expired (default)
-  if gg, err := db.GetSignedCompletions(WithTarget("peer1")); err != nil {
-    t.Errorf("GetSignedCompletions(): %v", err)
-  } else {
-    got := summarizeCompletions(gg)
-    want := "peer1: foo (live)"
-    if got != want {
-      t.Errorf("GetSignedCompletions() = %v, want %v", got, want)
-    }
-  }
-
-  // Lookup 'baz' scope
-  if gg, err := db.GetSignedCompletions(WithScope("baz")); err != nil {
-    t.Errorf("GetSignedCompletions(): %v", err)
-  } else {
-    got := summarizeCompletions(gg)
-    want := "peer2: baz (live)"
-    if got != want {
-      t.Errorf("GetSignedCompletions() = %v, want %v", got, want)
-    }
-  }
-
-  // Lookup Editor type
-  if gg, err := db.GetSignedCompletions(WithType(pb.CompletionType_EDITOR)); err != nil {
-    t.Errorf("GetSignedCompletions(): %v", err)
-  } else {
-    got := summarizeCompletions(gg)
-    want := "peer2: baz (live)" // Expired removed by default
-    if got != want {
-      t.Errorf("GetSignedCompletions() = %v, want %v", got, want)
-    }
-  }
-  */
 }
 
-func TestComputePeerTrust(t *testing.T) {
-  t.Errorf("TODO")
+func TestComputePeerTrustNoCompletions(t *testing.T) {
+  db := testingDB()
+  if got, err := db.ComputePeerTrust("arandompeer"); err != nil || got > 0 {
+    t.Errorf("Got %v, %v want 0, nil", got, err)
+  }
 }
 
-func TestComputeRecordWorkability(t *testing.T) {
-  t.Errorf("TODO")
+func TestComputePeerTrustOnlyUntrusted(t *testing.T) {
+  db := testingDB()
+  for i := 0; i < 2; i++ {
+    mustAddSC(db, "signer", "completer")
+  }
+  // comp/incomp=0, hearsay=2, max_hearsay=2 -> 0.66...
+  if got, err := db.ComputePeerTrust("completer"); err != nil || got != 2.0/3.0 {
+    t.Errorf("Got %v, %v want 0.66..., nil", got, err)
+  }
+}
+
+func TestComputePeerTrustOnlyTrusted(t *testing.T) {
+  db := testingDB()
+  for i := 0; i < 5; i++ {
+    mustAddSC(db, db.id, "completer")
+  }
+  mustAddSCT(db, "uuid1", db.id, "completer", false)
+  mustAddSCT(db, "uuid2", db.id, "completer", false)
+  // comp=5, incomp=2 -> 3
+  if got, err := db.ComputePeerTrust("completer"); err != nil || got != 3 {
+    t.Errorf("Got %v, %v want 3, nil", got, err)
+  }
+}
+
+func mustTrust(db *sqlite3, peer string, trust float64) {
+  if _, err := db.db.Exec(`INSERT INTO "trust" (peer, trust, timestamp) VALUES (?, ?, ?);`, peer, trust, time.Now().Unix()); err != nil {
+    panic(err)
+  }
+}
+
+func TestComputeRecordWorkabilityNoWorkers(t *testing.T) {
+  db := testingDB()
+  want := 1.0
+  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "foo"}); err != nil || got != want {
+    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
+  }
+}
+
+func TestComputeRecordWorkabilityLowTrust(t *testing.T) {
+  db := testingDB()
+  mustAddSCT(db, "record", "completer1", "completer1", false)
+  mustAddSCT(db, "record", "completer2", "completer2", false)
+  mustTrust(db, "completer1", 0.5)
+  mustTrust(db, "completer2", 0.1)
+  want := 4/(math.Pow(4, 1.6))
+  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "record"}); err != nil || got != want {
+    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
+  }
+}
+
+func TestComputeRecordWorkabilityHighTrust(t *testing.T) {
+  db := testingDB()
+  mustAddSCT(db, "record", "completer1", "completer1", false)
+  mustAddSCT(db, "record", "completer2", "completer2", false)
+  mustTrust(db, "completer1", 1)
+  mustTrust(db, "completer2", 4)
+  want := 4/(math.Pow(4, 6))
+  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "record"}); err != nil || got != want {
+    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
+  }
 }
 
 func TestCleanup(t *testing.T) {
+  db := testingDB()
   t.Errorf("TODO")
 }

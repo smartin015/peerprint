@@ -7,13 +7,16 @@ import (
   "strings"
   "math"
   "fmt"
+  "time"
   //"log"
   _ "github.com/mattn/go-sqlite3"
 )
 
 type sqlite3 struct {
+  path string
   db *sql.DB
   id string
+  lastCleanup time.Time
 }
 
 func clearSignedRecord(rec *pb.SignedRecord) {
@@ -29,7 +32,47 @@ func (s *sqlite3) Close() {
   s.db.Close()
 }
 
+func (s *sqlite3) recomputeAllTrust() error {
+  thresh := time.Now().Add(-5*time.Minute).Unix() // TODO const
+
+  if row, err := s.db.Query(`SELECT * FROM "trust";`); err != nil {
+    return err
+  } else {
+    defer row.Close()
+    for row.Next() {
+      peer := ""
+      trust := int64(0)
+      ts := int64(0)
+      if err := row.Scan(&peer, &trust, &ts); err != nil {
+        return err
+      }
+      if ts >= thresh {
+        continue
+      }
+
+      if newTrust, err := s.ComputePeerTrust(peer); err != nil {
+        return err
+      } else if _, err := s.db.Exec(`INSERT OR REPLACE INTO "trust" (peer, trust, ts) VALUES (?, ?, ?);`, peer, newTrust, time.Now().Unix()); err != nil {
+        return err
+      }
+    }
+  }
+  return nil
+}
+
+func (s *sqlite3) removeUntrustedPeers() error {
+  // trustThresh := 1.0
+  return fmt.Errorf("unimpelmented")
+}
+
 func (s *sqlite3) Cleanup() error {
+  if err := s.recomputeAllTrust(); err != nil {
+    return err
+  }
+  // TODO remove untrustworthy peers
+  // TODO recompute workability
+  // TODO remove unworkable records
+  s.lastCleanup = time.Now()
   return fmt.Errorf("Not implemented")
 }
 
@@ -73,7 +116,7 @@ func (s *sqlite3) migrateSchema() error {
 
   if _, err := tx.Exec(`
   CREATE TABLE trust (
-    id TEXT NOT NULL PRIMARY KEY,
+    peer TEXT NOT NULL PRIMARY KEY,
     trust REAL NOT NULL DEFAULT 0,
     timestamp INT NOT NULL
   );`); err != nil {
@@ -83,7 +126,8 @@ func (s *sqlite3) migrateSchema() error {
   if _, err := tx.Exec(`
   CREATE TABLE census (
     peer TEXT NOT NULL PRIMARY KEY,
-    timestamp INT NOT NULL
+    earliest INT NOT NULL,
+    latest INT NOT NULL
   );`); err != nil {
     return fmt.Errorf("create census table: %w", err)
   }
@@ -106,27 +150,38 @@ func (s *sqlite3) migrateSchema() error {
 
 func (s *sqlite3) ComputePeerTrust(peer string) (float64, error) {
   completions := int64(0)
-  incomplete := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNTIF(timestamp IS NULL), COUNTIF(timestamp IS NOT NULL) FROM "completions" WHERE completer=? AND approver=? GROUP BY uuid;`, peer, s.id).Scan(&incomplete, &completions); err != nil {
+  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) 
+    FROM "completions" 
+    WHERE completer=? AND signer=? AND timestamp!=0;`, peer, s.id).Scan(&completions); err != nil && err != sql.ErrNoRows {
     return 0, fmt.Errorf("Count completions: %w", err)
   }
+  incomplete := int64(0)
+  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) 
+    FROM "completions" 
+    WHERE completer=? AND signer=? AND timestamp=0;`, peer, s.id).Scan(&incomplete); err != nil && err != sql.ErrNoRows {
+    return 0, fmt.Errorf("Count incomplete: %w", err)
+  }
+
   hearsay := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(*) FROM "completions" WHERE timestamp IS NOT NULL AND completer=? AND approver != ? GROUP BY uuid;`, peer, s.id).Scan(&hearsay); err != nil {
+  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) FROM "completions" WHERE timestamp!=0 AND completer=? AND signer != ?;`, peer, s.id).Scan(&hearsay); err != nil && err != sql.ErrNoRows {
     return 0, fmt.Errorf("Count hearsay: %w", err)
   }
   max_hearsay := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(*) AS n FROM "completions" WHERE timestamp IS NOT NULL AND approver != ? GROUP BY uuid, completer ORDER BY n DESC LIMIT 1;`, s.id).Scan(&max_hearsay); err != nil {
+  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) AS n FROM "completions" WHERE timestamp!=0 AND signer != ? GROUP BY completer ORDER BY n DESC LIMIT 1;`, s.id).Scan(&max_hearsay); err != nil && err != sql.ErrNoRows {
     return 0, fmt.Errorf("Max hearsay: %w", err)
   }
+  //print("hearsay ", hearsay, " max ",  max_hearsay, " cplt ", completions, " incomp ", incomplete,"\n")
   return math.Max(float64(completions) + float64(hearsay)/(float64(max_hearsay)+1) - float64(incomplete), 0), nil
 }
 
 func (s *sqlite3) ComputeRecordWorkability(r *pb.Record) (float64, error) {
+  // Sum the trust for all incomplete assertions by workers
   tww := float64(0)
-  if err := s.db.QueryRow(`SELECT SUM(T2.trust) FROM "completions" T1 LEFT JOIN "peers" T2 ON T1.completer=T2.id WHERE T1.uuid=?`, r.Uuid).Scan(&tww); err != nil {
+  if err := s.db.QueryRow(`SELECT COALESCE(SUM(T2.trust), 0) FROM "completions" T1 LEFT JOIN "trust" T2 ON T1.completer=T2.peer WHERE T1.uuid=?`, r.Uuid).Scan(&tww); err != nil {
     return 0, fmt.Errorf("Trust-weighted workers: %w", err)
   }
-  pNotWork := 1/(math.Pow(4, tww+1))
+  //print("tww ", tww, "\n")
+  pNotWork := 4/(math.Pow(4, tww+1))
   return pNotWork, nil
 }
 
@@ -260,7 +315,7 @@ func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
     return fmt.Errorf("One or more message fields are nil")
   }
   _, err := s.db.Exec(`
-    INSERT OR REPLACE INTO "completions" (uuid, completer, timestamp, signer, signature)
+    INSERT INTO "completions" (uuid, completer, timestamp, signer, signature)
     VALUES (?, ?, ?, ?, ?);
   `, g.Completion.Uuid, g.Completion.Completer, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
   return err
@@ -323,11 +378,25 @@ func NewSqlite3(path string, id string) (*sqlite3, error) {
   }
   db.SetMaxOpenConns(1) // TODO verify needed for non-inmemory
   s := &sqlite3{
+    path: path,
     db: db,
     id: id,
+    lastCleanup: time.Unix(0,0),
   }
   if err := s.migrateSchema(); err != nil {
     return nil, fmt.Errorf("failed to migrate schema: %w", err)
   }
   return s, nil
+}
+
+func (s *sqlite3) GetSummary() *Summary {
+  return &Summary{
+    Location: s.path,
+    TotalRecords: 1,
+    TotalCompletions: 2,
+    LastCleanup: s.lastCleanup.Unix(),
+    MedianTrust: 4,
+    MedianWorkability: 5,
+    Stats: s.db.Stats(),
+  }
 }

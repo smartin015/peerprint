@@ -10,6 +10,7 @@ class ServerProcessOpts():
     testRecordTarget: int = None
 
     addr: str = None
+    www: str = None
     db: str = None
     privkeyfile: str = None
     pubkeyfile: str = None

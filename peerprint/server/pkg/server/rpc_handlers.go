@@ -4,6 +4,7 @@ import (
   "context"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/smartin015/peerprint/p2pgit/pkg/transport"
+	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
 )
 
 type PeerPrintService struct {
@@ -17,11 +18,11 @@ func (s *Server) GetService() interface{} {
 }
 
 func (s *PeerPrintService) GetSignedRecords(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedRecord) error {
-  return s.base.s.GetSignedRecords(ctx, repChan, WithLimit(1000)) // repChan closed by impl
+  return s.base.s.GetSignedRecords(ctx, repChan, storage.WithLimit(1000)) // repChan closed by impl
 }
 
 func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedCompletion) error {
-  return s.base.s.GetSignedCompletions(ctx, repChan, WithSigner(s.base.ID()), WithLimit(1000)) // repChan closed by impl
+  return s.base.s.GetSignedCompletions(ctx, repChan, storage.WithSigner(s.base.ID()), storage.WithLimit(1000)) // repChan closed by impl
 }
 
 func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest, rep *pb.GetPeersResponse) error {
