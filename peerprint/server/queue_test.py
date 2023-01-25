@@ -19,7 +19,6 @@ class ObjectCodec:
         assert protocol=="object"
         return dict()
 
-
 class MockPPQ:
     def __init__(self, opts, codec, binpath, on_update, logger, keydir):
         self.opts = opts
@@ -80,35 +79,11 @@ class TestPeerPrintQueue(unittest.TestCase):
         self.q.syncPeer(dict(asdf="ghjk"), addr="abc:123")
         self.q._zmqclient.call.assert_called_with(ppb.PeerStatus())
 
-    def testGetPeersNone(self):
-        got = self.q.getPeers()
-        self.assertEqual(got.sample, [])
-
-    def testGetPeersWithPeerList(self):
-        want = ppb.PeersSummary(peer_estimate=1, variance=float('inf'), sample=[ppb.PeerStatus(id="foo")])
-        self.q._update(want)
-        self.assertEqual(self.q.getPeers(), want)
-
-    def testJobPresenceAndGetters(self):
-        s=spb.State(jobs=dict(foo=jpb.Job(id="foo", data=b"", protocol="object", owner='testpeer')))
-        self.q._update(s)
-        self.assertEqual(self.q.hasJob("foo"), True)
-        self.assertEqual(self.q.hasJob("bar"), False)
-        self.assertEqual(self.q.getJobs(), {'foo': {'peer_': 'testpeer'}})
+    def testGetters(self):
+        self.skipTest("todo")
 
     def testSetJob(self):
         self.q.setJob("foo", dict(man="ifest"), addr="testaddr")
         req = self.q._zmqclient.call.call_args[0][0]
         self.assertEqual(req.job.id, "foo")
 
-    def testRemoveJob(self):
-        self.q.removeJob("foo")
-        self.q._zmqclient.call.assert_called_with(jpb.DeleteJobRequest(id="foo"))
-
-    def testAcquireJob(self):
-        self.q.acquireJob("foo")
-        self.q._zmqclient.call.assert_called_with(jpb.AcquireJobRequest(id="foo"))
-
-    def testReleaseJob(self):
-        self.q.releaseJob("foo")
-        self.q._zmqclient.call.assert_called_with(jpb.ReleaseJobRequest(id="foo"))

@@ -22,10 +22,6 @@ import (
 )
 
 var (
-  // Testing flags
-  testQPSFlag   = flag.Float64("testQPS", 0, "set nonzero to automatically generate traffic")
-  testRecordsFlag = flag.Int64("testRecordTarget", 100, "set target number of records to contribute to the queue")
-
   // Address flags
 	addrFlag     = flag.String("addr", "/ip4/0.0.0.0/tcp/0", "Address to host the service")
   wwwFlag      = flag.String("www", "localhost:0", "Address for hosting status page - set empty to disable")
@@ -44,6 +40,7 @@ var (
   // Timing flags
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
   syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
+  watchdogFlag = flag.Duration("wdt", 3*time.Second, "Time before exit after no interaction")
 
   // Safety and cleanup flags
   maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 100, "Maximum number of records to allow each peer to store in our DB")
@@ -51,6 +48,7 @@ var (
   maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
   trustCleanupThresholdFlag = flag.Float64("trustCleanupThreshold", 2.0, "Trust value to consider a peer as 'trusted' when cleaning up DB entries")
   trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 24*10*time.Hour, "Amount of time before peers are considered for removal")
+  trustRebroadcastThresholdFlag = flag.Float64("trustRebroadcastThreshold", 1.0, "How much to trust a peer before rebroadcasting its assertion that it's working on our record - this prevents other peers from speculatively working on the same record")
   trustedPeersFlag = flag.String("trustedPeers", "", "peer IDs to trust implicitly")
 
   // IPC flags
@@ -63,6 +61,22 @@ var (
 
 func main() {
   flag.Parse()
+
+	if *zmqLogAddrFlag != "" {
+		var dlog cmd.Destructor
+		logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
+		defer dlog()
+	}
+
+  var st storage.Interface
+  var err error
+  st, err = storage.NewSqlite3(*dbPathFlag)
+  if err != nil {
+    panic(fmt.Errorf("Error initializing DB: %w", err))
+  }
+  storage.SetPanicHandler(st)
+  defer storage.HandlePanic()
+
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
 	}
@@ -72,17 +86,11 @@ func main() {
   if *zmqPushFlag == "" {
     panic("-zmqPush must be specified!")
   }
-	if *zmqLogAddrFlag != "" {
-		var dlog cmd.Destructor
-		logger, dlog = cmd.NewLog(*zmqLogAddrFlag)
-		defer dlog()
-	}
 
   var kpriv lp2p_crypto.PrivKey
   var kpub lp2p_crypto.PubKey
-  var st storage.Interface
-  var err error
   if *privkeyfileFlag == "" && *pubkeyfileFlag == "" {
+    logger.Printf("WARNING: generating ephemeral key pair; this will change on restart")
     kpriv, kpub, err = crypto.GenKeyPair()
     if err != nil {
       panic(fmt.Errorf("Error generating ephemeral keys: %w", err))
@@ -123,11 +131,7 @@ func main() {
   id, err := peer.IDFromPublicKey(kpub)
   name := id.Pretty()
   name = name[len(name)-4:]
-
-  st, err = storage.NewSqlite3(*dbPathFlag, id.String())
-  if err != nil {
-    panic(fmt.Errorf("Error initializing DB: %w", err))
-  }
+	st.SetId(id.String())
 
   s := server.New(t, st, &server.Opts{
     SyncPeriod: *syncPeriodFlag,
@@ -135,6 +139,7 @@ func main() {
     MaxRecordsPerPeer: *maxRecordsPerPeerFlag,
     MaxCompletionsPerPeer: *maxCompletionsPerPeerFlag,
     MaxTrackedPeers: *maxTrackedPeersFlag,
+    TrustRebroadcastThreshold: *trustRebroadcastThresholdFlag,
   }, pplog.New(name, logger))
 
   if *wwwFlag != "" {
@@ -144,38 +149,70 @@ func main() {
 
 
   go s.Run(context.Background())
-  loopZMQ(s)
+  d := &driver{
+    s: s,
+    st: st,
+    l: pplog.New("cmd", logger),
+  }
+  d.Loop()
 }
 
-func loopZMQ(s server.Interface) {
+type driver struct {
+  s server.Interface
+  st storage.Interface
+  l *pplog.Sublog
+}
+
+func (d *driver) Loop() {
   cmdRecv := make(chan proto.Message, 5)
   errChan := make(chan error, 5)
   cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecv, errChan)
+  wdt := time.NewTimer(*watchdogFlag)
   for {
     select {
-    case <-s.OnUpdate():
-      logger.Println("Pushing update notification")
-      cmdPush<- &pb.StateUpdate{}
+    case m := <-d.s.OnUpdate():
+      cmdPush<- m
     case e := <-errChan:
-      logger.Println(e.Error())
+      d.l.Error(e.Error())
     case c := <-cmdRecv:
-      logger.Println("Handling command")
-      rep, err := handleCommand(c)
+      rep, err := d.handleCommand(c)
       if err != nil {
         cmdSend<- &pb.Error{Reason: err.Error()}
       } else {
         cmdSend<- rep
       }
+    case <-wdt.C:
+      d.l.Error("Watchdog timeout, exiting")
+      return
     }
+    wdt.Reset(*watchdogFlag)
   }
 }
 
-func handleCommand(c proto.Message) (proto.Message, error) {
+func (d *driver) handleCommand(c proto.Message) (proto.Message, error) {
   switch v := c.(type) {
+  case *pb.HealthCheck:
+    return &pb.HealthCheck{}, nil
+  case *pb.GetID:
+    return &pb.IDResponse{
+      Id: d.s.ID(),
+    }, nil
   case *pb.Record:
-    return nil, fmt.Errorf("TODO implement Record setting: %v", v)
+    return d.s.IssueRecord(v, true)
   case *pb.Completion:
-    return nil, fmt.Errorf("TODO implement Completion setting: %v", v)
+    return d.s.IssueCompletion(v, true)
+  case *pb.SetTrust:
+    if err := d.st.SetTrust(v.Peer, v.Trust); err != nil {
+      return nil, err
+    } else {
+      return &pb.Ok{}, nil
+    }
+  case *pb.SetWorkability:
+    if err := d.st.SetWorkability(v.Uuid, v.Workability); err != nil {
+      return nil, err
+    } else {
+      return &pb.Ok{}, nil
+    }
   default:
     return nil, fmt.Errorf("Unrecognized command")
   }

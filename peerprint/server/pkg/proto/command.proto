@@ -4,12 +4,46 @@ option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 
 package command;
 
-// Send along the PUSH channel to the wrapper to inform it of
-// changes happening on the network
-message StateUpdate {}
+// Sent via ZMQ PUSH when the server has rendezvous'd with peers and
+// begins its main loop
+message NotifyReady{}
+
+// Sent via ZMQ PUSH when the Sync operation completes
+message NotifySync{}
+
+// Sent via ZMQ PUSH when a message is received over pubsub
+message NotifyMessage{}
+
+// Exchanged back and forth between wrapper and process to ensure both are running
+message HealthCheck{}
+
+// This message is sent via ZMQ PUSH when a Record's owner/signer/approver publishes a 
+// Completion about their own Record, either sponsoring an in-progress worker or
+// indicating the record was completed.
+message NotifyProgress{
+  string uuid = 1;
+  string resolved_completer = 2;
+  bool completed = 3;
+}
 
 // Catch-all error message for when commands cannot be carried out by the server process.
 message Error {
   string reason = 1; 
 }
+// Generic "OK" message
+message Ok {}
 
+message GetID {}
+message IDResponse {
+  string id = 1;
+}
+
+message SetTrust {
+  string peer = 1;
+  double trust = 2;
+}
+
+message SetWorkability {
+  string uuid = 1;
+  double workability = 2;
+}

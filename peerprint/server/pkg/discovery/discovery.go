@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
+  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
 )
 
 type Method int64
@@ -70,6 +71,7 @@ func (c *Discovery) Run() {
 }
 
 func (c *Discovery) bootstrapPeer(peer peer.AddrInfo, wg *sync.WaitGroup) {
+  defer storage.HandlePanic()
   defer wg.Done()
   if err := c.h.Connect(c.ctx, peer); err != nil {
     c.l.Printf("Bootstrap warning: %s\n", err)

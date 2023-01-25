@@ -1,12 +1,18 @@
 package www
 
 import (
+  "sync"
   "context"
+  "time"
   "net/http"
 	"encoding/json"
 	"github.com/smartin015/peerprint/p2pgit/pkg/log"
 	"github.com/smartin015/peerprint/p2pgit/pkg/server"
 	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
+)
+
+const (
+  DBReadTimeout = 5*time.Second
 )
 
 type webserver struct {
@@ -21,6 +27,32 @@ func New(logger *log.Sublog, srv server.Interface, st storage.Interface) *webser
 		s: srv,
 		st: st,
 	}
+}
+
+func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
+  cur := make(chan storage.DBEvent, 5)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func() {
+    defer storage.HandlePanic()
+    defer wg.Done()
+    for v := range cur {
+      if data, err := json.Marshal(v); err != nil {
+        w.WriteHeader(500)
+        w.Write([]byte(err.Error()))
+        return
+      } else {
+        w.Write(data)
+        w.Write([]byte("\n"))
+      }
+    }
+  }()
+  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
+  if err := s.st.GetEvents(ctx, cur, 1000); err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(err.Error()))
+	}
+  wg.Wait()
 }
 
 func (s *webserver) handleGetHistory(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +87,7 @@ func (s *webserver) Serve(addr string, ctx context.Context) {
 	fileServer := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fileServer)
 	http.HandleFunc("/history", s.handleGetHistory)
+	http.HandleFunc("/events", s.handleGetEvents)
 	http.HandleFunc("/serverSummary", s.handleServerSummary)
 	http.HandleFunc("/storageSummary", s.handleStorageSummary)
 	if err := http.ListenAndServe(addr, nil); err != nil {

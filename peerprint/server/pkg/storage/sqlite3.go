@@ -4,12 +4,17 @@ import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "context"
   "database/sql"
+  "os"
   "strings"
   "math"
   "fmt"
   "time"
   //"log"
   _ "github.com/mattn/go-sqlite3"
+)
+
+const (
+  SchemaPath = "pkg/storage/schema.sql"
 )
 
 type sqlite3 struct {
@@ -76,76 +81,27 @@ func (s *sqlite3) Cleanup() error {
   return fmt.Errorf("Not implemented")
 }
 
-func (s *sqlite3) migrateSchema() error {
-  tx, err := s.db.Begin()
+func (s *sqlite3) createTables(src string) error {
+  dat, err := os.ReadFile(src)
   if err != nil {
     return err
   }
-  defer tx.Rollback()
-
-  if _, err := tx.Exec(`
-  CREATE TABLE records (
-    uuid TEXT NOT NULL,
-    tags TEXT NOT NULL,
-    approver TEXT NOT NULL,
-    location TEXT NOT NULL,
-    created INT NOT NULL,
-    tombstone INT,
-  
-    num INT NOT NULL,
-    den INT NOT NULL,
-    gen REAL NOT NULL,
-
-    worker TEXT,
-    worker_state TEXT,
-
-    signer BLOB NOT NULL,
-    signature BLOB NOT NULL
-  );`); err != nil {
-    return fmt.Errorf("create records table: %w", err)
+  ver := ""
+  if err := s.db.QueryRow("SELECT * FROM schemaversion LIMIT 1;").Scan(&ver); err != nil && err != sql.ErrNoRows && err.Error() != "no such table: schemaversion" {
+    return fmt.Errorf("check version: %w", err)
   }
 
-  if _, err := tx.Exec(`
-  CREATE TABLE workability (
-    uuid TEXT NOT NULL PRIMARY KEY,
-    timestamp INT NOT NULL,
-    workability REAL NOT NULL
-  );`); err != nil {
-      return fmt.Errorf("create workability table: %w", err)
+  if ver == "" {
+    if _, err := s.db.Exec(string(dat)); err != nil {
+      return fmt.Errorf("create tables: %w", err)
+    }
+    if _, err := s.db.Exec(`INSERT INTO schemaversion (version) VALUES ("0.0.1");`); err != nil {
+      return fmt.Errorf("write schema version: %w", err)
+    }
+  } else {
+    fmt.Errorf("Schema version %s", ver);
   }
-
-  if _, err := tx.Exec(`
-  CREATE TABLE trust (
-    peer TEXT NOT NULL PRIMARY KEY,
-    trust REAL NOT NULL DEFAULT 0,
-    timestamp INT NOT NULL
-  );`); err != nil {
-    return fmt.Errorf("create trust table: %w", err)
-  }
-
-  if _, err := tx.Exec(`
-  CREATE TABLE census (
-    peer TEXT NOT NULL PRIMARY KEY,
-    earliest INT NOT NULL,
-    latest INT NOT NULL
-  );`); err != nil {
-    return fmt.Errorf("create census table: %w", err)
-  }
-
-  if _, err := tx.Exec(`
-  CREATE TABLE completions (
-    uuid TEXT NOT NULL,
-    completer TEXT NOT NULL,
-    timestamp INT NOT NULL,
-
-    signer TEXT NOT NULL,
-    signature BLOB NOT NULL,
-    PRIMARY KEY (uuid, signer)
-  );`); err != nil {
-    return fmt.Errorf("create completions table: %w", err)
-  }
-
-  return tx.Commit()
+  return nil
 }
 
 func (s *sqlite3) ComputePeerTrust(peer string) (float64, error) {
@@ -190,17 +146,14 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
     return fmt.Errorf("One or more message fields are nil")
   }
   if _, err := s.db.Exec(`
-    INSERT INTO records (uuid, tags, approver, location, created, tombstone, worker, worker_state, num, den, gen, signer, signature)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    INSERT OR REPLACE INTO records (uuid, tags, approver, manifest, created, num, den, gen, signer, signature)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
   `,
     r.Record.Uuid,
     strings.Join(r.Record.Tags, ","),
     r.Record.Approver,
-    r.Record.Location,
+    r.Record.Manifest,
     r.Record.Created,
-    r.Record.Tombstone,
-    r.Record.Worker,
-    r.Record.WorkerState,
     r.Record.Rank.Num,
     r.Record.Rank.Den,
     r.Record.Rank.Gen,
@@ -217,20 +170,17 @@ type scannable interface {
 }
 
 func scanSignedRecord(r scannable, result *pb.SignedRecord) error {
-  // Order must match that of CREATE TABLE statement in migrateSchema()
+  // Order must match that of CREATE TABLE statement in createTables()
   tags := ""
   if err := r.Scan(
     &result.Record.Uuid,
     &tags,
     &result.Record.Approver,
-    &result.Record.Location,
+    &result.Record.Manifest,
     &result.Record.Created,
-    &result.Record.Tombstone,
     &result.Record.Rank.Num,
     &result.Record.Rank.Den,
     &result.Record.Rank.Gen,
-    &result.Record.Worker,
-    &result.Record.WorkerState,
     &result.Signature.Signer,
     &result.Signature.Data,
   ); err != nil {
@@ -241,24 +191,22 @@ func scanSignedRecord(r scannable, result *pb.SignedRecord) error {
 }
 
 func scanSignedCompletion(r scannable, result *pb.SignedCompletion) error {
-  // Order must match that of CREATE TABLE statement in migrateSchema()
+  // Order must match that of CREATE TABLE statement in createTables()
   return r.Scan(
     &result.Completion.Uuid,
     &result.Completion.Completer,
+    &result.Completion.CompleterState,
     &result.Completion.Timestamp,
     &result.Signature.Signer,
     &result.Signature.Data,
   );
 }
 
-func (s *sqlite3) GetRandomRecord() (*pb.SignedRecord, error) {
+func (s *sqlite3) GetSignedSourceRecord(uuid string) (*pb.SignedRecord, error) {
   result := &pb.SignedRecord{}
   clearSignedRecord(result)
-  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE tombstone=0 ORDER BY RANDOM() LIMIT 1;`), result); err != nil {
-    if err == sql.ErrNoRows {
-      return nil, err // Allow for comparison upstream
-    }
-    return nil, fmt.Errorf("get random record: %w", err)
+  if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE uuid=? AND approver=signer LIMIT 1;`, uuid), result); err != nil {
+    return nil, err
   }
   return result, nil
 }
@@ -315,9 +263,16 @@ func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
     return fmt.Errorf("One or more message fields are nil")
   }
   _, err := s.db.Exec(`
-    INSERT INTO "completions" (uuid, completer, timestamp, signer, signature)
-    VALUES (?, ?, ?, ?, ?);
-  `, g.Completion.Uuid, g.Completion.Completer, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
+    INSERT OR REPLACE INTO "completions" (uuid, completer, completer_state, timestamp, signer, signature)
+    VALUES (?, ?, ?, ?, ?, ?);
+  `, g.Completion.Uuid, g.Completion.Completer, g.Completion.CompleterState, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
+  return err
+}
+
+func (s *sqlite3) CollapseCompletions(uuid string, signer string) error {
+  _, err := s.db.Exec(`
+    DELETE FROM "completions" WHERE uuid=? AND signer!=?
+  `, uuid, signer)
   return err
 }
 
@@ -365,13 +320,54 @@ func (s *sqlite3) GetSignedCompletions(ctx context.Context, cur chan<- *pb.Signe
   return nil
 }
 
-func (s *sqlite3) CountRecordUUIDs() (int64, error) {
+func (s *sqlite3) CountRecordSigners(exclude string) (int64, error) {
+  // TODO consider memoization
   num := int64(0)
-  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" WHERE tombstone=0 GROUP BY uuid;`).Scan(&num)
+  err := s.db.QueryRow(`SELECT COUNT(DISTINCT(signer)) FROM "records" WHERE signer != ?;`, exclude).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
   return num, err
 }
 
-func NewSqlite3(path string, id string) (*sqlite3, error) {
+func (s *sqlite3) CountSignerRecords(signer string) (int64, error) {
+  // TODO consider memoization
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(DISTINCT(uuid)) FROM "records" WHERE signer=?;`, signer).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
+}
+
+func (s *sqlite3) CountCompletionSigners(exclude string) (int64, error) {
+  // TODO consider memoization
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(DISTINCT(signer)) FROM "completions" WHERE signer != ?;`, exclude).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
+}
+
+func (s *sqlite3) CountSignerCompletions(peer string) (int64, error) {
+  // TODO consider memoization
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(DISTINCT(uuid)) FROM "completions" WHERE signer=?;`, peer).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
+}
+
+func(s *sqlite3) SetId(id string) {
+	s.id = id
+}
+
+func NewSqlite3(path string) (*sqlite3, error) {
+  if path != ":memory:" {
+    path = "file:" + path + "?_journal_mode=WAL"
+  }
   db, err := sql.Open("sqlite3", path)
   if err != nil {
     return nil, fmt.Errorf("failed to open db at %s: %w", path, err)
@@ -380,23 +376,109 @@ func NewSqlite3(path string, id string) (*sqlite3, error) {
   s := &sqlite3{
     path: path,
     db: db,
-    id: id,
+		id: "",
     lastCleanup: time.Unix(0,0),
   }
-  if err := s.migrateSchema(); err != nil {
-    return nil, fmt.Errorf("failed to migrate schema: %w", err)
+  if err := s.createTables(SchemaPath); err != nil {
+    return nil, fmt.Errorf("failed to create tables: %w", err)
   }
   return s, nil
 }
 
 func (s *sqlite3) GetSummary() *Summary {
+  
+  nrec := int64(-1)
+  s.db.QueryRow(`SELECT COUNT(*) FROM "records";`).Scan(&nrec)
+  ncmp := int64(-1)
+  s.db.QueryRow(`SELECT COUNT(*) FROM "completions";`).Scan(&ncmp)
+  mtrust := int64(-1)
+  s.db.QueryRow(`
+		SELECT trust
+		FROM "trust"
+		ORDER BY trust
+		LIMIT 1
+		OFFSET (SELECT COUNT(*)
+						FROM "trust") / 2
+  `).Scan(&mtrust)
+  mwrk := int64(-1)
+  s.db.QueryRow(`
+		SELECT workability
+		FROM "workability"
+		ORDER BY workability
+		LIMIT 1
+		OFFSET (SELECT COUNT(*)
+						FROM "workability") / 2
+  `).Scan(&mwrk)
+
   return &Summary{
     Location: s.path,
-    TotalRecords: 1,
-    TotalCompletions: 2,
+    TotalRecords: nrec,
+    TotalCompletions: ncmp,
     LastCleanup: s.lastCleanup.Unix(),
-    MedianTrust: 4,
-    MedianWorkability: 5,
+    MedianTrust: mtrust,
+    MedianWorkability: mwrk,
     Stats: s.db.Stats(),
   }
+}
+
+func (s *sqlite3) SetTrust(peer string, trust float64) error {
+  if _, err := s.db.Exec(`
+    INSERT OR REPLACE INTO trust (peer, trust, timestamp)
+    VALUES (?, ?, ?);
+    `, peer, trust, time.Now().Unix()); err != nil {
+      return fmt.Errorf("setTrust: %w", err)
+  }
+  return nil
+}
+
+func (s *sqlite3) GetTrust(peer string) (float64, error) {
+  // TODO consider memoization
+  num := float64(0)
+  err := s.db.QueryRow(`SELECT trust FROM "trust" WHERE peer=?;`, peer).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
+}
+
+func (s *sqlite3) SetWorkability(uuid string, workability float64) error {
+  if _, err := s.db.Exec(`
+    INSERT OR REPLACE INTO workability (uuid, workability, timestamp)
+    VALUES (?, ?, ?);
+    `, uuid, workability, time.Now().Unix()); err != nil {
+      return fmt.Errorf("SetWorkability: %w", err)
+  }
+  return nil
+}
+
+func (s *sqlite3) AppendEvent(event string, details string) error {
+	if _, err := s.db.Exec(`
+		INSERT INTO events (event, details, timestamp)
+		VALUES (?, ?, ?);
+	`, event, details, time.Now().Unix()); err != nil {
+		return fmt.Errorf("AppendEvent: %w", err)
+	}
+	return nil
+}
+
+func (s *sqlite3) GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error {
+  defer close(cur)
+  rows, err := s.db.Query("SELECT * FROM events ORDER BY timestamp DESC limit ?;", limit)
+  if err != nil {
+    return fmt.Errorf("GetEvents SELECT: %w", err)
+  }
+  defer rows.Close()
+  for rows.Next() {
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
+    }
+		e := DBEvent{}
+    if err := rows.Scan(&e.Event, &e.Details, &e.Timestamp); err != nil {
+      return fmt.Errorf("GetEvents scan: %w", err)
+    }
+    cur<- e
+  }
+  return nil
 }

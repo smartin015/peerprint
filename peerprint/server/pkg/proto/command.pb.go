@@ -20,16 +20,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Send along the PUSH channel to the wrapper to inform it of
-// changes happening on the network
-type StateUpdate struct {
+// Sent via ZMQ PUSH when the server has rendezvous'd with peers and
+// begins its main loop
+type NotifyReady struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 }
 
-func (x *StateUpdate) Reset() {
-	*x = StateUpdate{}
+func (x *NotifyReady) Reset() {
+	*x = NotifyReady{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_proto_command_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -37,13 +37,13 @@ func (x *StateUpdate) Reset() {
 	}
 }
 
-func (x *StateUpdate) String() string {
+func (x *NotifyReady) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StateUpdate) ProtoMessage() {}
+func (*NotifyReady) ProtoMessage() {}
 
-func (x *StateUpdate) ProtoReflect() protoreflect.Message {
+func (x *NotifyReady) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_command_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -55,9 +55,192 @@ func (x *StateUpdate) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StateUpdate.ProtoReflect.Descriptor instead.
-func (*StateUpdate) Descriptor() ([]byte, []int) {
+// Deprecated: Use NotifyReady.ProtoReflect.Descriptor instead.
+func (*NotifyReady) Descriptor() ([]byte, []int) {
 	return file_proto_command_proto_rawDescGZIP(), []int{0}
+}
+
+// Sent via ZMQ PUSH when the Sync operation completes
+type NotifySync struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *NotifySync) Reset() {
+	*x = NotifySync{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *NotifySync) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotifySync) ProtoMessage() {}
+
+func (x *NotifySync) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotifySync.ProtoReflect.Descriptor instead.
+func (*NotifySync) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{1}
+}
+
+// Sent via ZMQ PUSH when a message is received over pubsub
+type NotifyMessage struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *NotifyMessage) Reset() {
+	*x = NotifyMessage{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *NotifyMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotifyMessage) ProtoMessage() {}
+
+func (x *NotifyMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotifyMessage.ProtoReflect.Descriptor instead.
+func (*NotifyMessage) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{2}
+}
+
+// Exchanged back and forth between wrapper and process to ensure both are running
+type HealthCheck struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *HealthCheck) Reset() {
+	*x = HealthCheck{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HealthCheck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthCheck) ProtoMessage() {}
+
+func (x *HealthCheck) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthCheck.ProtoReflect.Descriptor instead.
+func (*HealthCheck) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{3}
+}
+
+// This message is sent via ZMQ PUSH when a Record's owner/signer/approver publishes a
+// Completion about their own Record, either sponsoring an in-progress worker or
+// indicating the record was completed.
+type NotifyProgress struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid              string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	ResolvedCompleter string `protobuf:"bytes,2,opt,name=resolved_completer,json=resolvedCompleter,proto3" json:"resolved_completer,omitempty"`
+	Completed         bool   `protobuf:"varint,3,opt,name=completed,proto3" json:"completed,omitempty"`
+}
+
+func (x *NotifyProgress) Reset() {
+	*x = NotifyProgress{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *NotifyProgress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotifyProgress) ProtoMessage() {}
+
+func (x *NotifyProgress) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotifyProgress.ProtoReflect.Descriptor instead.
+func (*NotifyProgress) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *NotifyProgress) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *NotifyProgress) GetResolvedCompleter() string {
+	if x != nil {
+		return x.ResolvedCompleter
+	}
+	return ""
+}
+
+func (x *NotifyProgress) GetCompleted() bool {
+	if x != nil {
+		return x.Completed
+	}
+	return false
 }
 
 // Catch-all error message for when commands cannot be carried out by the server process.
@@ -72,7 +255,7 @@ type Error struct {
 func (x *Error) Reset() {
 	*x = Error{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[1]
+		mi := &file_proto_command_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -85,7 +268,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[1]
+	mi := &file_proto_command_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -98,7 +281,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{1}
+	return file_proto_command_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Error) GetReason() string {
@@ -108,32 +291,30 @@ func (x *Error) GetReason() string {
 	return ""
 }
 
-type CrawlPeersCommand struct {
+// Generic "OK" message
+type Ok struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	Restart        bool  `protobuf:"varint,1,opt,name=restart,proto3" json:"restart,omitempty"` // Whether or not to start crawling anew or reuse existing peer set
-	MaxConnections int64 `protobuf:"varint,2,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
 }
 
-func (x *CrawlPeersCommand) Reset() {
-	*x = CrawlPeersCommand{}
+func (x *Ok) Reset() {
+	*x = Ok{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[2]
+		mi := &file_proto_command_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *CrawlPeersCommand) String() string {
+func (x *Ok) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CrawlPeersCommand) ProtoMessage() {}
+func (*Ok) ProtoMessage() {}
 
-func (x *CrawlPeersCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[2]
+func (x *Ok) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,51 +325,34 @@ func (x *CrawlPeersCommand) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CrawlPeersCommand.ProtoReflect.Descriptor instead.
-func (*CrawlPeersCommand) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use Ok.ProtoReflect.Descriptor instead.
+func (*Ok) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *CrawlPeersCommand) GetRestart() bool {
-	if x != nil {
-		return x.Restart
-	}
-	return false
-}
-
-func (x *CrawlPeersCommand) GetMaxConnections() int64 {
-	if x != nil {
-		return x.MaxConnections
-	}
-	return 0
-}
-
-type CrawlPeersResponse struct {
+type GetID struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	Num int64 `protobuf:"varint,1,opt,name=num,proto3" json:"num,omitempty"` // Total number of peers seen
-	New int64 `protobuf:"varint,2,opt,name=new,proto3" json:"new,omitempty"` // Peers retrieved on this crawl
 }
 
-func (x *CrawlPeersResponse) Reset() {
-	*x = CrawlPeersResponse{}
+func (x *GetID) Reset() {
+	*x = GetID{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[3]
+		mi := &file_proto_command_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *CrawlPeersResponse) String() string {
+func (x *GetID) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CrawlPeersResponse) ProtoMessage() {}
+func (*GetID) ProtoMessage() {}
 
-func (x *CrawlPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[3]
+func (x *GetID) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -199,21 +363,164 @@ func (x *CrawlPeersResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CrawlPeersResponse.ProtoReflect.Descriptor instead.
-func (*CrawlPeersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use GetID.ProtoReflect.Descriptor instead.
+func (*GetID) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *CrawlPeersResponse) GetNum() int64 {
+type IDResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+}
+
+func (x *IDResponse) Reset() {
+	*x = IDResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *IDResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IDResponse) ProtoMessage() {}
+
+func (x *IDResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IDResponse.ProtoReflect.Descriptor instead.
+func (*IDResponse) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *IDResponse) GetId() string {
 	if x != nil {
-		return x.Num
+		return x.Id
+	}
+	return ""
+}
+
+type SetTrust struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Peer  string  `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
+	Trust float64 `protobuf:"fixed64,2,opt,name=trust,proto3" json:"trust,omitempty"`
+}
+
+func (x *SetTrust) Reset() {
+	*x = SetTrust{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetTrust) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetTrust) ProtoMessage() {}
+
+func (x *SetTrust) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetTrust.ProtoReflect.Descriptor instead.
+func (*SetTrust) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SetTrust) GetPeer() string {
+	if x != nil {
+		return x.Peer
+	}
+	return ""
+}
+
+func (x *SetTrust) GetTrust() float64 {
+	if x != nil {
+		return x.Trust
 	}
 	return 0
 }
 
-func (x *CrawlPeersResponse) GetNew() int64 {
+type SetWorkability struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid        string  `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Workability float64 `protobuf:"fixed64,2,opt,name=workability,proto3" json:"workability,omitempty"`
+}
+
+func (x *SetWorkability) Reset() {
+	*x = SetWorkability{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_command_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetWorkability) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetWorkability) ProtoMessage() {}
+
+func (x *SetWorkability) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_command_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetWorkability.ProtoReflect.Descriptor instead.
+func (*SetWorkability) Descriptor() ([]byte, []int) {
+	return file_proto_command_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SetWorkability) GetUuid() string {
 	if x != nil {
-		return x.New
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *SetWorkability) GetWorkability() float64 {
+	if x != nil {
+		return x.Workability
 	}
 	return 0
 }
@@ -223,22 +530,34 @@ var File_proto_command_proto protoreflect.FileDescriptor
 var file_proto_command_proto_rawDesc = []byte{
 	0x0a, 0x13, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x2e,
 	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x07, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x22, 0x0d,
-	0x0a, 0x0b, 0x53, 0x74, 0x61, 0x74, 0x65, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x22, 0x1f, 0x0a,
-	0x05, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x22, 0x56,
-	0x0a, 0x11, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x43, 0x6f, 0x6d, 0x6d,
-	0x61, 0x6e, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x74, 0x61, 0x72, 0x74, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x72, 0x65, 0x73, 0x74, 0x61, 0x72, 0x74, 0x12, 0x27, 0x0a,
-	0x0f, 0x6d, 0x61, 0x78, 0x5f, 0x63, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0e, 0x6d, 0x61, 0x78, 0x43, 0x6f, 0x6e, 0x6e, 0x65,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0x38, 0x0a, 0x12, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x50,
-	0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x10, 0x0a, 0x03,
-	0x6e, 0x75, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x6e, 0x75, 0x6d, 0x12, 0x10,
-	0x0a, 0x03, 0x6e, 0x65, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x6e, 0x65, 0x77,
-	0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73,
-	0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72,
-	0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x0a, 0x0b, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x79, 0x52, 0x65, 0x61, 0x64, 0x79, 0x22, 0x0c, 0x0a,
+	0x0a, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x79, 0x53, 0x79, 0x6e, 0x63, 0x22, 0x0f, 0x0a, 0x0d, 0x4e,
+	0x6f, 0x74, 0x69, 0x66, 0x79, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x0d, 0x0a, 0x0b,
+	0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x22, 0x71, 0x0a, 0x0e, 0x4e,
+	0x6f, 0x74, 0x69, 0x66, 0x79, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x12, 0x12, 0x0a,
+	0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69,
+	0x64, 0x12, 0x2d, 0x0a, 0x12, 0x72, 0x65, 0x73, 0x6f, 0x6c, 0x76, 0x65, 0x64, 0x5f, 0x63, 0x6f,
+	0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x11, 0x72,
+	0x65, 0x73, 0x6f, 0x6c, 0x76, 0x65, 0x64, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x72,
+	0x12, 0x1c, 0x0a, 0x09, 0x63, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x09, 0x63, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x22, 0x1f,
+	0x0a, 0x05, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f,
+	0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x22,
+	0x04, 0x0a, 0x02, 0x4f, 0x6b, 0x22, 0x07, 0x0a, 0x05, 0x47, 0x65, 0x74, 0x49, 0x44, 0x22, 0x1c,
+	0x0a, 0x0a, 0x49, 0x44, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x34, 0x0a, 0x08,
+	0x53, 0x65, 0x74, 0x54, 0x72, 0x75, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x65, 0x65, 0x72,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x65, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05,
+	0x74, 0x72, 0x75, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x05, 0x74, 0x72, 0x75,
+	0x73, 0x74, 0x22, 0x46, 0x0a, 0x0e, 0x53, 0x65, 0x74, 0x57, 0x6f, 0x72, 0x6b, 0x61, 0x62, 0x69,
+	0x6c, 0x69, 0x74, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x20, 0x0a, 0x0b, 0x77, 0x6f, 0x72, 0x6b,
+	0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0b, 0x77,
+	0x6f, 0x72, 0x6b, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e,
+	0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75,
+	0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x33,
 }
 
 var (
@@ -253,12 +572,19 @@ func file_proto_command_proto_rawDescGZIP() []byte {
 	return file_proto_command_proto_rawDescData
 }
 
-var file_proto_command_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_command_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_command_proto_goTypes = []interface{}{
-	(*StateUpdate)(nil),        // 0: command.StateUpdate
-	(*Error)(nil),              // 1: command.Error
-	(*CrawlPeersCommand)(nil),  // 2: command.CrawlPeersCommand
-	(*CrawlPeersResponse)(nil), // 3: command.CrawlPeersResponse
+	(*NotifyReady)(nil),    // 0: command.NotifyReady
+	(*NotifySync)(nil),     // 1: command.NotifySync
+	(*NotifyMessage)(nil),  // 2: command.NotifyMessage
+	(*HealthCheck)(nil),    // 3: command.HealthCheck
+	(*NotifyProgress)(nil), // 4: command.NotifyProgress
+	(*Error)(nil),          // 5: command.Error
+	(*Ok)(nil),             // 6: command.Ok
+	(*GetID)(nil),          // 7: command.GetID
+	(*IDResponse)(nil),     // 8: command.IDResponse
+	(*SetTrust)(nil),       // 9: command.SetTrust
+	(*SetWorkability)(nil), // 10: command.SetWorkability
 }
 var file_proto_command_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -275,7 +601,7 @@ func file_proto_command_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_proto_command_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StateUpdate); i {
+			switch v := v.(*NotifyReady); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -287,7 +613,7 @@ func file_proto_command_proto_init() {
 			}
 		}
 		file_proto_command_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Error); i {
+			switch v := v.(*NotifySync); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -299,7 +625,7 @@ func file_proto_command_proto_init() {
 			}
 		}
 		file_proto_command_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CrawlPeersCommand); i {
+			switch v := v.(*NotifyMessage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -311,7 +637,91 @@ func file_proto_command_proto_init() {
 			}
 		}
 		file_proto_command_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CrawlPeersResponse); i {
+			switch v := v.(*HealthCheck); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*NotifyProgress); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Error); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Ok); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetID); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*IDResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetTrust); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_command_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetWorkability); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -329,7 +739,7 @@ func file_proto_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_command_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

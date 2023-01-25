@@ -29,7 +29,7 @@ func New(name string, l withprintln) (*Sublog) {
 }
 
 func (l *Sublog) log(prefix string, args []interface{}, suffix string) {
-  l.l.Println(fmt.Sprintf("%v %s(%s): ", time.Now().Format(time.RFC3339), prefix, l.n) + fmt.Sprintf(args[0].(string), args[1:]...))
+  l.l.Println(fmt.Sprintf("%v %s(%s): ", time.Now().Format(time.RFC3339), prefix, l.n) + fmt.Sprintf(args[0].(string), args[1:]...) + suffix)
 }
 func (l *Sublog) Info(args ...interface{}) {
   l.log("\033[0mI", args, "\033[0m")
@@ -38,7 +38,7 @@ func (l *Sublog) Error(args ...interface{}) {
   l.log("\033[31mE", args, "\033[0m")
 }
 func (l *Sublog) Fatal(args ...interface{}) {
-  l.Fatal(args...)
+  l.l.Fatal(args...)
 }
 func (l *Sublog) Println(v ...any) {
   v = append([]any{fmt.Sprintf("%s: ", l.n)}, v...)

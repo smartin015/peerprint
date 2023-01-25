@@ -49,8 +49,5 @@ message Completion {
   string uuid = 1;  
   string completer = 3;
   int64 timestamp = 4;
-
-  // Active state information
-  string worker = 8;
-  bytes worker_state = 9;
+  bytes completer_state = 5;
 }

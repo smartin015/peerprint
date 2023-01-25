@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
 )
 
 type TopicMsg struct {
@@ -68,6 +69,7 @@ func (t *TopicChannel) destroy() error {
 }
 
 func (t *TopicChannel) sendLoop(ctx context.Context) {
+  defer storage.HandlePanic()
   for {
     req, more := <-t.sendChan
     if !more {
@@ -125,6 +127,7 @@ func pubkeyFromMsg(m *pubsub.Message) (crypto.PubKey, error) {
 }
 
 func (t *TopicChannel) recvLoop(ctx context.Context) {
+  defer storage.HandlePanic()
 	for {
 		m, err := t.s.Next(ctx)
 		if err != nil {

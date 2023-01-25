@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/state.proto\x12\x05state\")\n\tSignature\x12\x0e\n\x06signer\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\"R\n\x0cSignedRecord\x12\x1d\n\x06record\x18\x01 \x01(\x0b\x32\r.state.Record\x12#\n\tsignature\x18\x02 \x01(\x0b\x32\x10.state.Signature\"-\n\x04Rank\x12\x0b\n\x03num\x18\x01 \x01(\x04\x12\x0b\n\x03\x64\x65n\x18\x02 \x01(\x04\x12\x0b\n\x03gen\x18\x03 \x01(\x01\"\xad\x01\n\x06Record\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x10\n\x08\x61pprover\x18\x02 \x01(\t\x12\x0c\n\x04tags\x18\x03 \x03(\t\x12\x19\n\x04rank\x18\x04 \x01(\x0b\x32\x0b.state.Rank\x12\x10\n\x08location\x18\x05 \x01(\t\x12\x0f\n\x07\x63reated\x18\x06 \x01(\x03\x12\x11\n\ttombstone\x18\x07 \x01(\x03\x12\x0e\n\x06worker\x18\x08 \x01(\t\x12\x14\n\x0cworker_state\x18\t \x01(\x0c\"^\n\x10SignedCompletion\x12%\n\ncompletion\x18\x01 \x01(\x0b\x32\x11.state.Completion\x12#\n\tsignature\x18\x02 \x01(\x0b\x32\x10.state.Signature\"@\n\nCompletion\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x11\n\tcompleter\x18\x03 \x01(\t\x12\x11\n\ttimestamp\x18\x04 \x01(\x03*)\n\x0cLocationType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0c\n\x08IPFS_CID\x10\x01\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/state.proto\x12\x05state\")\n\tSignature\x12\x0e\n\x06signer\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\"R\n\x0cSignedRecord\x12\x1d\n\x06record\x18\x01 \x01(\x0b\x32\r.state.Record\x12#\n\tsignature\x18\x02 \x01(\x0b\x32\x10.state.Signature\"-\n\x04Rank\x12\x0b\n\x03num\x18\x01 \x01(\x04\x12\x0b\n\x03\x64\x65n\x18\x02 \x01(\x04\x12\x0b\n\x03gen\x18\x03 \x01(\x01\"t\n\x06Record\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x10\n\x08\x61pprover\x18\x02 \x01(\t\x12\x0c\n\x04tags\x18\x03 \x03(\t\x12\x19\n\x04rank\x18\x04 \x01(\x0b\x32\x0b.state.Rank\x12\x10\n\x08manifest\x18\x05 \x01(\t\x12\x0f\n\x07\x63reated\x18\x06 \x01(\x03\"^\n\x10SignedCompletion\x12%\n\ncompletion\x18\x01 \x01(\x0b\x32\x11.state.Completion\x12#\n\tsignature\x18\x02 \x01(\x0b\x32\x10.state.Signature\"Y\n\nCompletion\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x11\n\tcompleter\x18\x03 \x01(\t\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\x12\x17\n\x0f\x63ompleter_state\x18\x05 \x01(\x0c*)\n\x0cLocationType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0c\n\x08IPFS_CID\x10\x01\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.state_pb2', globals())
@@ -21,18 +21,18 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   DESCRIPTOR._serialized_options = b'Z,github.com/smartin015/peerprint/pubsub/proto'
-  _LOCATIONTYPE._serialized_start=540
-  _LOCATIONTYPE._serialized_end=581
+  _LOCATIONTYPE._serialized_start=507
+  _LOCATIONTYPE._serialized_end=548
   _SIGNATURE._serialized_start=28
   _SIGNATURE._serialized_end=69
   _SIGNEDRECORD._serialized_start=71
   _SIGNEDRECORD._serialized_end=153
   _RANK._serialized_start=155
   _RANK._serialized_end=200
-  _RECORD._serialized_start=203
-  _RECORD._serialized_end=376
-  _SIGNEDCOMPLETION._serialized_start=378
-  _SIGNEDCOMPLETION._serialized_end=472
-  _COMPLETION._serialized_start=474
-  _COMPLETION._serialized_end=538
+  _RECORD._serialized_start=202
+  _RECORD._serialized_end=318
+  _SIGNEDCOMPLETION._serialized_start=320
+  _SIGNEDCOMPLETION._serialized_end=414
+  _COMPLETION._serialized_start=416
+  _COMPLETION._serialized_end=505
 # @@protoc_insertion_point(module_scope)

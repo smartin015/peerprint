@@ -16,6 +16,7 @@ import (
 const (
   PeerPrintProtocol = "peerprint@0.0.1"
   DefaultTopic = "default"
+  UpdateChannelBufferSize = 20
 )
 
 type Opts struct {
@@ -25,6 +26,8 @@ type Opts struct {
   MaxRecordsPerPeer int64
   MaxCompletionsPerPeer int64
   MaxTrackedPeers int64
+
+  TrustRebroadcastThreshold float64
 }
 
 type Interface interface {
@@ -37,18 +40,18 @@ type Interface interface {
   Sync(context.Context)
 
   Run(context.Context)
-  OnUpdate() <-chan struct{}
+  OnUpdate() <-chan proto.Message
 
   GetSummary() *Summary
 }
 
 type Server struct {
-  opts Opts
+  opts *Opts
   t transport.Interface
   s storage.Interface
   l *log.Sublog
 
-  updateChan chan struct{}
+  updateChan chan proto.Message
 
   // Tickers for periodic network activity
   syncTicker *time.Ticker
@@ -64,7 +67,8 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     t: t,
     s: s,
     l: l,
-    updateChan: make(chan struct{}),
+    opts: opts,
+    updateChan: make(chan proto.Message, UpdateChannelBufferSize),
     syncTicker: time.NewTicker(opts.SyncPeriod),
     connStr: "Initializing",
     lastSyncStart: time.Unix(0,0),
@@ -82,7 +86,7 @@ func (s *Server) ID() string {
 }
 
 
-func (s *Server) OnUpdate() <-chan struct{} {
+func (s *Server) OnUpdate() <-chan proto.Message {
   return s.updateChan
 }
 
@@ -93,9 +97,9 @@ func pretty(i interface{}) string {
   case *pb.Completion:
     return fmt.Sprintf("Completion{%s did %s}", shorten(v.Completer), v.Uuid)
   case *pb.Record:
-    return fmt.Sprintf("Record{%s->%s (%d tags)}", shorten(v.Uuid), shorten(v.Location), len(v.Tags))
+    return fmt.Sprintf("Record{%s->%s (%d tags)}", shorten(v.Uuid), shorten(v.Manifest), len(v.Tags))
   case *pb.SignedRecord:
-    return fmt.Sprintf("Record{signer %s: %s->%s (%d tags)}", shorten(v.Signature.Signer), shorten(v.Record.Uuid), shorten(v.Record.Location), len(v.Record.Tags))
+    return fmt.Sprintf("Record{signer %s: %s->%s (%d tags)}", shorten(v.Signature.Signer), shorten(v.Record.Uuid), shorten(v.Record.Manifest), len(v.Record.Tags))
   default:
     return fmt.Sprintf("%+v", i)
   }
@@ -159,6 +163,7 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
   rep := make(chan *pb.SignedRecord, 5) // Closed by Stream
   n := 0
   go func () {
+    defer storage.HandlePanic()
     if err := s.t.Stream(ctx, p, "GetSignedRecords", req, rep); err != nil {
       s.l.Error("syncRecords(): %+v", err)
       return
@@ -187,6 +192,7 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
   rep := make(chan *pb.SignedCompletion, 5) // Closed by Stream
   n := 0
   go func () {
+    defer storage.HandlePanic()
     if err := s.t.Stream(ctx, p, "GetSignedCompletions", req, rep); err != nil {
       s.l.Error("syncCompletions(): %+v", err)
       return
@@ -227,11 +233,13 @@ func (s *Server) Sync(ctx context.Context) {
     wg.Add(2)
     s.l.Info("Syncing with %s", shorten(p.String()))
     go func(p peer.ID) {
+      defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncRecords(ctx, p)
       s.l.Info("Synced %d records from %s", n, shorten(p.String()))
     }(p)
     go func(p peer.ID) {
+      defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncCompletions(ctx, p)
       s.l.Info("Synced %d completions from %s", n, shorten(p.String()))
@@ -261,9 +269,18 @@ func (s *Server) Run(ctx context.Context) {
   s.l.Info("Completing initial sync")
   s.Sync(ctx)
 
+	s.l.Info("Cleaning up DB")
+	if err := s.s.Cleanup(); err != nil {
+		s.l.Error("Cleanup: %v", err)
+	}
+
   s.l.Info("Running server main loop")
-  s.notify()
+  s.notify(&pb.NotifyReady{})
+  if err := s.s.AppendEvent("server", "main loop entered"); err != nil {
+    s.l.Error("enter main loop: %v", err)
+  }
   go func() {
+    defer storage.HandlePanic()
     defer close(s.updateChan)
     for {
       select {
@@ -271,46 +288,130 @@ func (s *Server) Run(ctx context.Context) {
         s.lastMsg = time.Now()
         switch v := tm.Msg.(type) {
           case *pb.Completion:
-            s.handleCompletion(tm.Peer, v, tm.Signature)
+            if err := s.handleCompletion(tm.Peer, v, tm.Signature); err != nil {
+              s.l.Error("handleCompletion(%s, _, _): %v", shorten(tm.Peer), err)
+            }
           case *pb.Record:
-            s.handleRecord(tm.Peer, v, tm.Signature)
+            if err := s.handleRecord(tm.Peer, v, tm.Signature); err != nil {
+              s.l.Error("handleRecord(%s, _, _): %v", shorten(tm.Peer), err)
+            }
         }
+        s.notify(&pb.NotifyMessage{})
       case <-s.syncTicker.C:
         if err := s.s.Cleanup(); err != nil {
-          s.l.Error("Sync: %v", err)
+          s.l.Error("Sync cleanup: %v", err)
           return
         }
         go s.Sync(ctx)
+        s.notify(&pb.NotifySync{})
       case <-ctx.Done():
         return
       }
-      s.notify()
     }
   }()
 }
 
-func (s *Server) notify() {
+func (s *Server) notify(m proto.Message) {
   select {
-  case s.updateChan<- struct{}{}:
+  case s.updateChan<- m:
   default:
   }
 }
 
-func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signature) {
-  s.l.Error("TODO handleCompletion")
-  // Ignore if neither approver nor completer is us
-  // Or if we don't already have a completion matching this uuid
-  //
-  // If completer is trusted and timestamp is null, republish with our
-  // own signature so that other workers know not to attempt it
+func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signature) error {
+  // Ignore if there's no matching record
+  sr, err := s.s.GetSignedSourceRecord(c.Uuid)
+  if err != nil {
+    return fmt.Errorf("GetSignedSourceRecord: %w", err)
+  }
+  // Reject record if peer already has MaxCompletionsPerPeer
+  if num, err := s.s.CountSignerCompletions(peer); err != nil {
+    return fmt.Errorf("CountSignerCompletions: %w", err)
+  } else if num > s.opts.MaxCompletionsPerPeer {
+    return fmt.Errorf("MaxCompletionsPerPeer exceeded (%d > %d)", num, s.opts.MaxCompletionsPerPeer)
+  }
+  // Or if peer would put us over MaxTrackedPeers
+  if num, err := s.s.CountCompletionSigners(peer); err != nil {
+    return fmt.Errorf("CountCompletionSigners: %w", err)
+  } else if num > s.opts.MaxTrackedPeers {
+    return fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, s.opts.MaxTrackedPeers)
+  }
+
+  sc := &pb.SignedCompletion{
+    Completion: c,
+    Signature: sig,
+  }
+
+  if err := s.s.SetSignedCompletion(sc); err != nil {
+    return fmt.Errorf("SetSignedCompletion: %w", err)
+  }
+
+  if sr.Record.Approver == s.ID() && c.Timestamp == 0 {
+    // Peer talking about a record of ours
+    s.l.Info("Peer %s is working on our record (%s)", shorten(peer), c.Uuid)
+    if trust, err := s.s.GetTrust(peer); err != nil {
+      return fmt.Errorf("GetTrust: %w", err)
+    } else if trust > s.opts.TrustRebroadcastThreshold {
+      // TODO prevent another trusted peer from coming along and swiping the work - must check if record already has a sponsored worker
+      s.l.Info("We nominate %s to complete (%s)", shorten(peer), c.Uuid)
+      _, err := s.IssueCompletion(c, true)
+      return err
+    } else {
+      return nil
+    }
+  } else if sr.Record.Approver == peer && sr.Signature.Signer == peer {
+    // Record owner is talking about completion of their record. Either
+    // timestamp=0 in which case they acknowledge someone working on it,
+    // or timestamp>0 in which case they acknowledge receipt of the physical
+    // goods.
+    if c.Timestamp != 0 {
+      s.l.Info("Peer %s confirmed our completion (%s)", shorten(peer), c.Uuid)
+    } else {
+      s.l.Info("Peer %s sponsors completer %s", shorten(peer), shorten(c.Completer))
+    }
+
+    if err := s.s.SetSignedCompletion(sc); err != nil {
+      return fmt.Errorf("SetSignedCompletion: %w", err)
+    }
+    // We can dump all other "speculative" completions as we assume the signer
+    // is truthful about the state of their own record's completion
+    // (they have no incentive to lie)
+    if err := s.s.CollapseCompletions(c.Uuid, peer); err != nil {
+      return fmt.Errorf("CollapseCompletions: %w", err)
+    }
+    s.notify(&pb.NotifyProgress{
+      Uuid: c.Uuid,
+      ResolvedCompleter: c.Completer,
+      Completed: c.Timestamp != 0,
+    })
+    return nil
+  } else {
+    s.l.Info("Overheard peer (%s) completing approver (%s)'s record (%s) (ts %d)", shorten(peer), shorten(sr.Record.Approver), c.Uuid, c.Timestamp)
+    return nil
+  }
 }
 
-func (s *Server) handleRecord(peer string, c *pb.Record, sig *pb.Signature) {
-  s.l.Error("TODO handleRecord")
-  // Reject record if r.approver already has MaxRecordsPerPeer
-  // Or if peer is not r.approver or r.worker
-  // Or if peer would put us over MaxPeers
-  //
-  // Otherwise accept. Work selection is handled by the wrapper
+func (s *Server) handleRecord(peer string, r *pb.Record, sig *pb.Signature) error {
+  // Reject if neither we nor the peer are the approver
+  if r.Approver != peer && r.Approver != s.ID() {
+    return fmt.Errorf("Approver=%s, want peer (%s) or self (%s)", shorten(r.Approver), shorten(peer), shorten(s.ID()))
+  }
+  // Reject record if peer already has MaxRecordsPerPeer
+  if num, err := s.s.CountSignerRecords(peer); err != nil {
+    return fmt.Errorf("CountSignerRecords: %w", err)
+  } else if num > s.opts.MaxRecordsPerPeer {
+    return fmt.Errorf("MaxRecordsPerPeer exceeded (%d > %d)", num, s.opts.MaxRecordsPerPeer)
+  }
+  // Or if peer would put us over MaxTrackedPeers
+  if num, err := s.s.CountRecordSigners(peer); err != nil {
+    return fmt.Errorf("CountRecordSigners: %w", err)
+  } else if num > s.opts.MaxTrackedPeers {
+    return fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, s.opts.MaxTrackedPeers)
+  }
+  // Otherwise accept. Note that we just store it here; work selection is handled out of band (via the wrapper)
+  return s.s.SetSignedRecord(&pb.SignedRecord{
+    Record: r,
+    Signature: sig,
+  })
 }
 
