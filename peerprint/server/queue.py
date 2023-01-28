@@ -4,7 +4,7 @@ import time
 import copy
 import tempfile
 from zmq.error import ZMQError
-from threading import Lock, Thread
+from threading import Semaphore, Thread
 from .comms import ZMQLogSink, ZMQClient, MessageUnpackError
 from .proc import ServerProcess
 from .queries import DBReader
@@ -30,6 +30,8 @@ class P2PQueue():
         self._codec = codec
         self._cond = Condition()
         self._update_cb = update_cb
+        self._mut = Semaphore(value=3) # Used for halting sockets during restart
+
 
         self._zmqLogger = None
         self._zmqclient = None
@@ -65,22 +67,25 @@ class P2PQueue():
                 self._restart_server()
 
     def _restart_server(self):
-        if self._proc is not None:
-            self._proc.destroy()
-            self._proc = None
-        if self._zmqLogger is not None:
-            self._zmqLogger.destroy()
-            self._zmqLogger = None
-        if self._zmqclient is not None:
-            self._zmqclient.destroy()
-            self._zmqclient = None
+        # Wait for all sockets to not be sending/receiving before
+        # destroying them
+        with (self._mut.acquire(), self._mut.acquire(), self._mut.acquire()):
+            if self._proc is not None:
+                self._proc.destroy()
+                self._proc = None
+            if self._zmqLogger is not None:
+                self._zmqLogger.destroy()
+                self._zmqLogger = None
+            if self._zmqclient is not None:
+                self._zmqclient.destroy()
+                self._zmqclient = None
 
         self._logger.debug("initializing logsink")
-        self._zmqLogger = ZMQLogSink(self._opts.zmqLog, self._logger.getChild("zmqlog"))
+        self._zmqLogger = ZMQLogSink(self._opts.zmqLog, self._mut, self._logger.getChild("zmqlog"))
         self._logger.debug("initializing server process")
         self._proc = ServerProcess(self._opts, self._binary_path, self._logger.getChild("proc"))
         self._logger.debug("initializing zmq client")
-        self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqPush, self._update, self._logger.getChild("zmqclient"))
+        self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqPush, self._mut, self._update, self._logger.getChild("zmqclient"))
 
 
     def connect(self, timeout=None):
@@ -112,7 +117,7 @@ class P2PQueue():
         with self._cond:
             self._cond.notify_all()
 
-    def _call(self, v, timeout=9):
+    def _call(self, v, timeout=15):
         rep = self._zmqclient.call(v, timeout)
         if isinstance(rep, cpb.Error):
             raise Exception(rep.Reason)
@@ -129,8 +134,14 @@ class P2PQueue():
     def set(self, v):
         return self._call(v)
 
-    def setTrust(self, peer, t):
-        return self._call(cpb.SetTrust(
+    def setWorkerTrust(self, peer, t):
+        return self._call(cpb.SetWorkerTrust(
+            peer=peer,
+            trust=t,
+        ))
+
+    def setRewardTrust(self, peer, t):
+        return self._call(cpb.SetRewardTrust(
             peer=peer,
             trust=t,
         ))

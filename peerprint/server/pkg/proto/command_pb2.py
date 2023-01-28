@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13proto/command.proto\x12\x07\x63ommand\"\r\n\x0bNotifyReady\"\x0c\n\nNotifySync\"\x0f\n\rNotifyMessage\"\r\n\x0bHealthCheck\"M\n\x0eNotifyProgress\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x1a\n\x12resolved_completer\x18\x02 \x01(\t\x12\x11\n\tcompleted\x18\x03 \x01(\x08\"\x17\n\x05\x45rror\x12\x0e\n\x06reason\x18\x01 \x01(\t\"\x04\n\x02Ok\"\x07\n\x05GetID\"\x18\n\nIDResponse\x12\n\n\x02id\x18\x01 \x01(\t\"\'\n\x08SetTrust\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\r\n\x05trust\x18\x02 \x01(\x01\"3\n\x0eSetWorkability\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x13\n\x0bworkability\x18\x02 \x01(\x01\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13proto/command.proto\x12\x07\x63ommand\"\r\n\x0bNotifyReady\"\x0c\n\nNotifySync\"\x0f\n\rNotifyMessage\"\r\n\x0bHealthCheck\"M\n\x0eNotifyProgress\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x1a\n\x12resolved_completer\x18\x02 \x01(\t\x12\x11\n\tcompleted\x18\x03 \x01(\x08\"\x17\n\x05\x45rror\x12\x0e\n\x06reason\x18\x01 \x01(\t\"\x04\n\x02Ok\"\x07\n\x05GetID\"\x18\n\nIDResponse\x12\n\n\x02id\x18\x01 \x01(\t\"-\n\x0eSetWorkerTrust\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\r\n\x05trust\x18\x02 \x01(\x01\"-\n\x0eSetRewardTrust\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\r\n\x05trust\x18\x02 \x01(\x01\"3\n\x0eSetWorkability\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x13\n\x0bworkability\x18\x02 \x01(\x01\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.command_pb2', globals())
@@ -39,8 +39,10 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _GETID._serialized_end=210
   _IDRESPONSE._serialized_start=212
   _IDRESPONSE._serialized_end=236
-  _SETTRUST._serialized_start=238
-  _SETTRUST._serialized_end=277
-  _SETWORKABILITY._serialized_start=279
-  _SETWORKABILITY._serialized_end=330
+  _SETWORKERTRUST._serialized_start=238
+  _SETWORKERTRUST._serialized_end=283
+  _SETREWARDTRUST._serialized_start=285
+  _SETREWARDTRUST._serialized_end=330
+  _SETWORKABILITY._serialized_start=332
+  _SETWORKABILITY._serialized_end=383
 # @@protoc_insertion_point(module_scope)

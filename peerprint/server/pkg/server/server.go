@@ -7,10 +7,10 @@ import (
   "fmt"
   "google.golang.org/protobuf/proto"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
-	"github.com/smartin015/peerprint/p2pgit/pkg/transport"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
-	"github.com/smartin015/peerprint/p2pgit/pkg/log"
+  "github.com/smartin015/peerprint/p2pgit/pkg/transport"
+  "github.com/libp2p/go-libp2p/core/peer"
+  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const (
@@ -27,7 +27,7 @@ type Opts struct {
   MaxCompletionsPerPeer int64
   MaxTrackedPeers int64
 
-  TrustRebroadcastThreshold float64
+  TrustedWorkerThreshold float64
 }
 
 type Interface interface {
@@ -175,6 +175,20 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
       if !ok {
         return n
       }
+      // Ensure signature is valid
+      if ok, err := s.verify(v.Record, v.Signature); err != nil {
+        s.l.Warning("syncRecords() verify(): %v", err)
+        continue
+      else if !ok {
+        s.l.warning("syncRecords(): ingnoring record %s with invalid signature", pretty(v))
+      }
+      // Only accept records that are signed by this peer and where
+      // the approver and signer are both the peer. This prevents
+      // us from blindly trusting our peer to tell us about other peers.
+      if v.Signature.Signer != p.String() || v.Record.Approver != v.Signature.Signer {
+        s.l.Warning("syncRecords(): peer %s passed record with non-matching signer/approver %s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Record.Approver))
+      }
+
       if err := s.s.SetSignedRecord(v); err != nil {
         s.l.Error("syncRecords() SetSignedRecord(%v): %v", v, err)
       } else {
@@ -203,6 +217,20 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
     case v, ok := <-rep:
       if !ok {
         return n
+      }
+      // Ensure signature is valid
+      if ok, err := s.verify(v.Completion, v.Signature); err != nil {
+        s.l.Warning("syncCompletions() verify(): %v", err)
+        continue
+      else if !ok {
+        s.l.warning("syncCompletions(): ingnoring completion %s with invalid signature", pretty(v))
+      }
+      // Only accept completions that are signed by this peer and where
+      // the completer and signer are both the peer. This prevents
+      // us from blindly trusting our peer to tell us about other peers.
+      if v.Signature.Signer != p.String() || v.Completion.Completer != v.Signature.Signer {
+        s.l.Warning("syncCompletions(): peer %s passed record with non-matching signer/completer %s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Completion.Completer))
+        continue
       }
       if err := s.s.SetSignedCompletion(v); err != nil {
         s.l.Error("syncCompletions() SetSignedCompletion(%v): %v", v, err)
@@ -261,6 +289,18 @@ func (s *Server) sign(m proto.Message) (*pb.Signature, error) {
   }
 }
 
+func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
+  k, err := peer.ExtractPublicKey(sig.Signer)
+  if err != nil {
+    return false, fmt.Errorf("verify() get key error: %w", err)
+  }
+  b, err := proto.Marshal(m)
+  if err != nil {
+    return false, fmt.Errorf("verify() marshal error: %w", err)
+  }
+  return k.Verify(b, sig.Data)
+}
+
 func (s *Server) Run(ctx context.Context) {
   // Run will return when there are peers to connect to
   s.connStr = "Searching for peers"
@@ -269,10 +309,10 @@ func (s *Server) Run(ctx context.Context) {
   s.l.Info("Completing initial sync")
   s.Sync(ctx)
 
-	s.l.Info("Cleaning up DB")
-	if err := s.s.Cleanup(); err != nil {
-		s.l.Error("Cleanup: %v", err)
-	}
+  s.l.Info("Cleaning up DB")
+  for _, ee := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
+    s.l.Error("Cleanup: %v", err)
+  }
 
   s.l.Info("Running server main loop")
   s.notify(&pb.NotifyReady{})
@@ -286,6 +326,10 @@ func (s *Server) Run(ctx context.Context) {
       select {
       case tm := <-s.t.OnMessage():
         s.lastMsg = time.Now()
+        if err := s.TrackPeer(r.Signature.Signer); err != nil {
+          s.l.Error("TrackPeer: %v", err)
+        }
+
         switch v := tm.Msg.(type) {
           case *pb.Completion:
             if err := s.handleCompletion(tm.Peer, v, tm.Signature); err != nil {
@@ -298,9 +342,8 @@ func (s *Server) Run(ctx context.Context) {
         }
         s.notify(&pb.NotifyMessage{})
       case <-s.syncTicker.C:
-        if err := s.s.Cleanup(); err != nil {
+         for _, ee := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
           s.l.Error("Sync cleanup: %v", err)
-          return
         }
         go s.Sync(ctx)
         s.notify(&pb.NotifySync{})
@@ -349,9 +392,9 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
   if sr.Record.Approver == s.ID() && c.Timestamp == 0 {
     // Peer talking about a record of ours
     s.l.Info("Peer %s is working on our record (%s)", shorten(peer), c.Uuid)
-    if trust, err := s.s.GetTrust(peer); err != nil {
+    if trust, err := s.s.GetWorkerTrust(peer); err != nil {
       return fmt.Errorf("GetTrust: %w", err)
-    } else if trust > s.opts.TrustRebroadcastThreshold {
+    } else if trust > s.opts.TrustedWorkerThreshold {
       // TODO prevent another trusted peer from coming along and swiping the work - must check if record already has a sponsored worker
       s.l.Info("We nominate %s to complete (%s)", shorten(peer), c.Uuid)
       _, err := s.IssueCompletion(c, true)

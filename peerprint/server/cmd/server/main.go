@@ -5,6 +5,7 @@ import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "github.com/smartin015/peerprint/p2pgit/pkg/crawl"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
   "github.com/smartin015/peerprint/p2pgit/pkg/www"
@@ -152,6 +153,8 @@ func main() {
   d := &driver{
     s: s,
     st: st,
+    t: t,
+    c: nil,
     l: pplog.New("cmd", logger),
   }
   d.Loop()
@@ -160,10 +163,12 @@ func main() {
 type driver struct {
   s server.Interface
   st storage.Interface
+  t transport.Interface
+  c *Crawler
   l *pplog.Sublog
 }
 
-func (d *driver) Loop() {
+func (d *driver) Loop(ctx context.Context) {
   cmdRecv := make(chan proto.Message, 5)
   errChan := make(chan error, 5)
   cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecv, errChan)
@@ -175,7 +180,7 @@ func (d *driver) Loop() {
     case e := <-errChan:
       d.l.Error(e.Error())
     case c := <-cmdRecv:
-      rep, err := d.handleCommand(c)
+      rep, err := d.handleCommand(ctx, c)
       if err != nil {
         cmdSend<- &pb.Error{Reason: err.Error()}
       } else {
@@ -184,12 +189,14 @@ func (d *driver) Loop() {
     case <-wdt.C:
       d.l.Error("Watchdog timeout, exiting")
       return
+    case <- ctx.Done:
+      d.l.Info("Context completed, exiting")
     }
     wdt.Reset(*watchdogFlag)
   }
 }
 
-func (d *driver) handleCommand(c proto.Message) (proto.Message, error) {
+func (d *driver) handleCommand(ctx context.Context, c proto.Message) (proto.Message, error) {
   switch v := c.(type) {
   case *pb.HealthCheck:
     return &pb.HealthCheck{}, nil
@@ -201,8 +208,14 @@ func (d *driver) handleCommand(c proto.Message) (proto.Message, error) {
     return d.s.IssueRecord(v, true)
   case *pb.Completion:
     return d.s.IssueCompletion(v, true)
-  case *pb.SetTrust:
-    if err := d.st.SetTrust(v.Peer, v.Trust); err != nil {
+  case *pb.SetWorkerTrust:
+    if err := d.st.SetWorkerTrust(v.Peer, v.Trust); err != nil {
+      return nil, err
+    } else {
+      return &pb.Ok{}, nil
+    }
+  case *pb.SetRewardTrust:
+    if err := d.st.SetRewardTrust(v.Peer, v.Trust); err != nil {
       return nil, err
     } else {
       return &pb.Ok{}, nil
@@ -213,7 +226,36 @@ func (d *driver) handleCommand(c proto.Message) (proto.Message, error) {
     } else {
       return &pb.Ok{}, nil
     }
+  case *pb.CrawlPeers:
+    if (v.Reset || d.crawl == nil) {
+      d.c = NewCrawl(d.t.GetPeerAddresses(), d.crawlPeer)
+    }
+    d.c.Step(context.WithTimeout(ctx, v.TimeoutMillis*time.Millisecond), v.BatchSize)
+    return &pb.Ok{}
   default:
     return nil, fmt.Errorf("Unrecognized command")
+  }
+}
+
+func (d *driver) crawlPeer(ctx context.Context, ai peer.AddrInfo) []peer.AddrInfo {
+  rep := &pb.GetPeersResponse{}
+  d.t.AddTempPeer(ai)
+  if err := d.t.Call(ctx, ai.ID, "GetPeers", &pb.GetPeersRequest{}, rep); err != nil {
+    d.l.Error("GetPeers of %s: %v", shorten(ai.ID.String()), err)
+    return []peer.AddrInfo{}
+  } else {
+    if err := d.st.LogPeerCrawl(ai.ID.String(), d.c.Started); err != nil {
+      d.l.Error("LogPeerCrawl: %v", err)
+      return []peer.AddrInfo{}
+    }
+    ais := []peer.AddrInfo{}
+    for _, a := range rep {
+      if r, err := transport.ProtoToPeerAddrInfo(a); err != nil {
+        d.l.Error("ProtoToPeerAddrInfo: %v", err)
+      } else {
+        ais = append(ais, r)
+      }
+    }
+    return ais
   }
 }

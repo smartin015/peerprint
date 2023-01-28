@@ -14,11 +14,11 @@ message NotifySync{}
 // Sent via ZMQ PUSH when a message is received over pubsub
 message NotifyMessage{}
 
-// Exchanged back and forth between wrapper and process to ensure both are running
+// Exchanged between wrapper and process to ensure both are healthy
 message HealthCheck{}
 
-// This message is sent via ZMQ PUSH when a Record's owner/signer/approver publishes a 
-// Completion about their own Record, either sponsoring an in-progress worker or
+// This message is PUSHed when a Record's owner/signer/approver publishes a 
+// Completion about their own Record - sponsoring an in-progress worker or
 // indicating the record was completed.
 message NotifyProgress{
   string uuid = 1;
@@ -38,12 +38,32 @@ message IDResponse {
   string id = 1;
 }
 
-message SetTrust {
+// SetWorkerTrust can be used to establish trust outside of the p2p algorithm,
+// e.g. by exchanging a list of trusted peers with the network details.
+message SetWorkerTrust {
   string peer = 1;
   double trust = 2;
 }
-
+// SetRewardTrust can be used as with SetWorkerTrust, and also when the wrapper
+// decides that a Record has been fully fulfilled by its approver
+// (payment or thanks exchanged, approver issued Completion etc.)
+message SetRewardTrust {
+  string peer = 1;
+  double trust = 2;
+}
+// SetWorkability allows for overriding the network and seeking/avoiding
+// a record despite the number of peers that claim to be working on it.
 message SetWorkability {
   string uuid = 1;
   double workability = 2;
+}
+
+message CrawlPeers {
+  bool Reset = 1; // Whether to start crawling anew
+  int64 BatchSize = 2; // How many peers to query for this step
+  int64 TimeoutMillis = 3; // Max amount of time to crawl before returning
+}
+
+message CrawlResult {
+
 }

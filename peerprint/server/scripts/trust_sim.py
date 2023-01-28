@@ -234,7 +234,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     env = Env(args)
-    print(env)
     sim = Sim(env, args.verbose)
     sim.run(args.num_iterations, args.target_total_records)
     print("==== Simulation complete ====")

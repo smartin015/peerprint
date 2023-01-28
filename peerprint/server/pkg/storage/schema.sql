@@ -2,12 +2,6 @@ CREATE TABLE schemaversion (
   version TEXT NOT NULL
 );
 
-CREATE TABLE events (
-  event TEXT NOT NULL,
-  details TEXT NOT NULL,
-  timestamp INT NOT NULL
-);
-
 CREATE TABLE records (
   uuid TEXT NOT NULL,
   tags TEXT NOT NULL,
@@ -25,24 +19,6 @@ CREATE TABLE records (
   PRIMARY KEY (uuid, signer)
 );
 
-CREATE TABLE workability (
-  uuid TEXT NOT NULL PRIMARY KEY,
-  timestamp INT NOT NULL,
-  workability REAL NOT NULL
-);
-
-CREATE TABLE trust (
-  peer TEXT NOT NULL PRIMARY KEY,
-  trust REAL NOT NULL DEFAULT 0,
-  timestamp INT NOT NULL
-);
-
-CREATE TABLE census (
-  peer TEXT NOT NULL PRIMARY KEY,
-  earliest INT NOT NULL,
-  latest INT NOT NULL
-);
-
 CREATE TABLE completions (
   uuid TEXT NOT NULL,
   completer TEXT NOT NULL,
@@ -52,5 +28,46 @@ CREATE TABLE completions (
   signer TEXT NOT NULL,
   signature BLOB NOT NULL,
 
-  PRIMARY KEY (uuid, signer)
+	CONSTRAINT completions_pk 
+		PRIMARY KEY (uuid, signer),
+
+	CONSTRAINT completions_uuid_fk 
+		FOREIGN KEY (uuid) references records(uuid) 
+		ON DELETE CASCADE,
+
+	CONSTRAINT completions_signer_fk 
+		FOREIGN KEY (signer) references records(signer) 
+		ON DELETE CASCADE
 );
+
+CREATE TABLE events (
+  event TEXT NOT NULL,
+  details TEXT NOT NULL,
+  timestamp INT NOT NULL
+);
+
+CREATE TABLE workability (
+  uuid TEXT NOT NULL PRIMARY KEY,
+  timestamp INT NOT NULL,
+  workability REAL NOT NULL
+);
+
+CREATE TABLE trust (
+  peer TEXT NOT NULL PRIMARY KEY,
+  -- worker_trust is how likely we think this peer
+  -- will complete our Record
+  worker_trust REAL NOT NULL DEFAULT 0,
+  -- reward_trust is how likely we think this peer
+  -- will reward us if we complete their Record
+  reward_trust REAL NOT NULL DEFAULT 0,
+	first_seen INT NOT NULL,
+	last_seen INT NOT NULL,
+  timestamp INT NOT NULL
+);
+
+CREATE TABLE census (
+  peer TEXT NOT NULL,
+  timestamp INT NOT NULL
+  PRIMARY KEY (peer, timestamp)
+);
+

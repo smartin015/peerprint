@@ -66,7 +66,7 @@ func TestReceiveReply(t *testing.T) {
   if err != nil {
     t.Fatal(err)
   }
-  if err := e.ReqSock.SendMessage(ser); err != nil {
+  if err := e.ReqSock.SendMessage([][]byte{ser}); err != nil {
     t.Fatal(err)
   }
 

@@ -16,12 +16,13 @@ class CommandError(Exception):
     pass
 
 class MutexSock():
-    def __init__(self, ctx, typ, logger, addr=None):
+    def __init__(self, ctx, typ, mut, logger, addr=None):
         self._logger = logger
         self._ctx = ctx
         self._addr = addr  # only needed for req/rep lazy pirate reconnection
         self._sock = ctx.socket(typ)
         self._mut = threading.Lock()
+        self._par_mut = mut
 
     def bind(self, addr):
         self._sock.bind(addr)
@@ -31,24 +32,27 @@ class MutexSock():
 
     def recv(self, timeout=1):
         with self._mut:
-            if self._sock.closed:
-                return
-            if (self._sock.poll(timeout*1000) & zmq.POLLIN) != 0:
-                return self._sock.recv()
-            else:
-                return None
+            with self._par_mut:
+                if self._sock.closed:
+                    return
+                if (self._sock.poll(timeout*1000) & zmq.POLLIN) != 0:
+                    return self._sock.recv()
+                else:
+                    return None
 
     def reqrep(self, req, timeout=3):
         REQUEST_RETRIES = 3
         with self._mut:
             # print("PY ->    LEN", len(req))
-            self._sock.send(req)
+            with self._par_mut:
+                self._sock.send(req)
             retries_left = REQUEST_RETRIES
             while True:
-                if (self._sock.poll(timeout*1000/REQUEST_RETRIES) & zmq.POLLIN) != 0:
-                    rep = self._sock.recv()
-                    # print("   -> PY LEN", len(rep))
-                    return rep
+                with self._par_mut:
+                    if (self._sock.poll(timeout*1000/REQUEST_RETRIES) & zmq.POLLIN) != 0:
+                        rep = self._sock.recv()
+                        # print("   -> PY LEN", len(rep))
+                        return rep
                 retries_left -= 1
                 self._logger.warning("No response from server")
                 # Socket is confused. Close and remove it.
@@ -69,10 +73,10 @@ class MutexSock():
 
 
 class ZMQLogSink():
-    def __init__(self, addr, logger):
+    def __init__(self, addr, mut, logger):
         self._logger = logger
         self._context = zmq.Context()
-        self._log_sock = MutexSock(self._context, zmq.PULL, self._logger)
+        self._log_sock = MutexSock(self._context, zmq.PULL, mut, self._logger)
         self._log_sock.bind(addr)
         self._log_thread = threading.Thread(target=self._stream_log, daemon=True)
         self._log_thread.start()
@@ -95,13 +99,13 @@ class ZMQLogSink():
         self._log_sock = None
 
 class ZMQClient():
-    def __init__(self, req_addr, pull_addr, cb, logger):
+    def __init__(self, req_addr, pull_addr, mut, cb, logger):
         self._logger = logger
         self._cb = cb
         self._context = zmq.Context()
-        self._sock = MutexSock(self._context, zmq.REQ, self._logger, req_addr)
+        self._sock = MutexSock(self._context, zmq.REQ, mut, self._logger, req_addr)
         self._sock.connect(req_addr) # connect to bound REP socket in golang code
-        self._pull = MutexSock(self._context, zmq.PULL, self._logger)
+        self._pull = MutexSock(self._context, zmq.PULL, mut, self._logger)
         self._pull.bind(pull_addr) # bind for connecting PUSH socket in golang code
         self._logger.debug(f"ZMQClient connect to REQ {req_addr}")
 

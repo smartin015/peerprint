@@ -36,18 +36,21 @@ type Interface interface {
   CountSignerCompletions(signer string) (int64, error)
   CollapseCompletions(uuid string, signer string) error
 
-  ComputePeerTrust(peer string) (float64, error)
-  ComputeRecordWorkability(r *pb.Record) (float64, error)
-  Cleanup() error
-
+  Cleanup(untilPeers int64) error
   GetSummary() *Summary
 
-  SetTrust(peer string, trust float64) error
-  GetTrust(peer string) (float64, error)
+  GetWorkerTrust(peer string) (float64, error)
+  // GetRewardTrust not provided - we should never need to get the reward trust, as we delegate work-picking to the (python) wrapper 
+  SetWorkerTrust(peer string, trust float64) error
+  SetRewardTrust(peer string, trust float64) error
+
   SetWorkability(uuid string, workability float64) error
 
   AppendEvent(event string, details string) error
   GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error
+
+	TrackPeer(signer string) error
+  LogPeerCrawl(peer string, ts int64) error
 }
 
 func SetPanicHandler(s Interface) {
@@ -61,12 +64,20 @@ func  HandlePanic() {
   }
 }
 
+type TableStat struct {
+	Name string
+	Stat int64
+}
+
+type TimeProfile struct {
+  Name string
+  Start int64
+  End int64
+}
+
 type Summary struct {
   Location string
-  TotalRecords int64
-  TotalCompletions int64
-  LastCleanup int64
-  MedianTrust int64
-  MedianWorkability int64
-  Stats sql.DBStats
+  Timing []TimeProfile
+  TableStats []TableStat
+  DBStats sql.DBStats
 }
