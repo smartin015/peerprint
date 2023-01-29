@@ -1,4 +1,4 @@
-package server
+package crawl
 
 import (
   "testing"
@@ -17,7 +17,7 @@ func TestOneHop(t *testing.T) {
   a1 := testAI()
   a2:= testAI()
   got := 0
-  c:= NewCrawl([]peer.AddrInfo{a1}, func(ctx context.Context, ai peer.AddrInfo)   []peer.AddrInfo {
+  c:= NewCrawler([]peer.AddrInfo{a1}, func(ctx context.Context, ai peer.AddrInfo)   []peer.AddrInfo {
     got += 1
     return []peer.AddrInfo{a2}
   })

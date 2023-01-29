@@ -1,4 +1,4 @@
-package server
+package crawl
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -11,19 +11,19 @@ import (
 // Note: GetPeersResponse only contains peers which have not yet been crawled.
 // It's the responsibilty of the implementer of crawlPeerFn to strip these
 // from server replies and to track the peers that have been already received.
-type crawlPeerFn func(ctx context.Context, ai peer.AddrInfo) []peer.AddrInfo
+type crawlPeerFn func(ctx context.Context, ai *peer.AddrInfo) []*peer.AddrInfo
 
 type Crawler struct {
   Started time.Time
   crawlPeer crawlPeerFn
-  next map[string]peer.AddrInfo
+  next map[string]*peer.AddrInfo
   mut sync.Mutex // Prevent parallel reads/writes to `next`
 }
 
-func NewCrawl(start []peer.AddrInfo, cpf crawlPeerFn) *Crawler {
+func NewCrawler(start []*peer.AddrInfo, cpf crawlPeerFn) *Crawler {
   c := &Crawler{
     crawlPeer: cpf,
-    next: make(map[string]peer.AddrInfo),
+    next: make(map[string]*peer.AddrInfo),
     Started: time.Now(),
   }
   for _, p := range start {
@@ -32,7 +32,7 @@ func NewCrawl(start []peer.AddrInfo, cpf crawlPeerFn) *Crawler {
   return c
 }
 
-func (c *Crawler) Step(ctx context.Context, maxConn int64) bool {
+func (c *Crawler) Step(ctx context.Context, maxConn int64) int {
   var wg sync.WaitGroup
   ncon := int64(0)
   c.mut.Lock()
@@ -43,7 +43,7 @@ func (c *Crawler) Step(ctx context.Context, maxConn int64) bool {
     }
     defer delete(c.next, p.ID.String())
     wg.Add(1)
-    go func(p peer.AddrInfo) {
+    go func(p *peer.AddrInfo) {
       defer wg.Done()
       for _, a := range c.crawlPeer(ctx, p) {
         c.mut.Lock()
@@ -56,5 +56,5 @@ func (c *Crawler) Step(ctx context.Context, maxConn int64) bool {
   }
   c.mut.Unlock()
   wg.Wait()
-  return len(c.next) > 0
+  return len(c.next)
 }

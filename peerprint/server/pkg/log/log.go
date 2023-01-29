@@ -34,8 +34,11 @@ func (l *Sublog) log(prefix string, args []interface{}, suffix string) {
 func (l *Sublog) Info(args ...interface{}) {
   l.log("\033[0mI", args, "\033[0m")
 }
+func (l *Sublog) Warning(args ...interface{}) {
+  l.log("\033[35mW", args, "\033[0m")
+}
 func (l *Sublog) Error(args ...interface{}) {
-  l.log("\033[31mE", args, "\033[0m")
+  l.log("\033[33mE", args, "\033[0m")
 }
 func (l *Sublog) Fatal(args ...interface{}) {
   l.l.Fatal(args...)

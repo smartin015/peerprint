@@ -69,16 +69,21 @@ class P2PQueue():
     def _restart_server(self):
         # Wait for all sockets to not be sending/receiving before
         # destroying them
-        with (self._mut.acquire(), self._mut.acquire(), self._mut.acquire()):
-            if self._proc is not None:
-                self._proc.destroy()
-                self._proc = None
-            if self._zmqLogger is not None:
-                self._zmqLogger.destroy()
-                self._zmqLogger = None
-            if self._zmqclient is not None:
-                self._zmqclient.destroy()
-                self._zmqclient = None
+        self._mut.acquire()
+        self._mut.acquire()
+        self._mut.acquire()
+        if self._proc is not None:
+            self._proc.destroy()
+            self._proc = None
+        if self._zmqLogger is not None:
+            self._zmqLogger.destroy()
+            self._zmqLogger = None
+        if self._zmqclient is not None:
+            self._zmqclient.destroy()
+            self._zmqclient = None
+        self._mut.release()
+        self._mut.release()
+        self._mut.release()
 
         self._logger.debug("initializing logsink")
         self._zmqLogger = ZMQLogSink(self._opts.zmqLog, self._mut, self._logger.getChild("zmqlog"))

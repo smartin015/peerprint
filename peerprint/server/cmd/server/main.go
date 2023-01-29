@@ -49,7 +49,7 @@ var (
   maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
   trustCleanupThresholdFlag = flag.Float64("trustCleanupThreshold", 2.0, "Trust value to consider a peer as 'trusted' when cleaning up DB entries")
   trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 24*10*time.Hour, "Amount of time before peers are considered for removal")
-  trustRebroadcastThresholdFlag = flag.Float64("trustRebroadcastThreshold", 1.0, "How much to trust a peer before rebroadcasting its assertion that it's working on our record - this prevents other peers from speculatively working on the same record")
+  trustedWorkerThresholdFlag = flag.Float64("trustedWorkerThreshold", 1.0, "How much to trust a peer before rebroadcasting its assertion that it's working on our record - this prevents other peers from speculatively working on the same record")
   trustedPeersFlag = flag.String("trustedPeers", "", "peer IDs to trust implicitly")
 
   // IPC flags
@@ -115,6 +115,7 @@ func main() {
     logger.Printf("PSK: %x\n", []byte(psk))
   }
 
+  ctx := context.Background()
   t, err := transport.New(&transport.Opts{
     PubsubAddr: *addrFlag,
     Rendezvous: *rendezvousFlag,
@@ -124,7 +125,7 @@ func main() {
     PSK: psk,
     ConnectTimeout: *connectTimeoutFlag,
     Topics: []string{server.DefaultTopic},
-  }, context.Background(), logger)
+  }, ctx, logger)
   if err != nil {
     panic(fmt.Errorf("Error initializing transport layer: %w", err))
   }
@@ -140,16 +141,16 @@ func main() {
     MaxRecordsPerPeer: *maxRecordsPerPeerFlag,
     MaxCompletionsPerPeer: *maxCompletionsPerPeerFlag,
     MaxTrackedPeers: *maxTrackedPeersFlag,
-    TrustRebroadcastThreshold: *trustRebroadcastThresholdFlag,
+    TrustedWorkerThreshold: *trustedWorkerThresholdFlag,
   }, pplog.New(name, logger))
 
   if *wwwFlag != "" {
     wsrv := www.New(pplog.New("www", logger), s, st)
-    go wsrv.Serve(*wwwFlag, context.Background())
+    go wsrv.Serve(*wwwFlag, ctx)
   }
 
 
-  go s.Run(context.Background())
+  go s.Run(ctx)
   d := &driver{
     s: s,
     st: st,
@@ -157,14 +158,14 @@ func main() {
     c: nil,
     l: pplog.New("cmd", logger),
   }
-  d.Loop()
+  d.Loop(ctx)
 }
 
 type driver struct {
   s server.Interface
   st storage.Interface
   t transport.Interface
-  c *Crawler
+  c *crawl.Crawler
   l *pplog.Sublog
 }
 
@@ -189,7 +190,7 @@ func (d *driver) Loop(ctx context.Context) {
     case <-wdt.C:
       d.l.Error("Watchdog timeout, exiting")
       return
-    case <- ctx.Done:
+    case <- ctx.Done():
       d.l.Info("Context completed, exiting")
     }
     wdt.Reset(*watchdogFlag)
@@ -221,35 +222,36 @@ func (d *driver) handleCommand(ctx context.Context, c proto.Message) (proto.Mess
       return &pb.Ok{}, nil
     }
   case *pb.SetWorkability:
-    if err := d.st.SetWorkability(v.Uuid, v.Workability); err != nil {
+    if err := d.st.SetWorkability(v.Uuid, v.Origin, v.Workability); err != nil {
       return nil, err
     } else {
       return &pb.Ok{}, nil
     }
   case *pb.CrawlPeers:
-    if (v.Reset || d.crawl == nil) {
-      d.c = NewCrawl(d.t.GetPeerAddresses(), d.crawlPeer)
+    if v.RestartCrawl || d.c == nil {
+      d.c = crawl.NewCrawler(d.t.GetPeerAddresses(), d.crawlPeer)
     }
-    d.c.Step(context.WithTimeout(ctx, v.TimeoutMillis*time.Millisecond), v.BatchSize)
-    return &pb.Ok{}
+    ctx2, _ := context.WithTimeout(ctx, time.Duration(v.TimeoutMillis) * time.Millisecond)
+    remaining := d.c.Step(ctx2, v.BatchSize)
+    return &pb.CrawlResult{Remaining: int32(remaining)}, nil
   default:
     return nil, fmt.Errorf("Unrecognized command")
   }
 }
 
-func (d *driver) crawlPeer(ctx context.Context, ai peer.AddrInfo) []peer.AddrInfo {
+func (d *driver) crawlPeer(ctx context.Context, ai *peer.AddrInfo) []*peer.AddrInfo {
   rep := &pb.GetPeersResponse{}
   d.t.AddTempPeer(ai)
   if err := d.t.Call(ctx, ai.ID, "GetPeers", &pb.GetPeersRequest{}, rep); err != nil {
-    d.l.Error("GetPeers of %s: %v", shorten(ai.ID.String()), err)
-    return []peer.AddrInfo{}
+    d.l.Error("GetPeers of %s: %v", ai.ID.String(), err)
+    return []*peer.AddrInfo{}
   } else {
-    if err := d.st.LogPeerCrawl(ai.ID.String(), d.c.Started); err != nil {
+    if err := d.st.LogPeerCrawl(ai.ID.String(), d.c.Started.Unix()); err != nil {
       d.l.Error("LogPeerCrawl: %v", err)
-      return []peer.AddrInfo{}
+      return []*peer.AddrInfo{}
     }
-    ais := []peer.AddrInfo{}
-    for _, a := range rep {
+    ais := []*peer.AddrInfo{}
+    for _, a := range rep.Addresses {
       if r, err := transport.ProtoToPeerAddrInfo(a); err != nil {
         d.l.Error("ProtoToPeerAddrInfo: %v", err)
       } else {

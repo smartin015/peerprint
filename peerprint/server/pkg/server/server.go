@@ -179,8 +179,8 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
       if ok, err := s.verify(v.Record, v.Signature); err != nil {
         s.l.Warning("syncRecords() verify(): %v", err)
         continue
-      else if !ok {
-        s.l.warning("syncRecords(): ingnoring record %s with invalid signature", pretty(v))
+      } else if !ok {
+        s.l.Warning("syncRecords(): ingnoring record %s with invalid signature", pretty(v))
       }
       // Only accept records that are signed by this peer and where
       // the approver and signer are both the peer. This prevents
@@ -222,8 +222,8 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
       if ok, err := s.verify(v.Completion, v.Signature); err != nil {
         s.l.Warning("syncCompletions() verify(): %v", err)
         continue
-      else if !ok {
-        s.l.warning("syncCompletions(): ingnoring completion %s with invalid signature", pretty(v))
+      } else if !ok {
+        s.l.Warning("syncCompletions(): ingnoring completion %s with invalid signature", pretty(v))
       }
       // Only accept completions that are signed by this peer and where
       // the completer and signer are both the peer. This prevents
@@ -290,7 +290,11 @@ func (s *Server) sign(m proto.Message) (*pb.Signature, error) {
 }
 
 func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
-  k, err := peer.ExtractPublicKey(sig.Signer)
+  pid, err := peer.Decode(sig.Signer)
+  if err != nil {
+    return false, fmt.Errorf("verify() decode ID: %w", err)
+  }
+  k, err := pid.ExtractPublicKey()
   if err != nil {
     return false, fmt.Errorf("verify() get key error: %w", err)
   }
@@ -310,7 +314,7 @@ func (s *Server) Run(ctx context.Context) {
   s.Sync(ctx)
 
   s.l.Info("Cleaning up DB")
-  for _, ee := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
+  for _, err := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
     s.l.Error("Cleanup: %v", err)
   }
 
@@ -326,7 +330,7 @@ func (s *Server) Run(ctx context.Context) {
       select {
       case tm := <-s.t.OnMessage():
         s.lastMsg = time.Now()
-        if err := s.TrackPeer(r.Signature.Signer); err != nil {
+        if err := s.s.TrackPeer(tm.Signature.Signer); err != nil {
           s.l.Error("TrackPeer: %v", err)
         }
 
@@ -342,7 +346,7 @@ func (s *Server) Run(ctx context.Context) {
         }
         s.notify(&pb.NotifyMessage{})
       case <-s.syncTicker.C:
-         for _, ee := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
+         for _, err := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
           s.l.Error("Sync cleanup: %v", err)
         }
         go s.Sync(ctx)
@@ -458,3 +462,22 @@ func (s *Server) handleRecord(peer string, r *pb.Record, sig *pb.Signature) erro
   })
 }
 
+type Summary struct {
+  ID string
+  Peers []*peer.AddrInfo
+  Connection string
+  LastSyncStart int64
+  LastSyncEnd int64
+  LastMessage int64
+}
+
+func (s *Server) GetSummary() *Summary {
+  return &Summary{
+    ID: s.ID(),
+    Peers: s.t.GetPeerAddresses(),
+    Connection: s.connStr,
+    LastSyncStart: s.lastSyncStart.Unix(),
+    LastSyncEnd: s.lastSyncEnd.Unix(),
+    LastMessage: s.lastMsg.Unix(),
+  }
+}

@@ -37,7 +37,7 @@ type Interface interface {
   OnMessage() <-chan topic.TopicMsg
 
   GetPeers() peer.IDSlice
-  GetPeerAddresses() []peer.AddrInfo
+  GetPeerAddresses() []*peer.AddrInfo
   AddTempPeer(*peer.AddrInfo)
   Call(ctx context.Context, pid peer.ID, method string, req proto.Message, rep proto.Message) error 
   Stream(ctx context.Context, pid peer.ID, method string, req interface{}, rep interface{}) error
@@ -184,10 +184,11 @@ func(t *Transport) Stream(ctx context.Context, pid peer.ID, method string, req i
 func (t *Transport) GetPeers() peer.IDSlice {
   return t.host.Peerstore().Peers()
 }
-func (t *Transport) GetPeerAddresses() []peer.AddrInfo {
-  aa := []peer.AddrInfo{}
+func (t *Transport) GetPeerAddresses() []*peer.AddrInfo {
+  aa := []*peer.AddrInfo{}
   for _, p := range t.GetPeers() {
-   aa = append(aa, t.host.Peerstore().PeerInfo(p))
+    a := t.host.Peerstore().PeerInfo(p)
+    aa = append(aa, &a)
   }
   return aa
 }

@@ -36,7 +36,7 @@ type Interface interface {
   CountSignerCompletions(signer string) (int64, error)
   CollapseCompletions(uuid string, signer string) error
 
-  Cleanup(untilPeers int64) error
+  Cleanup(untilPeers int64) []error
   GetSummary() *Summary
 
   GetWorkerTrust(peer string) (float64, error)
@@ -44,7 +44,7 @@ type Interface interface {
   SetWorkerTrust(peer string, trust float64) error
   SetRewardTrust(peer string, trust float64) error
 
-  SetWorkability(uuid string, workability float64) error
+  SetWorkability(uuid string, origin string, workability float64) error
 
   AppendEvent(event string, details string) error
   GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error

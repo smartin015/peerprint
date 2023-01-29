@@ -27,7 +27,7 @@ func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-c
 
 func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest, rep *pb.GetPeersResponse) error {
   for _, a := range s.base.t.GetPeerAddresses() {
-    rep.Addresses = append(rep.Addresses, transport.PeerToProtoAddrInfo(&a))
+    rep.Addresses = append(rep.Addresses, transport.PeerToProtoAddrInfo(a))
   }
   return nil
 }

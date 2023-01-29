@@ -5,17 +5,16 @@ import (
   "context"
   "math"
   "database/sql"
-  "os"
   "strings"
   "fmt"
   "time"
   //"log"
   _ "github.com/mattn/go-sqlite3"
+  _ "embed"
 )
 
-const (
-  SchemaPath = "pkg/storage/schema.sql"
-)
+//go:embed schema.sql
+var schema string
 
 type sqlite3 struct {
   path string
@@ -38,18 +37,14 @@ func (s *sqlite3) Close() {
   s.db.Close()
 }
 
-func (s *sqlite3) createTables(src string) error {
-  dat, err := os.ReadFile(src)
-  if err != nil {
-    return err
-  }
+func (s *sqlite3) createTables() error {
   ver := ""
   if err := s.db.QueryRow("SELECT * FROM schemaversion LIMIT 1;").Scan(&ver); err != nil && err != sql.ErrNoRows && err.Error() != "no such table: schemaversion" {
     return fmt.Errorf("check version: %w", err)
   }
 
   if ver == "" {
-    if _, err := s.db.Exec(string(dat)); err != nil {
+    if _, err := s.db.Exec(string(schema)); err != nil {
       return fmt.Errorf("create tables: %w", err)
     }
     if _, err := s.db.Exec(`INSERT INTO schemaversion (version) VALUES ("0.0.1");`); err != nil {
@@ -109,13 +104,13 @@ func scanSignedCompletion(r scannable, result *pb.SignedCompletion) error {
   );
 }
 
-func (s *sqlite3) updateWorkability(uuid string) error {
+func (s *sqlite3) updateWorkability(uuid string, signer string) error {
 	if newWorky, err := s.ComputeRecordWorkability(uuid); err != nil {
 		return err
 	} else if _, err := s.db.Exec(`
 			INSERT OR REPLACE 
-			INTO "workability" (uuid, timestamp, workability) 
-			VALUES (?, ?, ?);`, uuid, newWorky, time.Now().Unix()); err != nil {
+			INTO "workability" (uuid, origin, timestamp, workability) 
+			VALUES (?, ?, ?, ?);`, uuid, signer, newWorky, time.Now().Unix()); err != nil {
 		return err
 	}
   return nil
@@ -141,7 +136,7 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
     r.Signature.Data); err != nil {
     return fmt.Errorf("insert into records: %w", err)
   }
-	if err := s.updateWorkability(r.Record.Uuid); err != nil {
+	if err := s.updateWorkability(r.Record.Uuid, r.Signature.Signer); err != nil {
 		return fmt.Errorf("update workability (record %s): %w", r.Record.Uuid, err)
 	}
   return nil
@@ -214,7 +209,7 @@ func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
 	if err != nil {
 		return fmt.Errorf("insert completion: %w", err)
 	}
-	if err := s.updateWorkability(g.Completion.Uuid); err != nil {
+	if err := s.updateWorkability(g.Completion.Uuid, g.Signature.Signer); err != nil {
 		return fmt.Errorf("update workability (completion %s): %w", g.Completion.Uuid, err)
 	}
   return nil
@@ -331,7 +326,7 @@ func NewSqlite3(path string) (*sqlite3, error) {
     lastCleanupStart: time.Unix(0,0),
     lastCleanupEnd: time.Unix(0,0),
   }
-  if err := s.createTables(SchemaPath); err != nil {
+  if err := s.createTables(); err != nil {
     return nil, fmt.Errorf("failed to create tables: %w", err)
   }
   return s, nil
@@ -415,11 +410,11 @@ func (s *sqlite3) GetWorkerTrust(peer string) (float64, error) {
   return t, err
 }
 
-func (s *sqlite3) SetWorkability(uuid string, workability float64) error {
+func (s *sqlite3) SetWorkability(uuid string, origin string, workability float64) error {
   if _, err := s.db.Exec(`
-    INSERT OR REPLACE INTO workability (uuid, workability, timestamp)
-    VALUES (?, ?, ?);
-    `, uuid, workability, time.Now().Unix()); err != nil {
+    INSERT OR REPLACE INTO workability (uuid, origin, workability, timestamp)
+    VALUES (?, ?, ?, ?);
+    `, uuid, origin, workability, time.Now().Unix()); err != nil {
       return fmt.Errorf("SetWorkability: %w", err)
   }
   return nil
@@ -495,7 +490,7 @@ func (s *sqlite3) ComputePeerTrust(peer string) (float64, error) {
 func (s *sqlite3) ComputeRecordWorkability(uuid string) (float64, error) {
   // Sum the trust for all incomplete assertions by workers
   tww := float64(0)
-  if err := s.db.QueryRow(`SELECT COALESCE(SUM(T2.trust), 0) FROM "completions" T1 LEFT JOIN "trust" T2 ON T1.completer=T2.peer WHERE T1.uuid=?`, uuid).Scan(&tww); err != nil {
+  if err := s.db.QueryRow(`SELECT COALESCE(SUM(T2.worker_trust), 0) FROM "completions" T1 LEFT JOIN "trust" T2 ON T1.completer=T2.peer WHERE T1.uuid=?`, uuid).Scan(&tww); err != nil {
     return 0, fmt.Errorf("Trust-weighted workers: %w", err)
   }
   //print("tww ", tww, "\n")

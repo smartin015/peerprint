@@ -9,11 +9,15 @@ import (
 	"github.com/smartin015/peerprint/p2pgit/pkg/log"
 	"github.com/smartin015/peerprint/p2pgit/pkg/server"
 	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "embed"
 )
 
 const (
   DBReadTimeout = 5*time.Second
 )
+
+//go:embed static
+var static embed.FS
 
 type webserver struct {
 	l *log.Sublog
@@ -84,7 +88,8 @@ func (s *webserver) handleStorageSummary(w http.ResponseWriter, r *http.Request)
 
 func (s *webserver) Serve(addr string, ctx context.Context) {
 	s.l.Info("Starting status HTTP server at %s\n", addr)
-	fileServer := http.FileServer(http.Dir("./static"))
+
+	fileServer := http.FileServer(http.FS(static))
 	http.Handle("/", fileServer)
 	http.HandleFunc("/history", s.handleGetHistory)
 	http.HandleFunc("/events", s.handleGetEvents)

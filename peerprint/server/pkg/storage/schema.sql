@@ -47,9 +47,21 @@ CREATE TABLE events (
 );
 
 CREATE TABLE workability (
-  uuid TEXT NOT NULL PRIMARY KEY,
+  uuid TEXT NOT NULL,
+  origin TEXT NOT NULL,
   timestamp INT NOT NULL,
-  workability REAL NOT NULL
+  workability REAL NOT NULL,
+
+	CONSTRAINT workability_pk 
+		PRIMARY KEY (uuid, origin),
+
+  CONSTRAINT workability_uuid_fk
+    FOREIGN KEY (uuid) references records(uuid)
+    ON DELETE CASCADE,
+
+	CONSTRAINT workability_signer_fk 
+		FOREIGN KEY (origin) references records(signer) 
+		ON DELETE CASCADE
 );
 
 CREATE TABLE trust (
@@ -64,10 +76,11 @@ CREATE TABLE trust (
 	last_seen INT NOT NULL,
   timestamp INT NOT NULL
 );
-
+ 
 CREATE TABLE census (
   peer TEXT NOT NULL,
-  timestamp INT NOT NULL
+  timestamp INT NOT NULL,
+
   PRIMARY KEY (peer, timestamp)
 );
 

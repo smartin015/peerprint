@@ -55,15 +55,16 @@ message SetRewardTrust {
 // a record despite the number of peers that claim to be working on it.
 message SetWorkability {
   string uuid = 1;
-  double workability = 2;
+  string origin = 2;
+  double workability = 3;
 }
 
 message CrawlPeers {
-  bool Reset = 1; // Whether to start crawling anew
+  bool RestartCrawl = 1; // Whether to start crawling anew
   int64 BatchSize = 2; // How many peers to query for this step
-  int64 TimeoutMillis = 3; // Max amount of time to crawl before returning
+  int32 TimeoutMillis = 3; // Max amount of time to crawl before returning
 }
 
 message CrawlResult {
-
+  int32 remaining = 2;
 }
