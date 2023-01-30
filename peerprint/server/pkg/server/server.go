@@ -117,20 +117,20 @@ func (s *Server) ShortID() string {
 }
 
 func (s *Server) IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error) {
-  sig, err := s.sign(g)
+  sig, err := s.t.Sign(g)
   if err != nil {
     return nil, fmt.Errorf("sign completion: %w", err)
   }
   sg := &pb.SignedCompletion{
     Completion: g,
-    Signature: sig,
+    Signature: &pb.Signature{Signer: s.t.ID(), Data: sig},
   }
   s.l.Info("issueCompletion(%s)", pretty(sg))
   if err := s.s.SetSignedCompletion(sg); err != nil {
     return nil, fmt.Errorf("store completion: %w", err)
   }
   if publish {
-    if err := s.t.Publish(DefaultTopic, g); err != nil {
+    if err := s.t.Publish(DefaultTopic, sg); err != nil {
       return nil, fmt.Errorf("publish completion: %w", err)
     }
   }
@@ -139,19 +139,20 @@ func (s *Server) IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedComp
 
 func (s *Server) IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error) {
   s.l.Info("issueRecord(%s)", pretty(r))
-  sig, err := s.sign(r)
+  sig, err := s.t.Sign(r)
   if err != nil {
     return nil, fmt.Errorf("sign record: %w", err)
   }
   sr := &pb.SignedRecord{
     Record: r,
-    Signature: sig,
+    Signature: &pb.Signature{Signer: s.t.ID(), Data: sig},
   }
+  s.l.Info("Full signature details: %+v", sr)
   if err := s.s.SetSignedRecord(sr); err != nil {
     return nil, fmt.Errorf("write record: %w", err)
   }
   if publish {
-    if err := s.t.Publish(DefaultTopic, r); err != nil {
+    if err := s.t.Publish(DefaultTopic, sr); err != nil {
       return nil, fmt.Errorf("publish record: %w", err)
     }
   }
@@ -176,17 +177,18 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
         return n
       }
       // Ensure signature is valid
-      if ok, err := s.verify(v.Record, v.Signature); err != nil {
-        s.l.Warning("syncRecords() verify(): %v", err)
+      if ok, err := s.t.Verify(v.Record, v.Signature.Signer, v.Signature.Data); err != nil {
+        s.l.Warning("syncRecords() Verify(): %v", err)
         continue
       } else if !ok {
-        s.l.Warning("syncRecords(): ingnoring record %s with invalid signature", pretty(v))
+        s.l.Warning("syncRecords(): ignored (invalid signature) %s", pretty(v))
+        continue
       }
       // Only accept records that are signed by this peer and where
       // the approver and signer are both the peer. This prevents
       // us from blindly trusting our peer to tell us about other peers.
       if v.Signature.Signer != p.String() || v.Record.Approver != v.Signature.Signer {
-        s.l.Warning("syncRecords(): peer %s passed record with non-matching signer/approver %s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Record.Approver))
+        s.l.Warning("syncRecords(): mismatch peer/signer/approver: %s/%s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Record.Approver))
       }
 
       if err := s.s.SetSignedRecord(v); err != nil {
@@ -219,11 +221,12 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
         return n
       }
       // Ensure signature is valid
-      if ok, err := s.verify(v.Completion, v.Signature); err != nil {
-        s.l.Warning("syncCompletions() verify(): %v", err)
+      if ok, err := s.t.Verify(v.Completion, v.Signature.Signer, v.Signature.Data); err != nil {
+        s.l.Warning("syncCompletions() Verify(): %v", err)
         continue
       } else if !ok {
         s.l.Warning("syncCompletions(): ingnoring completion %s with invalid signature", pretty(v))
+        continue
       }
       // Only accept completions that are signed by this peer and where
       // the completer and signer are both the peer. This prevents
@@ -276,35 +279,6 @@ func (s *Server) Sync(ctx context.Context) {
   wg.Wait()
 }
 
-func (s *Server) sign(m proto.Message) (*pb.Signature, error) {
-  if b, err := proto.Marshal(m); err != nil {
-    return nil, fmt.Errorf("sign() marshal error: %w", err)
-  } else if sig, err := s.t.Sign(b); err != nil {
-    return nil, fmt.Errorf("sign() crypto error: %w", err)
-  } else {
-    return &pb.Signature{
-      Signer: s.t.ID(),
-      Data: sig,
-    }, nil
-  }
-}
-
-func (s *Server) verify(m proto.Message, sig *pb.Signature) (bool, error) {
-  pid, err := peer.Decode(sig.Signer)
-  if err != nil {
-    return false, fmt.Errorf("verify() decode ID: %w", err)
-  }
-  k, err := pid.ExtractPublicKey()
-  if err != nil {
-    return false, fmt.Errorf("verify() get key error: %w", err)
-  }
-  b, err := proto.Marshal(m)
-  if err != nil {
-    return false, fmt.Errorf("verify() marshal error: %w", err)
-  }
-  return k.Verify(b, sig.Data)
-}
-
 func (s *Server) Run(ctx context.Context) {
   // Run will return when there are peers to connect to
   s.connStr = "Searching for peers"
@@ -314,7 +288,7 @@ func (s *Server) Run(ctx context.Context) {
   s.Sync(ctx)
 
   s.l.Info("Cleaning up DB")
-  for _, err := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
+  for _, err := range s.s.Cleanup() {
     s.l.Error("Cleanup: %v", err)
   }
 
@@ -335,18 +309,18 @@ func (s *Server) Run(ctx context.Context) {
         }
 
         switch v := tm.Msg.(type) {
-          case *pb.Completion:
-            if err := s.handleCompletion(tm.Peer, v, tm.Signature); err != nil {
+          case *pb.SignedCompletion:
+            if err := s.handleCompletion(tm.Peer, v.Completion, v.Signature); err != nil {
               s.l.Error("handleCompletion(%s, _, _): %v", shorten(tm.Peer), err)
             }
-          case *pb.Record:
-            if err := s.handleRecord(tm.Peer, v, tm.Signature); err != nil {
+          case *pb.SignedRecord:
+            if err := s.handleRecord(tm.Peer, v.Record, v.Signature); err != nil {
               s.l.Error("handleRecord(%s, _, _): %v", shorten(tm.Peer), err)
             }
         }
         s.notify(&pb.NotifyMessage{})
       case <-s.syncTicker.C:
-         for _, err := range s.s.Cleanup(s.opts.MaxTrackedPeers) {
+         for _, err := range s.s.Cleanup() {
           s.l.Error("Sync cleanup: %v", err)
         }
         go s.Sync(ctx)
@@ -366,24 +340,16 @@ func (s *Server) notify(m proto.Message) {
 }
 
 func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signature) error {
-  // Ignore if there's no matching record
-  sr, err := s.s.GetSignedSourceRecord(c.Uuid)
-  if err != nil {
-    return fmt.Errorf("GetSignedSourceRecord: %w", err)
-  }
-  // Reject record if peer already has MaxCompletionsPerPeer
-  if num, err := s.s.CountSignerCompletions(peer); err != nil {
-    return fmt.Errorf("CountSignerCompletions: %w", err)
-  } else if num > s.opts.MaxCompletionsPerPeer {
-    return fmt.Errorf("MaxCompletionsPerPeer exceeded (%d > %d)", num, s.opts.MaxCompletionsPerPeer)
-  }
-  // Or if peer would put us over MaxTrackedPeers
-  if num, err := s.s.CountCompletionSigners(peer); err != nil {
-    return fmt.Errorf("CountCompletionSigners: %w", err)
-  } else if num > s.opts.MaxTrackedPeers {
-    return fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, s.opts.MaxTrackedPeers)
+  if ok, err := s.t.Verify(c, sig.Signer, sig.Data); err != nil {
+    return err
+  } else if !ok {
+    return fmt.Errorf("invalid signature %s", pretty(c))
   }
 
+  sr, err := s.s.ValidateCompletion(c, peer, s.opts.MaxCompletionsPerPeer, s.opts.MaxTrackedPeers)
+  if err != nil {
+    return fmt.Errorf("handleCompletion validation: %w", err)
+  }
   sc := &pb.SignedCompletion{
     Completion: c,
     Signature: sig,
@@ -396,16 +362,7 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
   if sr.Record.Approver == s.ID() && c.Timestamp == 0 {
     // Peer talking about a record of ours
     s.l.Info("Peer %s is working on our record (%s)", shorten(peer), c.Uuid)
-    if trust, err := s.s.GetWorkerTrust(peer); err != nil {
-      return fmt.Errorf("GetTrust: %w", err)
-    } else if trust > s.opts.TrustedWorkerThreshold {
-      // TODO prevent another trusted peer from coming along and swiping the work - must check if record already has a sponsored worker
-      s.l.Info("We nominate %s to complete (%s)", shorten(peer), c.Uuid)
-      _, err := s.IssueCompletion(c, true)
-      return err
-    } else {
-      return nil
-    }
+    return nil
   } else if sr.Record.Approver == peer && sr.Signature.Signer == peer {
     // Record owner is talking about completion of their record. Either
     // timestamp=0 in which case they acknowledge someone working on it,
@@ -439,23 +396,14 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
 }
 
 func (s *Server) handleRecord(peer string, r *pb.Record, sig *pb.Signature) error {
-  // Reject if neither we nor the peer are the approver
-  if r.Approver != peer && r.Approver != s.ID() {
-    return fmt.Errorf("Approver=%s, want peer (%s) or self (%s)", shorten(r.Approver), shorten(peer), shorten(s.ID()))
+  if ok, err := s.t.Verify(r, sig.Signer, sig.Data); err != nil {
+    return err
+  } else if !ok {
+    return fmt.Errorf("invalid signature %s", pretty(r))
   }
-  // Reject record if peer already has MaxRecordsPerPeer
-  if num, err := s.s.CountSignerRecords(peer); err != nil {
-    return fmt.Errorf("CountSignerRecords: %w", err)
-  } else if num > s.opts.MaxRecordsPerPeer {
-    return fmt.Errorf("MaxRecordsPerPeer exceeded (%d > %d)", num, s.opts.MaxRecordsPerPeer)
+  if err := s.s.ValidateRecord(r, peer, s.opts.MaxRecordsPerPeer, s.opts.MaxTrackedPeers); err != nil {
+    return fmt.Errorf("handleRecord validation: %w", err)
   }
-  // Or if peer would put us over MaxTrackedPeers
-  if num, err := s.s.CountRecordSigners(peer); err != nil {
-    return fmt.Errorf("CountRecordSigners: %w", err)
-  } else if num > s.opts.MaxTrackedPeers {
-    return fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, s.opts.MaxTrackedPeers)
-  }
-  // Otherwise accept. Note that we just store it here; work selection is handled out of band (via the wrapper)
   return s.s.SetSignedRecord(&pb.SignedRecord{
     Record: r,
     Signature: sig,

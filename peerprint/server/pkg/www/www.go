@@ -2,8 +2,10 @@ package www
 
 import (
   "sync"
+  "io/fs"
   "context"
   "time"
+  "net"
   "net/http"
 	"encoding/json"
 	"github.com/smartin015/peerprint/p2pgit/pkg/log"
@@ -87,15 +89,24 @@ func (s *webserver) handleStorageSummary(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *webserver) Serve(addr string, ctx context.Context) {
-	s.l.Info("Starting status HTTP server at %s\n", addr)
-
-	fileServer := http.FileServer(http.FS(static))
-	http.Handle("/", fileServer)
+  subFS, err := fs.Sub(static, "static")
+  if err != nil {
+    panic(err)
+  }
+  http.Handle("/", http.FileServer(http.FS(subFS)))
 	http.HandleFunc("/history", s.handleGetHistory)
 	http.HandleFunc("/events", s.handleGetEvents)
 	http.HandleFunc("/serverSummary", s.handleServerSummary)
 	http.HandleFunc("/storageSummary", s.handleStorageSummary)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+
+	l, err := net.Listen("tcp", addr)
+  if err != nil {
+      panic(err)
+  }
+  defer l.Close()
+
+	s.l.Info("Starting status HTTP server on %s\n", l.Addr().(*net.TCPAddr).String())
+  if err := http.Serve(l, nil); err != nil {
 		s.l.Fatal(err)
 	}
 }

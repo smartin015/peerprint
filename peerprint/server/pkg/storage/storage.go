@@ -24,27 +24,17 @@ type DBEvent struct {
 type Interface interface {
   SetId(id string)
 
-  SetSignedRecord(r *pb.SignedRecord) error
+  ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer int64, maxTrackedPeers int64) error
+  SetSignedRecord(*pb.SignedRecord) error
   GetSignedRecords(context.Context, chan<- *pb.SignedRecord, ...any) error
-  GetSignedSourceRecord(uuid string) (*pb.SignedRecord, error)
-  CountRecordSigners(exclude string) (int64, error)
-  CountSignerRecords(signer string) (int64, error)
 
-  SetSignedCompletion(g *pb.SignedCompletion) error
+  ValidateCompletion(c *pb.Completion, peer string, maxCompletionsPerPeer int64, maxTrackedPeers int64) (*pb.SignedRecord, error)
+  SetSignedCompletion(*pb.SignedCompletion) error
   GetSignedCompletions(context.Context, chan<- *pb.SignedCompletion, ...any) error
-  CountCompletionSigners(exclude string) (int64, error)
-  CountSignerCompletions(signer string) (int64, error)
   CollapseCompletions(uuid string, signer string) error
 
-  Cleanup(untilPeers int64) []error
+  Cleanup() []error
   GetSummary() *Summary
-
-  GetWorkerTrust(peer string) (float64, error)
-  // GetRewardTrust not provided - we should never need to get the reward trust, as we delegate work-picking to the (python) wrapper 
-  SetWorkerTrust(peer string, trust float64) error
-  SetRewardTrust(peer string, trust float64) error
-
-  SetWorkability(uuid string, origin string, workability float64) error
 
   AppendEvent(event string, details string) error
   GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error

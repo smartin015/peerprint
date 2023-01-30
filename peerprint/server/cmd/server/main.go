@@ -41,7 +41,7 @@ var (
   // Timing flags
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
   syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
-  watchdogFlag = flag.Duration("wdt", 3*time.Second, "Time before exit after no interaction")
+  watchdogFlag = flag.Duration("wdt", 3*time.Second, "Time before exit after no interaction - 0 to disable")
 
   // Safety and cleanup flags
   maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 100, "Maximum number of records to allow each peer to store in our DB")
@@ -174,6 +174,9 @@ func (d *driver) Loop(ctx context.Context) {
   errChan := make(chan error, 5)
   cmdSend, cmdPush := cmd.New(*zmqRepFlag, *zmqPushFlag, cmdRecv, errChan)
   wdt := time.NewTimer(*watchdogFlag)
+  if *watchdogFlag == 0 {
+    wdt.Stop()
+  }
   for {
     select {
     case m := <-d.s.OnUpdate():
@@ -193,7 +196,9 @@ func (d *driver) Loop(ctx context.Context) {
     case <- ctx.Done():
       d.l.Info("Context completed, exiting")
     }
-    wdt.Reset(*watchdogFlag)
+    if *watchdogFlag > 0 {
+      wdt.Reset(*watchdogFlag)
+    }
   }
 }
 
@@ -209,24 +214,6 @@ func (d *driver) handleCommand(ctx context.Context, c proto.Message) (proto.Mess
     return d.s.IssueRecord(v, true)
   case *pb.Completion:
     return d.s.IssueCompletion(v, true)
-  case *pb.SetWorkerTrust:
-    if err := d.st.SetWorkerTrust(v.Peer, v.Trust); err != nil {
-      return nil, err
-    } else {
-      return &pb.Ok{}, nil
-    }
-  case *pb.SetRewardTrust:
-    if err := d.st.SetRewardTrust(v.Peer, v.Trust); err != nil {
-      return nil, err
-    } else {
-      return &pb.Ok{}, nil
-    }
-  case *pb.SetWorkability:
-    if err := d.st.SetWorkability(v.Uuid, v.Origin, v.Workability); err != nil {
-      return nil, err
-    } else {
-      return &pb.Ok{}, nil
-    }
   case *pb.CrawlPeers:
     if v.RestartCrawl || d.c == nil {
       d.c = crawl.NewCrawler(d.t.GetPeerAddresses(), d.crawlPeer)

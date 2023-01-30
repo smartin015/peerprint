@@ -2,7 +2,6 @@ package storage
 
 import (
   "context"
-  "math"
   "testing"
   "fmt"
   "strings"
@@ -14,11 +13,28 @@ import (
 )
 
 func testingDB() *sqlite3 {
-  if db, err := NewSqlite3(":memory:", "self"); err != nil {
+  if db, err := NewSqlite3(":memory:"); err != nil {
     panic(err)
   } else {
+    db.SetId("self")
     return db
   }
+}
+
+func recGet(db Interface, opts ...any) ([]*pb.SignedRecord, error) {
+  got := []*pb.SignedRecord{}
+  ch := make(chan *pb.SignedRecord)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func(){
+    defer wg.Done()
+    for sr := range ch {
+      got = append(got, sr)
+    }
+  }()
+  err := db.GetSignedRecords(context.Background(), ch, opts...)
+  wg.Wait()
+  return got, err
 }
 
 func cmpGet(db *sqlite3, opts ...any) ([]*pb.SignedCompletion, error) {
@@ -33,22 +49,6 @@ func cmpGet(db *sqlite3, opts ...any) ([]*pb.SignedCompletion, error) {
     }
   }()
   err := db.GetSignedCompletions(context.Background(), ch, opts...)
-  wg.Wait()
-  return got, err
-}
-
-func recGet(db *sqlite3, opts ...any) ([]*pb.SignedRecord, error) {
-  got := []*pb.SignedRecord{}
-  ch := make(chan *pb.SignedRecord)
-  var wg sync.WaitGroup
-  wg.Add(1)
-  go func(){
-    defer wg.Done()
-    for sr := range ch {
-      got = append(got, sr)
-    }
-  }()
-  err := db.GetSignedRecords(context.Background(), ch, opts...)
   wg.Wait()
   return got, err
 }
@@ -80,6 +80,28 @@ func TestSignedRecordSetGet(t *testing.T) {
   // Basic test
   if got, err := recGet(db); err != nil || len(got) != 10 {
     t.Errorf("Get: %v, %v, want len=10, nil", got, err)
+  }
+}
+
+func TestSignedRecordNoTag(t *testing.T) {
+  // Test for regressions if tag retrieval inserts additional rows
+  db := testingDB()
+  want := &pb.SignedRecord{
+    Signature: &pb.Signature{
+      Data: []byte{1,2,3},
+      Signer: "foo",
+    },
+    Record: &pb.Record{
+      Uuid: "asdf",
+      Rank: &pb.Rank{Num:1, Den:1, Gen:1},
+      Tags: []string{},
+    },
+  }
+  if err := db.SetSignedRecord(want); err != nil {
+    t.Errorf("Set: %v", err.Error())
+  }
+  if got, err := recGet(db); err != nil || len(got) != 1 || !proto.Equal(got[0], want) {
+    t.Errorf("Get: %v, %v, want []{%v}, nil", got, err, want)
   }
 }
 
@@ -125,6 +147,7 @@ func mustAddSCT(db *sqlite3, uuid, signer, completer string, with_timestamp bool
       Completion: &pb.Completion{
         Uuid: uuid,
         Completer: completer,
+        CompleterState: []byte("testing"),
         Timestamp: ts,
       },
   }
@@ -149,76 +172,7 @@ func TestSignedCompletionsSetGet(t *testing.T) {
   }
 }
 
-func TestComputePeerTrustNoCompletions(t *testing.T) {
-  db := testingDB()
-  if got, err := db.ComputePeerTrust("arandompeer"); err != nil || got > 0 {
-    t.Errorf("Got %v, %v want 0, nil", got, err)
-  }
-}
-
-func TestComputePeerTrustOnlyUntrusted(t *testing.T) {
-  db := testingDB()
-  for i := 0; i < 2; i++ {
-    mustAddSC(db, "signer", "completer")
-  }
-  // comp/incomp=0, hearsay=2, max_hearsay=2 -> 0.66...
-  if got, err := db.ComputePeerTrust("completer"); err != nil || got != 2.0/3.0 {
-    t.Errorf("Got %v, %v want 0.66..., nil", got, err)
-  }
-}
-
-func TestComputePeerTrustOnlyTrusted(t *testing.T) {
-  db := testingDB()
-  for i := 0; i < 5; i++ {
-    mustAddSC(db, db.id, "completer")
-  }
-  mustAddSCT(db, "uuid1", db.id, "completer", false)
-  mustAddSCT(db, "uuid2", db.id, "completer", false)
-  // comp=5, incomp=2 -> 3
-  if got, err := db.ComputePeerTrust("completer"); err != nil || got != 3 {
-    t.Errorf("Got %v, %v want 3, nil", got, err)
-  }
-}
-
-func mustTrust(db *sqlite3, peer string, trust float64) {
-  if _, err := db.db.Exec(`INSERT INTO "trust" (peer, trust, timestamp) VALUES (?, ?, ?);`, peer, trust, time.Now().Unix()); err != nil {
-    panic(err)
-  }
-}
-
-func TestComputeRecordWorkabilityNoWorkers(t *testing.T) {
-  db := testingDB()
-  want := 1.0
-  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "foo"}); err != nil || got != want {
-    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
-  }
-}
-
-func TestComputeRecordWorkabilityLowTrust(t *testing.T) {
-  db := testingDB()
-  mustAddSCT(db, "record", "completer1", "completer1", false)
-  mustAddSCT(db, "record", "completer2", "completer2", false)
-  mustTrust(db, "completer1", 0.5)
-  mustTrust(db, "completer2", 0.1)
-  want := 4/(math.Pow(4, 1.6))
-  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "record"}); err != nil || got != want {
-    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
-  }
-}
-
-func TestComputeRecordWorkabilityHighTrust(t *testing.T) {
-  db := testingDB()
-  mustAddSCT(db, "record", "completer1", "completer1", false)
-  mustAddSCT(db, "record", "completer2", "completer2", false)
-  mustTrust(db, "completer1", 1)
-  mustTrust(db, "completer2", 4)
-  want := 4/(math.Pow(4, 6))
-  if got, err := db.ComputeRecordWorkability(&pb.Record{Uuid: "record"}); err != nil || got != want {
-    t.Errorf("Got %v, %v, want %v, nil", got, err, want)
-  }
-}
-
 func TestCleanup(t *testing.T) {
-  db := testingDB()
+  // db := testingDB()
   t.Errorf("TODO")
 }

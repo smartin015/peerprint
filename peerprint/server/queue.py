@@ -20,18 +20,15 @@ class ChangeType(Enum):
     PEERS = 1
 
 class P2PQueue():
-    def __init__(self, opts, codec, binary_path, update_cb, logger):
+    def __init__(self, opts, binary_path, logger):
         self._logger = logger
         self._opts = opts
         self._binary_path = binary_path
         self.state = None
         self._proc = None
         self._id = None
-        self._codec = codec
         self._cond = Condition()
-        self._update_cb = update_cb
         self._mut = Semaphore(value=3) # Used for halting sockets during restart
-
 
         self._zmqLogger = None
         self._zmqclient = None

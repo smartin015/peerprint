@@ -18,7 +18,7 @@ func (s *Server) GetService() interface{} {
 }
 
 func (s *PeerPrintService) GetSignedRecords(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedRecord) error {
-  return s.base.s.GetSignedRecords(ctx, repChan, storage.WithLimit(1000)) // repChan closed by impl
+  return s.base.s.GetSignedRecords(ctx, repChan, storage.WithLimit(1000), storage.WithSigner(s.base.ID())) // repChan closed by impl
 }
 
 func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedCompletion) error {

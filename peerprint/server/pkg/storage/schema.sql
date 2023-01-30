@@ -46,32 +46,8 @@ CREATE TABLE events (
   timestamp INT NOT NULL
 );
 
-CREATE TABLE workability (
-  uuid TEXT NOT NULL,
-  origin TEXT NOT NULL,
-  timestamp INT NOT NULL,
-  workability REAL NOT NULL,
-
-	CONSTRAINT workability_pk 
-		PRIMARY KEY (uuid, origin),
-
-  CONSTRAINT workability_uuid_fk
-    FOREIGN KEY (uuid) references records(uuid)
-    ON DELETE CASCADE,
-
-	CONSTRAINT workability_signer_fk 
-		FOREIGN KEY (origin) references records(signer) 
-		ON DELETE CASCADE
-);
-
-CREATE TABLE trust (
+CREATE TABLE peers (
   peer TEXT NOT NULL PRIMARY KEY,
-  -- worker_trust is how likely we think this peer
-  -- will complete our Record
-  worker_trust REAL NOT NULL DEFAULT 0,
-  -- reward_trust is how likely we think this peer
-  -- will reward us if we complete their Record
-  reward_trust REAL NOT NULL DEFAULT 0,
 	first_seen INT NOT NULL,
 	last_seen INT NOT NULL,
   timestamp INT NOT NULL

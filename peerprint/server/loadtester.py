@@ -68,7 +68,7 @@ class LoadTester:
         if len(sys.argv) > 1 and sys.argv[1] != "":
             opts.www=sys.argv[1] # e.g. 0.0.0.0:5000
 
-        self.q = P2PQueue(opts, "TODO", BINPATH, "TODO", self._logger.getChild("queue"))
+        self.q = P2PQueue(opts, BINPATH, self._logger.getChild("queue"))
 
         self.debug("Connecting and waiting for response")
         self.q.connect()

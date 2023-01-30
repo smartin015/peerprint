@@ -18,42 +18,62 @@
 		<div class="row">
 			<nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
 				<div class="position-sticky pt-3 sidebar-sticky">
-					<ul class="nav flex-column">
-						<li class="nav-item">
-							<a class="nav-link active" aria-current="page" href="#">Stats</a>
+					<ul class="nav flex-column nav-pills me-3" id="myTab" role="tablist">
+						<li class="nav-item" role="presentation">
+							<button class="nav-link active" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="true">Server</button>
+						</li>
+						<li class="nav-item" role="presentation">
+							<button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage" aria-selected="false">Storage</button>
+						</li>
+						<li class="nav-item" role="presentation">
+							<button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events" aria-selected="false">Events</button>
+						</li>
+						<li class="nav-item" role="presentation">
+							<button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">History</button>
 						</li>
 					</ul>
 				</div>
 			</nav>
 			<main class="col-md-9 ms-sm-auto col-lg-10 px-md-4"><div class="chartjs-size-monitor"><div class="chartjs-size-monitor-expand"><div class=""></div></div><div class="chartjs-size-monitor-shrink"><div class=""></div></div></div>
 
-				<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-					<h1 class="h2">Server</h1>
-				</div>
-				<pre data-bind="text: JSON.stringify(serverSummary(), null, 2)">
-				</pre>
+      <div class="tab-content" id="myTabContent">
+        <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
+          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">Server</h1>
+          </div>
+          <pre data-bind="text: JSON.stringify(serverSummary(), null, 2)">
+          </pre>
+        </div>
 
-				<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-					<h1 class="h2">Storage</h1>
-				</div>
-				<pre data-bind="text: JSON.stringify(storageSummary(), null, 2)">
-				</pre>
+        <div class="tab-pane fade" id="storage" role="tabpanel" aria-labelledby="storage-tab">
+          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">Storage</h1>
+          </div>
+          <pre data-bind="text: JSON.stringify(storageSummary(), null, 2)">
+          </pre>
+        </div>
 
-				<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-					<h1 class="h2">Events</h1>
-				</div>
-        <div data-bind="foreach: events">
-          <div data-bind="text: JSON.stringify($data)">
+        <div class="tab-pane fade" id="events" role="tabpanel" aria-labelledby="events-tab">
+          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">Events</h1>
+          </div>
+          <div data-bind="foreach: events">
+            <div data-bind="text: JSON.stringify($data)">
+            </div>
           </div>
         </div>
 
-				<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-					<h1 class="h2">History</h1>
-				</div>
+        <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
+          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">History</h1>
+          </div>
 
-				<div data-bind="foreach: history">
-					<div data-bind="text: JSON.stringify($data)"></div>
-				</div>
+          <div data-bind="foreach: history">
+            <div data-bind="text: JSON.stringify($data)"></div>
+          </div>
+        </div>
+
+      </div>
 			</main>
 		</div>
 	</div>

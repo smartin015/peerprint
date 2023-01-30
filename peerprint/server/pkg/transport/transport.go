@@ -30,7 +30,8 @@ type Interface interface {
   Register(protocol string, srv interface{}) error
   Run(context.Context)
   ID() string
-  Sign([]byte) ([]byte, error)
+  Sign(proto.Message) ([]byte, error)
+  Verify(m proto.Message, signer string, data []byte) (bool, error)
   PubKey() crypto.PubKey
 
   Publish(topic string, msg proto.Message) error
@@ -116,7 +117,6 @@ func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error)
     logger.Printf("Joined topic: %q\n", t)
     s.pubChan[t] = c
   }
-
   return s, nil
 }
 
@@ -127,8 +127,33 @@ func (s *Transport) Register(pid string, srv interface{}) error {
   return s.server.RegisterName(ServiceName, srv)
 }
 
-func (s *Transport) Sign(b []byte) ([]byte, error) {
-  return s.opts.PrivKey.Sign(b)
+func (s *Transport) Sign(m proto.Message) ([]byte, error) {
+  b, err := proto.Marshal(m)
+  if err != nil {
+    return nil, fmt.Errorf("sign() marshal error: %w", err)
+  }
+
+  if sig, err := s.opts.PrivKey.Sign(b); err != nil {
+    return nil, fmt.Errorf("sign() crypto error: %w", err)
+  } else {
+    return sig, nil
+  }
+}
+
+func (t *Transport) Verify(m proto.Message, signer string, data []byte) (bool, error) {
+  pid, err := peer.Decode(signer)
+  if err != nil {
+    return false, fmt.Errorf("decode peer ID: %w", err)
+  }
+  pubk, err := pid.ExtractPublicKey()
+  if err != nil {
+    return false, fmt.Errorf("Extract public key: %w", err)
+  }
+  msg, err := proto.Marshal(m)
+  if err != nil {
+    return false, fmt.Errorf("Marshal proto: %w", err)
+  }
+  return pubk.Verify(msg, data)
 }
 
 func (s *Transport) PubKey() crypto.PubKey {

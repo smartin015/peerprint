@@ -3,7 +3,6 @@ package storage
 import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "context"
-  "math"
   "database/sql"
   "strings"
   "fmt"
@@ -58,7 +57,7 @@ func (s *sqlite3) createTables() error {
 
 func (s *sqlite3) TrackPeer(signer string) error {
 	if _, err := s.db.Exec(`
-		INSERT INTO "trust" (peer, first_seen, last_seen, timestamp)
+		INSERT INTO "peers" (peer, first_seen, last_seen, timestamp)
 		VALUES ($1, $2, $2, $2)
 		ON CONFLICT(peer) DO UPDATE SET last_seen=$2
 	`, signer, time.Now().Unix()); err != nil {
@@ -88,7 +87,9 @@ func scanSignedRecord(r scannable, result *pb.SignedRecord) error {
   ); err != nil {
     return err
   }
-  result.Record.Tags = strings.Split(tags, ",")
+  if tags != "" {
+    result.Record.Tags = strings.Split(tags, ",")
+  }
   return nil
 }
 
@@ -104,22 +105,60 @@ func scanSignedCompletion(r scannable, result *pb.SignedCompletion) error {
   );
 }
 
-func (s *sqlite3) updateWorkability(uuid string, signer string) error {
-	if newWorky, err := s.ComputeRecordWorkability(uuid); err != nil {
-		return err
-	} else if _, err := s.db.Exec(`
-			INSERT OR REPLACE 
-			INTO "workability" (uuid, origin, timestamp, workability) 
-			VALUES (?, ?, ?, ?);`, uuid, signer, newWorky, time.Now().Unix()); err != nil {
-		return err
-	}
+func shorten(s string) string {
+  if len(s) < 5 {
+    return s
+  }
+  return s[len(s)-4:]
+}
+
+func (s *sqlite3) ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer int64, maxTrackedPeers int64) error {
+  // Reject if neither we nor the peer are the approver
+  if r.Approver != peer && r.Approver != s.id {
+    return fmt.Errorf("Approver=%s, want peer (%s) or self (%s)", shorten(r.Approver), shorten(peer), shorten(s.id))
+  }
+  // Reject record if peer already has MaxRecordsPerPeer
+  if num, err := s.countSignerRecords(peer); err != nil {
+    return fmt.Errorf("countSignerRecords: %w", err)
+  } else if num > maxRecordsPerPeer {
+    return fmt.Errorf("MaxRecordsPerPeer exceeded (%d > %d)", num, maxRecordsPerPeer)
+  }
+  // Or if peer would put us over MaxTrackedPeers
+  if num, err := s.countRecordSigners(peer); err != nil {
+    return fmt.Errorf("countRecordSigners: %w", err)
+  } else if num > maxTrackedPeers {
+    return fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, maxTrackedPeers)
+  }
+
+  // Otherwise accept
   return nil
+}
+
+func (s *sqlite3) ValidateCompletion(c *pb.Completion, peer string, maxCompletionsPerPeer int64, maxTrackedPeers int64) (*pb.SignedRecord, error) {
+  sr, err := s.getSignedSourceRecord(c.Uuid)
+  if err != nil {
+    return nil, fmt.Errorf("getSignedSourceRecord: %w", err)
+  }
+  // Reject if peer already has MaxCompletionsPerPeer
+  if num, err := s.countSignerCompletions(peer); err != nil {
+    return nil, fmt.Errorf("countSignerCompletions: %w", err)
+  } else if num > maxCompletionsPerPeer {
+    return nil, fmt.Errorf("MaxCompletionsPerPeer exceeded (%d > %d)", num, maxCompletionsPerPeer)
+  }
+  // Reject if peer would put us over MaxTrackedPeers
+  if num, err := s.countCompletionSigners(peer); err != nil {
+    return nil, fmt.Errorf("countCompletionSigners: %w", err)
+  } else if num > maxTrackedPeers {
+    return nil, fmt.Errorf("MaxTrackedPeers exceeded (%d > %d)", num, maxTrackedPeers)
+  }
+  return sr, nil
 }
 
 func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
   if r.Record == nil || r.Signature == nil || r.Record.Rank == nil {
     return fmt.Errorf("One or more message fields are nil")
   }
+
   if _, err := s.db.Exec(`
     INSERT OR REPLACE INTO records (uuid, tags, approver, manifest, created, num, den, gen, signer, signature)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -136,13 +175,10 @@ func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
     r.Signature.Data); err != nil {
     return fmt.Errorf("insert into records: %w", err)
   }
-	if err := s.updateWorkability(r.Record.Uuid, r.Signature.Signer); err != nil {
-		return fmt.Errorf("update workability (record %s): %w", r.Record.Uuid, err)
-	}
   return nil
 }
 
-func (s *sqlite3) GetSignedSourceRecord(uuid string) (*pb.SignedRecord, error) {
+func (s *sqlite3) getSignedSourceRecord(uuid string) (*pb.SignedRecord, error) {
   result := &pb.SignedRecord{}
   clearSignedRecord(result)
   if err := scanSignedRecord(s.db.QueryRow(`SELECT * FROM "records" WHERE uuid=? AND approver=signer LIMIT 1;`, uuid), result); err != nil {
@@ -158,13 +194,15 @@ func (s *sqlite3) GetSignedRecords(ctx context.Context, cur chan<- *pb.SignedRec
   limit := -1
   for _, opt := range opts {
     switch v := opt.(type) {
+    case WithSigner:
+      where = append(where,  "signer=?")
+      args = append(args, string(v))
     case WithLimit:
       limit = int(v)
     default:
         return fmt.Errorf("GetSignedRecords received invalid option: %v", opt)
     }
   }
-  // TODO join tags
   q := `SELECT * FROM "records" `
   if len(where) > 0 {
     q += "WHERE " + strings.Join(where, " AND ")
@@ -208,9 +246,6 @@ func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
   `, g.Completion.Uuid, g.Completion.Completer, g.Completion.CompleterState, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
 	if err != nil {
 		return fmt.Errorf("insert completion: %w", err)
-	}
-	if err := s.updateWorkability(g.Completion.Uuid, g.Signature.Signer); err != nil {
-		return fmt.Errorf("update workability (completion %s): %w", g.Completion.Uuid, err)
 	}
   return nil
 }
@@ -266,7 +301,7 @@ func (s *sqlite3) GetSignedCompletions(ctx context.Context, cur chan<- *pb.Signe
   return nil
 }
 
-func (s *sqlite3) CountRecordSigners(exclude string) (int64, error) {
+func (s *sqlite3) countRecordSigners(exclude string) (int64, error) {
   // TODO consider memoization
   num := int64(0)
   err := s.db.QueryRow(`SELECT COUNT(DISTINCT(signer)) FROM "records" WHERE signer != ?;`, exclude).Scan(&num)
@@ -276,7 +311,7 @@ func (s *sqlite3) CountRecordSigners(exclude string) (int64, error) {
   return num, err
 }
 
-func (s *sqlite3) CountSignerRecords(signer string) (int64, error) {
+func (s *sqlite3) countSignerRecords(signer string) (int64, error) {
   // TODO consider memoization
   num := int64(0)
   err := s.db.QueryRow(`SELECT COUNT(DISTINCT(uuid)) FROM "records" WHERE signer=?;`, signer).Scan(&num)
@@ -286,7 +321,7 @@ func (s *sqlite3) CountSignerRecords(signer string) (int64, error) {
   return num, err
 }
 
-func (s *sqlite3) CountCompletionSigners(exclude string) (int64, error) {
+func (s *sqlite3) countCompletionSigners(exclude string) (int64, error) {
   // TODO consider memoization
   num := int64(0)
   err := s.db.QueryRow(`SELECT COUNT(DISTINCT(signer)) FROM "completions" WHERE signer != ?;`, exclude).Scan(&num)
@@ -296,7 +331,7 @@ func (s *sqlite3) CountCompletionSigners(exclude string) (int64, error) {
   return num, err
 }
 
-func (s *sqlite3) CountSignerCompletions(peer string) (int64, error) {
+func (s *sqlite3) countSignerCompletions(peer string) (int64, error) {
   // TODO consider memoization
   num := int64(0)
   err := s.db.QueryRow(`SELECT COUNT(DISTINCT(uuid)) FROM "completions" WHERE signer=?;`, peer).Scan(&num)
@@ -347,23 +382,11 @@ func (s *sqlite3) medianInt64(tbl, col string) int64 {
 
 func (s *sqlite3) GetSummary() *Summary {
 	ts := []TableStat{}
-  for _, tbl := range []string{"records", "completions", "events", "workability", "trust", "census"} {
+  for _, tbl := range []string{"records", "completions", "events", "census"} {
 		n:= int64(-1)
 		s.db.QueryRow(`SELECT COUNT(*) FROM ?;`, tbl).Scan(&n)
 		ts = append(ts, TableStat{Name: "total " + tbl, Stat: n})
 	}
-  ts = append(ts, TableStat{
-    Name:"median workability",
-    Stat: s.medianInt64("workability", "workability"),
-  })
-  ts = append(ts, TableStat{
-    Name:"median worker_trust",
-    Stat: s.medianInt64("trust", "worker_trust"),
-  })
-  ts = append(ts, TableStat{
-    Name:"median reward_trust",
-    Stat: s.medianInt64("trust", "reward_trust"),
-  })
 
   return &Summary{
     Location: s.path,
@@ -377,47 +400,6 @@ func (s *sqlite3) GetSummary() *Summary {
     },
     DBStats: s.db.Stats(),
   }
-}
-
-func (s *sqlite3) SetWorkerTrust(peer string, trust float64) error {
-  if _, err := s.db.Exec(`
-    INSERT INTO "trust" (peer, worker_trust, timestamp, first_seen, last_seen)
-    VALUES ($1, $2, $3, 0, 0)
-		ON CONFLICT(peer) DO UPDATE SET worker_trust=$2, timestamp=$3
-    `, peer, trust, time.Now().Unix()); err != nil {
-      return fmt.Errorf("setWorkerTrust: %w", err)
-  }
-  return nil
-}
-func (s *sqlite3) SetRewardTrust(peer string, trust float64) error {
-  if _, err := s.db.Exec(`
-    INSERT INTO "trust" (peer, reward_trust, timestamp, first_seen, last_seen)
-    VALUES ($1, $2, $3, 0, 0)
-		ON CONFLICT(peer) DO UPDATE SET reward_trust=$2, timestamp=$3
-    `, peer, trust, time.Now().Unix()); err != nil {
-      return fmt.Errorf("setRewardTrust: %w", err)
-  }
-  return nil
-}
-
-func (s *sqlite3) GetWorkerTrust(peer string) (float64, error) {
-  // TODO consider memoization
-  t := float64(0)
-  err := s.db.QueryRow(`SELECT worker_trust FROM "trust" WHERE peer=?;`, peer).Scan(&t)
-  if err == sql.ErrNoRows {
-    return 0, nil
-  }
-  return t, err
-}
-
-func (s *sqlite3) SetWorkability(uuid string, origin string, workability float64) error {
-  if _, err := s.db.Exec(`
-    INSERT OR REPLACE INTO workability (uuid, origin, workability, timestamp)
-    VALUES (?, ?, ?, ?);
-    `, uuid, origin, workability, time.Now().Unix()); err != nil {
-      return fmt.Errorf("SetWorkability: %w", err)
-  }
-  return nil
 }
 
 func (s *sqlite3) AppendEvent(event string, details string) error {
@@ -458,42 +440,4 @@ func (s *sqlite3) LogPeerCrawl(peer string, ts int64) error {
     INSERT INTO census (peer, timestamp) VALUES (?, ?)
   `, peer, ts)
   return err
-}
-
-
-func (s *sqlite3) ComputePeerTrust(peer string) (float64, error) {
-  completions := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) 
-    FROM "completions" 
-    WHERE completer=? AND signer=? AND timestamp!=0;`, peer, s.id).Scan(&completions); err != nil && err != sql.ErrNoRows {
-    return 0, fmt.Errorf("Count completions: %w", err)
-  }
-  incomplete := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) 
-    FROM "completions" 
-    WHERE completer=? AND signer=? AND timestamp=0;`, peer, s.id).Scan(&incomplete); err != nil && err != sql.ErrNoRows {
-    return 0, fmt.Errorf("Count incomplete: %w", err)
-  }
-
-  hearsay := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) FROM "completions" WHERE timestamp!=0 AND completer=? AND signer != ?;`, peer, s.id).Scan(&hearsay); err != nil && err != sql.ErrNoRows {
-    return 0, fmt.Errorf("Count hearsay: %w", err)
-  }
-  max_hearsay := int64(0)
-  if err := s.db.QueryRow(`SELECT COUNT(DISTINCT uuid) AS n FROM "completions" WHERE timestamp!=0 AND signer != ? GROUP BY completer ORDER BY n DESC LIMIT 1;`, s.id).Scan(&max_hearsay); err != nil && err != sql.ErrNoRows {
-    return 0, fmt.Errorf("Max hearsay: %w", err)
-  }
-  //print("hearsay ", hearsay, " max ",  max_hearsay, " cplt ", completions, " incomp ", incomplete,"\n")
-  return math.Max(float64(completions) + float64(hearsay)/(float64(max_hearsay)+1) - float64(incomplete), 0), nil
-}
-
-func (s *sqlite3) ComputeRecordWorkability(uuid string) (float64, error) {
-  // Sum the trust for all incomplete assertions by workers
-  tww := float64(0)
-  if err := s.db.QueryRow(`SELECT COALESCE(SUM(T2.worker_trust), 0) FROM "completions" T1 LEFT JOIN "trust" T2 ON T1.completer=T2.peer WHERE T1.uuid=?`, uuid).Scan(&tww); err != nil {
-    return 0, fmt.Errorf("Trust-weighted workers: %w", err)
-  }
-  //print("tww ", tww, "\n")
-  pNotWork := 4/(math.Pow(4, tww+1))
-  return pNotWork, nil
 }
