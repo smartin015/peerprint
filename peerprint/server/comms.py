@@ -16,13 +16,14 @@ class CommandError(Exception):
     pass
 
 class MutexSock():
+    REQUEST_RETRIES = 3
+
     def __init__(self, ctx, typ, mut, logger, addr=None):
         self._logger = logger
         self._ctx = ctx
         self._addr = addr  # only needed for req/rep lazy pirate reconnection
         self._sock = ctx.socket(typ)
-        self._mut = threading.Lock()
-        self._par_mut = mut
+        self._mut = mut
 
     def bind(self, addr):
         self._sock.bind(addr)
@@ -32,44 +33,38 @@ class MutexSock():
 
     def recv(self, timeout=1):
         with self._mut:
-            with self._par_mut:
-                if self._sock.closed:
-                    return
-                if (self._sock.poll(timeout*1000) & zmq.POLLIN) != 0:
-                    return self._sock.recv()
-                else:
-                    return None
+            if self._sock.closed:
+                return
+            if (self._sock.poll(timeout*1000) & zmq.POLLIN) != 0:
+                return self._sock.recv()
+            else:
+                return None
 
-    def reqrep(self, req, timeout=3):
-        REQUEST_RETRIES = 3
+    def reqrep(self, req, timeout):
+        # print("PY ->    LEN", len(req))
         with self._mut:
-            # print("PY ->    LEN", len(req))
-            with self._par_mut:
-                self._sock.send(req)
-            retries_left = REQUEST_RETRIES
+            self._sock.send(req)
+            retries_left = self.REQUEST_RETRIES
             while True:
-                with self._par_mut:
-                    if (self._sock.poll(timeout*1000/REQUEST_RETRIES) & zmq.POLLIN) != 0:
-                        rep = self._sock.recv()
-                        # print("   -> PY LEN", len(rep))
-                        return rep
+                if (self._sock.poll(timeout*1000/self.REQUEST_RETRIES) & zmq.POLLIN) != 0:
+                    rep = self._sock.recv()
+                    # print("   -> PY LEN", len(rep))
+                    return rep
                 retries_left -= 1
-                self._logger.warning("No response from server")
                 # Socket is confused. Close and remove it.
                 self._sock.close(linger=0)
+
                 if retries_left == 0:
-                    self._logger.error("Server seems to be offline, bailing out")
+                    self._logger.error("Server seems to be offline")
                     raise zmq.error.ZMQError("Max retries exceeded")
-                self._logger.warning("Reconnecting to server…")
-                # Create new connection
+                
+                self._logger.warning("No response from server - reconnecting and resending")
                 self._sock = self._ctx.socket(zmq.REQ)
                 self._sock.connect(self._addr)
-                self._logger.warning("Resending request")
                 self._sock.send(req)
 
     def destroy(self):
-        with self._mut:
-            self._sock.close(linger=0)
+        self._sock.close(linger=0)
 
 
 class ZMQLogSink():
@@ -99,13 +94,13 @@ class ZMQLogSink():
         self._log_sock = None
 
 class ZMQClient():
-    def __init__(self, req_addr, pull_addr, mut, cb, logger):
+    def __init__(self, req_addr, pull_addr, req_mut, pull_mut, cb, logger):
         self._logger = logger
         self._cb = cb
         self._context = zmq.Context()
-        self._sock = MutexSock(self._context, zmq.REQ, mut, self._logger, req_addr)
+        self._sock = MutexSock(self._context, zmq.REQ, req_mut, self._logger, req_addr)
         self._sock.connect(req_addr) # connect to bound REP socket in golang code
-        self._pull = MutexSock(self._context, zmq.PULL, mut, self._logger)
+        self._pull = MutexSock(self._context, zmq.PULL, pull_mut, self._logger)
         self._pull.bind(pull_addr) # bind for connecting PUSH socket in golang code
         self._logger.debug(f"ZMQClient connect to REQ {req_addr}")
 
@@ -156,7 +151,8 @@ class ZMQClient():
                 except MessageUnpackError as e:
                     self._logger.error(e)
 
-    def call(self, p, sec=2):
+    def call(self, p, timeout):
         amsg = Any()
         amsg.Pack(p)
-        return self._unpack(self._sock.reqrep(amsg.SerializeToString()))
+        rep = self._sock.reqrep(amsg.SerializeToString(), timeout)
+        return self._unpack(rep)

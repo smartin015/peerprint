@@ -32,11 +32,7 @@ CREATE TABLE completions (
 		PRIMARY KEY (uuid, signer),
 
 	CONSTRAINT completions_uuid_fk 
-		FOREIGN KEY (uuid) references records(uuid) 
-		ON DELETE CASCADE,
-
-	CONSTRAINT completions_signer_fk 
-		FOREIGN KEY (signer) references records(signer) 
+		FOREIGN KEY (uuid, signer) references records(uuid, signer) 
 		ON DELETE CASCADE
 );
 

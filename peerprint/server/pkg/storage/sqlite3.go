@@ -134,18 +134,17 @@ func (s *sqlite3) ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer in
   return nil
 }
 
-func (s *sqlite3) ValidateCompletion(c *pb.Completion, peer string, maxCompletionsPerPeer int64, maxTrackedPeers int64) (*pb.SignedRecord, error) {
+func (s *sqlite3) ValidateCompletion(c *pb.Completion, peer string, maxTrackedPeers int64) (*pb.SignedRecord, error) {
   sr, err := s.getSignedSourceRecord(c.Uuid)
   if err != nil {
+    if err == sql.ErrNoRows {
+      return nil, fmt.Errorf("no record matching completion UUID %s", c.Uuid)
+    }
     return nil, fmt.Errorf("getSignedSourceRecord: %w", err)
   }
-  // Reject if peer already has MaxCompletionsPerPeer
-  if num, err := s.countSignerCompletions(peer); err != nil {
-    return nil, fmt.Errorf("countSignerCompletions: %w", err)
-  } else if num > maxCompletionsPerPeer {
-    return nil, fmt.Errorf("MaxCompletionsPerPeer exceeded (%d > %d)", num, maxCompletionsPerPeer)
-  }
   // Reject if peer would put us over MaxTrackedPeers
+  // We don't have a MaxCompletionsPerPeer as it's only possible to
+  // write NUM_RECORDS * NUM_PEERS completions - it's bounded by primary key.
   if num, err := s.countCompletionSigners(peer); err != nil {
     return nil, fmt.Errorf("countCompletionSigners: %w", err)
   } else if num > maxTrackedPeers {
@@ -341,6 +340,15 @@ func (s *sqlite3) countSignerCompletions(peer string) (int64, error) {
   return num, err
 }
 
+func (s *sqlite3) countCompletedRecords() (int64, error) {
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" R LEFT JOIN "completions" C ON R.uuid=C.uuid AND R.signer=C.signer WHERE C.timestamp > 0 AND r.signer=R.approver;`).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
+}
+
 func(s *sqlite3) SetId(id string) {
 	s.id = id
 }
@@ -380,13 +388,22 @@ func (s *sqlite3) medianInt64(tbl, col string) int64 {
   return m
 }
 
-func (s *sqlite3) GetSummary() *Summary {
+func (s *sqlite3) GetSummary() (*Summary, []error) {
 	ts := []TableStat{}
-  for _, tbl := range []string{"records", "completions", "events", "census"} {
+  errs := []error{}
+  for _, tbl := range []string{"records", "completions", "events", "peers", "census"} {
 		n:= int64(-1)
-		s.db.QueryRow(`SELECT COUNT(*) FROM ?;`, tbl).Scan(&n)
+    if err := s.db.QueryRow("SELECT COUNT(*) FROM " + tbl + ";").Scan(&n); err != nil {
+      errs = append(errs, fmt.Errorf("get count for %s: %w", tbl, err))
+    }
 		ts = append(ts, TableStat{Name: "total " + tbl, Stat: n})
 	}
+  numCplt, err := s.countCompletedRecords()
+  if err != nil {
+    errs = append(errs, fmt.Errorf("get completed records: %w", err))
+  } else {
+    ts = append(ts, TableStat{Name: "tombstoned records", Stat: numCplt})
+  }
 
   return &Summary{
     Location: s.path,
@@ -399,7 +416,7 @@ func (s *sqlite3) GetSummary() *Summary {
       },
     },
     DBStats: s.db.Stats(),
-  }
+  }, errs
 }
 
 func (s *sqlite3) AppendEvent(event string, details string) error {

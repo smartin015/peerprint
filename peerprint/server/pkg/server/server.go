@@ -24,10 +24,7 @@ type Opts struct {
   DisplayName string
 
   MaxRecordsPerPeer int64
-  MaxCompletionsPerPeer int64
   MaxTrackedPeers int64
-
-  TrustedWorkerThreshold float64
 }
 
 type Interface interface {
@@ -147,7 +144,6 @@ func (s *Server) IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, erro
     Record: r,
     Signature: &pb.Signature{Signer: s.t.ID(), Data: sig},
   }
-  s.l.Info("Full signature details: %+v", sr)
   if err := s.s.SetSignedRecord(sr); err != nil {
     return nil, fmt.Errorf("write record: %w", err)
   }
@@ -235,6 +231,13 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
         s.l.Warning("syncCompletions(): peer %s passed record with non-matching signer/completer %s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Completion.Completer))
         continue
       }
+
+      // Ensure completion is within limits and has a matching source record
+      if _, err := s.s.ValidateCompletion(v.Completion, v.Signature.Signer, s.opts.MaxTrackedPeers); err != nil {
+        s.l.Warning("syncCompletions(): %v", err)
+        continue
+      }
+
       if err := s.s.SetSignedCompletion(v); err != nil {
         s.l.Error("syncCompletions() SetSignedCompletion(%v): %v", v, err)
       } else {
@@ -260,15 +263,23 @@ func (s *Server) Sync(ctx context.Context) {
     if p.String() == s.ID() {
       continue // No self connection
     }
-    // TODO fetch <= MaxRecordsPerPeer records and MaxCompletionsPerPeer completions for p
-    wg.Add(2)
-    s.l.Info("Syncing with %s", shorten(p.String()))
+    wg.Add(1)
+    s.l.Info("Syncing records from %s", shorten(p.String()))
     go func(p peer.ID) {
       defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncRecords(ctx, p)
       s.l.Info("Synced %d records from %s", n, shorten(p.String()))
     }(p)
+  }
+  wg.Wait()
+
+  for _, p := range s.t.GetPeers() {
+    if p.String() == s.ID() {
+      continue // No self connection
+    }
+    wg.Add(1)
+    s.l.Info("Syncing completions from %s", shorten(p.String()))
     go func(p peer.ID) {
       defer storage.HandlePanic()
       defer wg.Done()
@@ -288,8 +299,10 @@ func (s *Server) Run(ctx context.Context) {
   s.Sync(ctx)
 
   s.l.Info("Cleaning up DB")
-  for _, err := range s.s.Cleanup() {
+  if num, err := s.s.Cleanup(0); err != nil {
     s.l.Error("Cleanup: %v", err)
+  } else {
+    s.l.Info("Cleaned up %d records", num)
   }
 
   s.l.Info("Running server main loop")
@@ -320,8 +333,10 @@ func (s *Server) Run(ctx context.Context) {
         }
         s.notify(&pb.NotifyMessage{})
       case <-s.syncTicker.C:
-         for _, err := range s.s.Cleanup() {
+        if num, err := s.s.Cleanup(s.opts.MaxRecordsPerPeer/2); err != nil {
           s.l.Error("Sync cleanup: %v", err)
+        } else {
+          s.l.Info("Cleaned up %d records", num)
         }
         go s.Sync(ctx)
         s.notify(&pb.NotifySync{})
@@ -346,7 +361,7 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
     return fmt.Errorf("invalid signature %s", pretty(c))
   }
 
-  sr, err := s.s.ValidateCompletion(c, peer, s.opts.MaxCompletionsPerPeer, s.opts.MaxTrackedPeers)
+  sr, err := s.s.ValidateCompletion(c, peer, s.opts.MaxTrackedPeers)
   if err != nil {
     return fmt.Errorf("handleCompletion validation: %w", err)
   }

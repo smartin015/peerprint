@@ -4,7 +4,7 @@ import time
 import copy
 import tempfile
 from zmq.error import ZMQError
-from threading import Semaphore, Thread
+from threading import Lock, Thread
 from .comms import ZMQLogSink, ZMQClient, MessageUnpackError
 from .proc import ServerProcess
 from .queries import DBReader
@@ -20,6 +20,9 @@ class ChangeType(Enum):
     PEERS = 1
 
 class P2PQueue():
+    HEALTHCHECK_PD = 5.0
+    RECONNECT_TIMEOUT = 30.0
+
     def __init__(self, opts, binary_path, logger):
         self._logger = logger
         self._opts = opts
@@ -28,7 +31,9 @@ class P2PQueue():
         self._proc = None
         self._id = None
         self._cond = Condition()
-        self._mut = Semaphore(value=3) # Used for halting sockets during restart
+        self._do_healthcheck = False
+        self._mut = [Lock() for l in range(3)] # Used for halting sockets during restart
+        self._op_mut = Lock()
 
         self._zmqLogger = None
         self._zmqclient = None
@@ -54,9 +59,9 @@ class P2PQueue():
     def _healthcheck_loop(self):
         self._logger.debug("Starting healthcheck loop")
         while True:
-            time.sleep(1.0)
+            time.sleep(self.HEALTHCHECK_PD)
             try: 
-                if self._proc is not None:
+                if self._do_healthcheck:
                     ret = self._call(cpb.HealthCheck(), 3.0)
             except ZMQError:
                 # TODO exponential backoff to reduce churn
@@ -64,55 +69,62 @@ class P2PQueue():
                 self._restart_server()
 
     def _restart_server(self):
-        # Wait for all sockets to not be sending/receiving before
-        # destroying them
-        self._mut.acquire()
-        self._mut.acquire()
-        self._mut.acquire()
-        if self._proc is not None:
-            self._proc.destroy()
-            self._proc = None
-        if self._zmqLogger is not None:
-            self._zmqLogger.destroy()
-            self._zmqLogger = None
-        if self._zmqclient is not None:
-            self._zmqclient.destroy()
-            self._zmqclient = None
-        self._mut.release()
-        self._mut.release()
-        self._mut.release()
+        self._do_healthcheck = False
+        with self._op_mut:
+            # Wait for all sockets to not be sending/receiving before
+            # destroying them
+            if self._proc is not None:
+                self._logger.debug("Destroying process")
+                self._proc.destroy()
+                self._proc = None
 
-        self._logger.debug("initializing logsink")
-        self._zmqLogger = ZMQLogSink(self._opts.zmqLog, self._mut, self._logger.getChild("zmqlog"))
-        self._logger.debug("initializing server process")
-        self._proc = ServerProcess(self._opts, self._binary_path, self._logger.getChild("proc"))
-        self._logger.debug("initializing zmq client")
-        self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqPush, self._mut, self._update, self._logger.getChild("zmqclient"))
+            with self._mut[0]:
+                self._logger.debug("Lock acquired; destroying logger")
+                if self._zmqLogger is not None:
+                    self._zmqLogger.destroy()
+                    self._zmqLogger = None
+
+            with self._mut[1]:
+                with self._mut[2]:
+                    self._logger.debug("Locks acquired; destroying zmqClient")
+                    if self._zmqclient is not None:
+                        self._zmqclient.destroy()
+                        self._zmqclient = None
+
+            with self._cond:
+                self._logger.debug("initializing logsink")
+                self._zmqLogger = ZMQLogSink(self._opts.zmqLog, self._mut[0], self._logger.getChild("zmqlog"))
+                self._logger.debug("initializing server process")
+                self._proc = ServerProcess(self._opts, self._binary_path, self._logger.getChild("proc"))
+                self._logger.debug("initializing zmq client")
+                self._zmqclient = ZMQClient(self._opts.zmq, self._opts.zmqPush, self._mut[1], self._mut[2], self._update, self._logger.getChild("zmqclient"))
+                self._do_healthcheck = True
+
+                self._logger.debug("entering cond wait")
+                self._cond.wait(self.RECONNECT_TIMEOUT)
 
 
     def connect(self, timeout=None):
-        with self._cond:
-            Thread(target=self._healthcheck_loop, daemon=True).start()
-            self._restart_server()
-            self._logger.debug("entering cond wait")
-            self._cond.wait(timeout)
+        Thread(target=self._healthcheck_loop, daemon=True).start()
+        self._restart_server()
 
-            # Must initialize the reader *after* the server is initialized
-            # otherwise the DB file may not exist
-            self.state = DBReader(self._opts.db) 
+        # Must initialize the reader *after* the server is initialized
+        # otherwise the DB file may not exist
+        self.state = DBReader(self._opts.db) 
 
     def waitForUpdate(self, timeout=None):
         with self._cond:
             self._cond.wait(timeout)
 
     def destroy(self):
-        if self._zmqLogger is not None:
-            self._zmqLogger.destroy()
-        if self._zmqclient is not None:
-            self._zmqclient.destroy()
-        if self._proc is not None:
-            self._proc.destroy()
-        self.tmpdir.cleanup()
+        with self._op_mut:
+            if self._zmqLogger is not None:
+                self._zmqLogger.destroy()
+            if self._zmqclient is not None:
+                self._zmqclient.destroy()
+            if self._proc is not None:
+                self._proc.destroy()
+            self.tmpdir.cleanup()
 
     def _update(self, msg):
         # self._logger.debug(f"Got update message: {msg}")
@@ -120,7 +132,8 @@ class P2PQueue():
             self._cond.notify_all()
 
     def _call(self, v, timeout=15):
-        rep = self._zmqclient.call(v, timeout)
+        with self._op_mut:
+            rep = self._zmqclient.call(v, timeout)
         if isinstance(rep, cpb.Error):
             raise Exception(rep.Reason)
         else:

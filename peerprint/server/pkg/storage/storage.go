@@ -28,13 +28,13 @@ type Interface interface {
   SetSignedRecord(*pb.SignedRecord) error
   GetSignedRecords(context.Context, chan<- *pb.SignedRecord, ...any) error
 
-  ValidateCompletion(c *pb.Completion, peer string, maxCompletionsPerPeer int64, maxTrackedPeers int64) (*pb.SignedRecord, error)
+  ValidateCompletion(c *pb.Completion, peer string, maxTrackedPeers int64) (*pb.SignedRecord, error)
   SetSignedCompletion(*pb.SignedCompletion) error
   GetSignedCompletions(context.Context, chan<- *pb.SignedCompletion, ...any) error
   CollapseCompletions(uuid string, signer string) error
 
-  Cleanup() []error
-  GetSummary() *Summary
+  Cleanup(until_records int64) (int64, error)
+  GetSummary() (*Summary, []error)
 
   AppendEvent(event string, details string) error
   GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error

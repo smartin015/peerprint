@@ -80,7 +80,11 @@ func (s *webserver) handleServerSummary(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *webserver) handleStorageSummary(w http.ResponseWriter, r *http.Request) {
-	data, err := json.Marshal(s.st.GetSummary())
+  summary, errs := s.st.GetSummary()
+  for _, e := range errs {
+    s.l.Error("handleStorageSummary: %v", e)
+  }
+	data, err := json.Marshal(summary)
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte(err.Error()))

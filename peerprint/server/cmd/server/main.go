@@ -41,16 +41,11 @@ var (
   // Timing flags
 	connectTimeoutFlag = flag.Duration("connectTimeout", 2*time.Minute, "How long to wait for initial connection")
   syncPeriodFlag = flag.Duration("syncPeriod", 10*time.Minute, "Time between syncing with peers to correct missed data")
-  watchdogFlag = flag.Duration("wdt", 3*time.Second, "Time before exit after no interaction - 0 to disable")
+  watchdogFlag = flag.Duration("wdt", 10*time.Second, "Time before exit after no interaction - 0 to disable")
 
   // Safety and cleanup flags
-  maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 100, "Maximum number of records to allow each peer to store in our DB")
-  maxCompletionsPerPeerFlag = flag.Int64("maxCompletionsPerPeer", 100, "Maximum number of completions to record from neighboring peers")
+  maxRecordsPerPeerFlag = flag.Int64("maxRecordsPerPeer", 15, "Maximum number of records to allow each peer to store in our DB")
   maxTrackedPeersFlag = flag.Int64("maxTrackedPeers", 100,"Maximum number of peers for which we keep state information (including records and completions)")
-  trustCleanupThresholdFlag = flag.Float64("trustCleanupThreshold", 2.0, "Trust value to consider a peer as 'trusted' when cleaning up DB entries")
-  trustCleanupTTLFlag = flag.Duration("trustCleanupTTL", 24*10*time.Hour, "Amount of time before peers are considered for removal")
-  trustedWorkerThresholdFlag = flag.Float64("trustedWorkerThreshold", 1.0, "How much to trust a peer before rebroadcasting its assertion that it's working on our record - this prevents other peers from speculatively working on the same record")
-  trustedPeersFlag = flag.String("trustedPeers", "", "peer IDs to trust implicitly")
 
   // IPC flags
 	zmqRepFlag         = flag.String("zmq", "", "zmq server REP address (can be IPC, socket, etc.), required")
@@ -139,9 +134,7 @@ func main() {
     SyncPeriod: *syncPeriodFlag,
     DisplayName: *displayNameFlag,
     MaxRecordsPerPeer: *maxRecordsPerPeerFlag,
-    MaxCompletionsPerPeer: *maxCompletionsPerPeerFlag,
     MaxTrackedPeers: *maxTrackedPeersFlag,
-    TrustedWorkerThreshold: *trustedWorkerThresholdFlag,
   }, pplog.New(name, logger))
 
   if *wwwFlag != "" {
