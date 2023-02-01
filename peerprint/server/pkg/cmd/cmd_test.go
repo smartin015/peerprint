@@ -27,12 +27,12 @@ func testEnv(t *testing.T) (*TestEnv) {
   push_addr := makeIPC(t)
   rc := make(chan proto.Message)
   ec := make(chan error)
-  sc, pc := New(rep_addr, push_addr, rc, ec)
+  sc, pc, destroy := New(rep_addr, push_addr, rc, ec)
   t.Cleanup(func() {
     close(sc)
-    close(pc)
     close(rc)
     close(ec)
+    destroy() // closes pc
   })
 
   req, err := goczmq.NewReq(rep_addr)

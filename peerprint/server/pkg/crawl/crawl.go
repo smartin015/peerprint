@@ -9,9 +9,9 @@ import (
 
 
 // Note: GetPeersResponse only contains peers which have not yet been crawled.
-// It's the responsibilty of the implementer of crawlPeerFn to strip these
-// from server replies and to track the peers that have been already received.
-type crawlPeerFn func(ctx context.Context, ai *peer.AddrInfo) []*peer.AddrInfo
+// It's the responsibilty of the implementer of crawlPeerFn to strip already
+// crawled peers from server replies.
+type crawlPeerFn func(ctx context.Context, ai *peer.AddrInfo) ([]*peer.AddrInfo, error)
 
 type Crawler struct {
   Started time.Time
@@ -32,10 +32,11 @@ func NewCrawler(start []*peer.AddrInfo, cpf crawlPeerFn) *Crawler {
   return c
 }
 
-func (c *Crawler) Step(ctx context.Context, maxConn int64) int {
+func (c *Crawler) Step(ctx context.Context, maxConn int64) (int, []error) {
   var wg sync.WaitGroup
   ncon := int64(0)
   c.mut.Lock()
+  errs := []error{}
   for _, p := range c.next {
     ncon += 1
     if ncon > maxConn {
@@ -45,7 +46,11 @@ func (c *Crawler) Step(ctx context.Context, maxConn int64) int {
     wg.Add(1)
     go func(p *peer.AddrInfo) {
       defer wg.Done()
-      for _, a := range c.crawlPeer(ctx, p) {
+      rep, err := c.crawlPeer(ctx, p)
+      if err != nil {
+        errs = append(errs, err)
+      }
+      for _, a := range rep {
         c.mut.Lock()
         if _, ok := c.next[a.ID.String()]; !ok {
           c.next[a.ID.String()] = a
@@ -56,5 +61,5 @@ func (c *Crawler) Step(ctx context.Context, maxConn int64) int {
   }
   c.mut.Unlock()
   wg.Wait()
-  return len(c.next)
+  return len(c.next), errs
 }

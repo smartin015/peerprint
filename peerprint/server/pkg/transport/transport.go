@@ -24,6 +24,7 @@ import (
 
 const (
   ServiceName = "PeerPrintService"
+  MaxMultiAddr = 50
 )
 
 type Interface interface {
@@ -231,6 +232,9 @@ func ProtoToPeerAddrInfo(ai *pb.AddrInfo) (*peer.AddrInfo, error) {
 		Addrs: []ma.Multiaddr{},
 	}
 	for _, a := range ai.GetAddrs() {
+    if len(p.Addrs) > MaxMultiAddr {
+      break
+    }
 		aa, err := ma.NewMultiaddr(a)
 		if err != nil {
 			return nil, fmt.Errorf("Error creating AddrInfo from string %s: %w", a, err)
@@ -245,6 +249,9 @@ func PeerToProtoAddrInfo(ai *peer.AddrInfo) *pb.AddrInfo {
     Addrs: []string{},
   }
   for _, ma := range ai.Addrs {
+    if len(a.Addrs) > MaxMultiAddr {
+      break
+    }
     a.Addrs = append(a.Addrs, ma.String())
   }
   return a
