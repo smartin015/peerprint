@@ -92,3 +92,7 @@ func TestCleanupDanglingCompletions(t *testing.T) {
     t.Errorf("GetSignedRecords = %v, %v, want len=0, nil", got, err)
   }
 }
+
+func TestDeleteOldTimeline(t *testing.T) {
+  t.Skip("TODO")
+}

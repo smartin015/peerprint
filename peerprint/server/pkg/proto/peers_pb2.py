@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/peers.proto\x12\x05peers\"\x1a\n\nPeerStatus\x12\x0c\n\x04name\x18\x01 \x01(\t\"%\n\x08\x41\x64\x64rInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\t\"\x11\n\x0fGetPeersRequest\"6\n\x10GetPeersResponse\x12\"\n\tAddresses\x18\x01 \x03(\x0b\x32\x0f.peers.AddrInfoB.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11proto/peers.proto\x12\x05peers\"\x1a\n\nPeerStatus\x12\x0c\n\x04name\x18\x01 \x01(\t\"%\n\x08\x41\x64\x64rInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\t\"\x11\n\x0fGetPeersRequest\"6\n\x10GetPeersResponse\x12\"\n\tAddresses\x18\x01 \x03(\x0b\x32\x0f.peers.AddrInfo\">\n\tPeerTrack\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nfirst_seen\x18\x02 \x01(\x03\x12\x11\n\tlast_seen\x18\x03 \x01(\x03\"+\n\nPeerSample\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x42.Z,github.com/smartin015/peerprint/pubsub/protob\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.peers_pb2', globals())
@@ -29,4 +29,8 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _GETPEERSREQUEST._serialized_end=112
   _GETPEERSRESPONSE._serialized_start=114
   _GETPEERSRESPONSE._serialized_end=168
+  _PEERTRACK._serialized_start=170
+  _PEERTRACK._serialized_end=232
+  _PEERSAMPLE._serialized_start=234
+  _PEERSAMPLE._serialized_end=277
 # @@protoc_insertion_point(module_scope)

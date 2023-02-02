@@ -45,8 +45,7 @@ CREATE TABLE events (
 CREATE TABLE peers (
   peer TEXT NOT NULL PRIMARY KEY,
 	first_seen INT NOT NULL,
-	last_seen INT NOT NULL,
-  timestamp INT NOT NULL
+	last_seen INT NOT NULL
 );
  
 CREATE TABLE census (

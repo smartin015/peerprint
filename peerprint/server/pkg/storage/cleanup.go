@@ -7,6 +7,11 @@ import (
   _ "github.com/mattn/go-sqlite3"
 )
 
+func (s *sqlite3) deleteOldTimeline() (int64, error) {
+  // TODO decimate Census table with a predetermined retention period
+  return 0,  fmt.Errorf("Not implemented")
+}
+
 func(s *sqlite3) deleteCompletedRecords(amt int64) (int64, error) {
   n, err := s.countCompletedRecords()
   if err != nil {
@@ -80,5 +85,9 @@ func (s *sqlite3) Cleanup(until_records int64) (int64, error) {
   if err != nil {
     return n1, fmt.Errorf("delete dangling completions: %w", err)
   }
-  return n1+n2, nil
+  n3, err := s.deleteOldTimeline()
+  if err != nil {
+    return n1+n2, fmt.Errorf("delete old timeline: %w", err)
+  }
+  return n1+n2+n3, nil
 }

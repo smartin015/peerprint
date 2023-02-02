@@ -15,6 +15,11 @@ var (
 type WithSigner string
 type WithLimit int
 
+type DataPoint struct {
+	Timestamp int64
+	Value int64
+}
+
 type DBEvent struct {
   Event string
   Details string
@@ -41,6 +46,8 @@ type Interface interface {
 
 	TrackPeer(signer string) error
   LogPeerCrawl(peer string, ts int64) error
+  GetPeerTracking(context.Context, chan<- *TimeProfile, ...any) error
+  GetPeerTimeline(context.Context, chan<- *DataPoint, ...any) error
 }
 
 func SetPanicHandler(s Interface) {

@@ -415,186 +415,6 @@ func (x *IDResponse) GetId() string {
 	return ""
 }
 
-// SetWorkerTrust can be used to establish trust outside of the p2p algorithm,
-// e.g. by exchanging a list of trusted peers with the network details.
-type SetWorkerTrust struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Peer  string  `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
-	Trust float64 `protobuf:"fixed64,2,opt,name=trust,proto3" json:"trust,omitempty"`
-}
-
-func (x *SetWorkerTrust) Reset() {
-	*x = SetWorkerTrust{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[9]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *SetWorkerTrust) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetWorkerTrust) ProtoMessage() {}
-
-func (x *SetWorkerTrust) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[9]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetWorkerTrust.ProtoReflect.Descriptor instead.
-func (*SetWorkerTrust) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *SetWorkerTrust) GetPeer() string {
-	if x != nil {
-		return x.Peer
-	}
-	return ""
-}
-
-func (x *SetWorkerTrust) GetTrust() float64 {
-	if x != nil {
-		return x.Trust
-	}
-	return 0
-}
-
-// SetRewardTrust can be used as with SetWorkerTrust, and also when the wrapper
-// decides that a Record has been fully fulfilled by its approver
-// (payment or thanks exchanged, approver issued Completion etc.)
-type SetRewardTrust struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Peer  string  `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
-	Trust float64 `protobuf:"fixed64,2,opt,name=trust,proto3" json:"trust,omitempty"`
-}
-
-func (x *SetRewardTrust) Reset() {
-	*x = SetRewardTrust{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[10]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *SetRewardTrust) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetRewardTrust) ProtoMessage() {}
-
-func (x *SetRewardTrust) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[10]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetRewardTrust.ProtoReflect.Descriptor instead.
-func (*SetRewardTrust) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *SetRewardTrust) GetPeer() string {
-	if x != nil {
-		return x.Peer
-	}
-	return ""
-}
-
-func (x *SetRewardTrust) GetTrust() float64 {
-	if x != nil {
-		return x.Trust
-	}
-	return 0
-}
-
-// SetWorkability allows for overriding the network and seeking/avoiding
-// a record despite the number of peers that claim to be working on it.
-type SetWorkability struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Uuid        string  `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Origin      string  `protobuf:"bytes,2,opt,name=origin,proto3" json:"origin,omitempty"`
-	Workability float64 `protobuf:"fixed64,3,opt,name=workability,proto3" json:"workability,omitempty"`
-}
-
-func (x *SetWorkability) Reset() {
-	*x = SetWorkability{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[11]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *SetWorkability) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetWorkability) ProtoMessage() {}
-
-func (x *SetWorkability) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[11]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetWorkability.ProtoReflect.Descriptor instead.
-func (*SetWorkability) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *SetWorkability) GetUuid() string {
-	if x != nil {
-		return x.Uuid
-	}
-	return ""
-}
-
-func (x *SetWorkability) GetOrigin() string {
-	if x != nil {
-		return x.Origin
-	}
-	return ""
-}
-
-func (x *SetWorkability) GetWorkability() float64 {
-	if x != nil {
-		return x.Workability
-	}
-	return 0
-}
-
 type CrawlPeers struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -608,7 +428,7 @@ type CrawlPeers struct {
 func (x *CrawlPeers) Reset() {
 	*x = CrawlPeers{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[12]
+		mi := &file_proto_command_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -621,7 +441,7 @@ func (x *CrawlPeers) String() string {
 func (*CrawlPeers) ProtoMessage() {}
 
 func (x *CrawlPeers) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[12]
+	mi := &file_proto_command_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +454,7 @@ func (x *CrawlPeers) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrawlPeers.ProtoReflect.Descriptor instead.
 func (*CrawlPeers) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{12}
+	return file_proto_command_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CrawlPeers) GetRestartCrawl() bool {
@@ -669,7 +489,7 @@ type CrawlResult struct {
 func (x *CrawlResult) Reset() {
 	*x = CrawlResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_command_proto_msgTypes[13]
+		mi := &file_proto_command_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -682,7 +502,7 @@ func (x *CrawlResult) String() string {
 func (*CrawlResult) ProtoMessage() {}
 
 func (x *CrawlResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_command_proto_msgTypes[13]
+	mi := &file_proto_command_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -695,7 +515,7 @@ func (x *CrawlResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrawlResult.ProtoReflect.Descriptor instead.
 func (*CrawlResult) Descriptor() ([]byte, []int) {
-	return file_proto_command_proto_rawDescGZIP(), []int{13}
+	return file_proto_command_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CrawlResult) GetRemaining() int32 {
@@ -725,34 +545,21 @@ var file_proto_command_proto_rawDesc = []byte{
 	0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x22,
 	0x04, 0x0a, 0x02, 0x4f, 0x6b, 0x22, 0x07, 0x0a, 0x05, 0x47, 0x65, 0x74, 0x49, 0x44, 0x22, 0x1c,
 	0x0a, 0x0a, 0x49, 0x44, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02,
-	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x3a, 0x0a, 0x0e,
-	0x53, 0x65, 0x74, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x54, 0x72, 0x75, 0x73, 0x74, 0x12, 0x12,
-	0x0a, 0x04, 0x70, 0x65, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x65,
-	0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x72, 0x75, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x01, 0x52, 0x05, 0x74, 0x72, 0x75, 0x73, 0x74, 0x22, 0x3a, 0x0a, 0x0e, 0x53, 0x65, 0x74, 0x52,
-	0x65, 0x77, 0x61, 0x72, 0x64, 0x54, 0x72, 0x75, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x65,
-	0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x65, 0x65, 0x72, 0x12, 0x14,
-	0x0a, 0x05, 0x74, 0x72, 0x75, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x05, 0x74,
-	0x72, 0x75, 0x73, 0x74, 0x22, 0x5e, 0x0a, 0x0e, 0x53, 0x65, 0x74, 0x57, 0x6f, 0x72, 0x6b, 0x61,
-	0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x72,
-	0x69, 0x67, 0x69, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x6f, 0x72, 0x69, 0x67,
-	0x69, 0x6e, 0x12, 0x20, 0x0a, 0x0b, 0x77, 0x6f, 0x72, 0x6b, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74,
-	0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0b, 0x77, 0x6f, 0x72, 0x6b, 0x61, 0x62, 0x69,
-	0x6c, 0x69, 0x74, 0x79, 0x22, 0x74, 0x0a, 0x0a, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x50, 0x65, 0x65,
-	0x72, 0x73, 0x12, 0x22, 0x0a, 0x0c, 0x52, 0x65, 0x73, 0x74, 0x61, 0x72, 0x74, 0x43, 0x72, 0x61,
-	0x77, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0c, 0x52, 0x65, 0x73, 0x74, 0x61, 0x72,
-	0x74, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x12, 0x1c, 0x0a, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68, 0x53,
-	0x69, 0x7a, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68,
-	0x53, 0x69, 0x7a, 0x65, 0x12, 0x24, 0x0a, 0x0d, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x4d,
-	0x69, 0x6c, 0x6c, 0x69, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x0d, 0x54, 0x69, 0x6d,
-	0x65, 0x6f, 0x75, 0x74, 0x4d, 0x69, 0x6c, 0x6c, 0x69, 0x73, 0x22, 0x2b, 0x0a, 0x0b, 0x43, 0x72,
-	0x61, 0x77, 0x6c, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x1c, 0x0a, 0x09, 0x72, 0x65, 0x6d,
-	0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x09, 0x72, 0x65,
-	0x6d, 0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35,
-	0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75,
-	0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x74, 0x0a, 0x0a,
+	0x43, 0x72, 0x61, 0x77, 0x6c, 0x50, 0x65, 0x65, 0x72, 0x73, 0x12, 0x22, 0x0a, 0x0c, 0x52, 0x65,
+	0x73, 0x74, 0x61, 0x72, 0x74, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x0c, 0x52, 0x65, 0x73, 0x74, 0x61, 0x72, 0x74, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x12, 0x1c,
+	0x0a, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68, 0x53, 0x69, 0x7a, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x03, 0x52, 0x09, 0x42, 0x61, 0x74, 0x63, 0x68, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x24, 0x0a, 0x0d,
+	0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x4d, 0x69, 0x6c, 0x6c, 0x69, 0x73, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x0d, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x4d, 0x69, 0x6c, 0x6c,
+	0x69, 0x73, 0x22, 0x2b, 0x0a, 0x0b, 0x43, 0x72, 0x61, 0x77, 0x6c, 0x52, 0x65, 0x73, 0x75, 0x6c,
+	0x74, 0x12, 0x1c, 0x0a, 0x09, 0x72, 0x65, 0x6d, 0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x05, 0x52, 0x09, 0x72, 0x65, 0x6d, 0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x42,
+	0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d,
+	0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69,
+	0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -767,7 +574,7 @@ func file_proto_command_proto_rawDescGZIP() []byte {
 	return file_proto_command_proto_rawDescData
 }
 
-var file_proto_command_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_command_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_command_proto_goTypes = []interface{}{
 	(*NotifyReady)(nil),    // 0: command.NotifyReady
 	(*NotifySync)(nil),     // 1: command.NotifySync
@@ -778,11 +585,8 @@ var file_proto_command_proto_goTypes = []interface{}{
 	(*Ok)(nil),             // 6: command.Ok
 	(*GetID)(nil),          // 7: command.GetID
 	(*IDResponse)(nil),     // 8: command.IDResponse
-	(*SetWorkerTrust)(nil), // 9: command.SetWorkerTrust
-	(*SetRewardTrust)(nil), // 10: command.SetRewardTrust
-	(*SetWorkability)(nil), // 11: command.SetWorkability
-	(*CrawlPeers)(nil),     // 12: command.CrawlPeers
-	(*CrawlResult)(nil),    // 13: command.CrawlResult
+	(*CrawlPeers)(nil),     // 9: command.CrawlPeers
+	(*CrawlResult)(nil),    // 10: command.CrawlResult
 }
 var file_proto_command_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -907,42 +711,6 @@ func file_proto_command_proto_init() {
 			}
 		}
 		file_proto_command_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetWorkerTrust); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_command_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetRewardTrust); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_command_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetWorkability); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_command_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CrawlPeers); i {
 			case 0:
 				return &v.state
@@ -954,7 +722,7 @@ func file_proto_command_proto_init() {
 				return nil
 			}
 		}
-		file_proto_command_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_proto_command_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CrawlResult); i {
 			case 0:
 				return &v.state
@@ -973,7 +741,7 @@ func file_proto_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_command_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

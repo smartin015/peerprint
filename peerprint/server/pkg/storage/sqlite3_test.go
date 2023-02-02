@@ -171,3 +171,11 @@ func TestSignedCompletionsSetGet(t *testing.T) {
     t.Errorf("Get: %v, %v, want %v, nil", got, err, want)
   }
 }
+
+func TestGetPeerTracking(t *testing.T) {
+  t.Skip("TODO");
+}
+
+func TestGetPeerTimeline(t *testing.T) {
+  t.Skip("TODO");
+}

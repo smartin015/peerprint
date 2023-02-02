@@ -29,6 +29,7 @@ var (
   dbPathFlag = flag.String("db", ":memory:", "Path to database (use :memory: for ephemeral, inmemory DB")
 	privkeyfileFlag    = flag.String("privKeyPath", "", "Path to serialized private key - default inmemory (if not present, one will be created at that location)")
 	pubkeyfileFlag     = flag.String("pubKeyPath", "", "Path to serialized public key - default inmemory (if not present, one will be created at that location)")
+  wwwDirFlag = flag.String("wwwDir", "", "Path to WWW serving directory - leave empty to use bundled assets")
 
   // Other network flags
 	rendezvousFlag     = flag.String("rendezvous", "", "String to use for discovery (required)")
@@ -74,12 +75,6 @@ func main() {
 	if *rendezvousFlag == "" {
 		panic("-rendezvous must be specified!")
 	}
-  if *zmqRepFlag == "" {
-    panic("-zmq must be specified!")
-  }
-  if *zmqPushFlag == "" {
-    panic("-zmqPush must be specified!")
-  }
 
   var kpriv lp2p_crypto.PrivKey
   var kpub lp2p_crypto.PubKey
@@ -137,13 +132,17 @@ func main() {
 
   if *wwwFlag != "" {
     wsrv := www.New(pplog.New("www", logger), s, st)
-    go wsrv.Serve(*wwwFlag, ctx)
+    go wsrv.Serve(*wwwFlag, ctx, *wwwDirFlag)
   }
-
 
   go s.Run(ctx)
 
-  d := driver.NewDriver(s, st, t, pplog.New("cmd", logger))
-  d.Loop(ctx, *zmqRepFlag, *zmqPushFlag, *watchdogFlag)
+  if *zmqRepFlag == "" || *zmqPushFlag == "" {
+    logger.Printf("WARNING: No ZMQ flags specified, server will run driverless")
+    select{}
+  } else {
+    d := driver.NewDriver(s, st, t, pplog.New("cmd", logger))
+    d.Loop(ctx, *zmqRepFlag, *zmqPushFlag, *watchdogFlag)
+  }
 }
 

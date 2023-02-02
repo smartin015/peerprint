@@ -3,6 +3,7 @@ package storage
 import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "context"
+  "math/rand"
   "database/sql"
   "strings"
   "fmt"
@@ -36,6 +37,28 @@ func (s *sqlite3) Close() {
   s.db.Close()
 }
 
+func (s *sqlite3) genTestTimeline() error {
+  start := time.Now().Unix() - (5*60*100)
+  for i := 0; i < 100; i++ {
+    n :=  rand.Intn(20)
+    for j := 0; j < n; j++ {
+      if _, err := s.db.Exec(`
+        INSERT INTO "census" (peer, timestamp)
+        VALUES ($1, $2)
+      `, fmt.Sprintf("peer%d", j), start + int64(5*60*i)); err != nil {
+        return fmt.Errorf("genTestTimeline: %w", err)
+      }
+    }
+    if _, err := s.db.Exec(`
+      INSERT INTO "peers" (peer, first_seen, last_seen)
+      VALUES ($1, $2, $3)
+    `, fmt.Sprintf("peer%d", i), 1, 2); err != nil {
+      return fmt.Errorf("genTestTimeline: %w", err)
+    }
+  }
+  return nil
+}
+
 func (s *sqlite3) createTables() error {
   ver := ""
   if err := s.db.QueryRow("SELECT * FROM schemaversion LIMIT 1;").Scan(&ver); err != nil && err != sql.ErrNoRows && err.Error() != "no such table: schemaversion" {
@@ -52,13 +75,15 @@ func (s *sqlite3) createTables() error {
   } else {
     fmt.Errorf("Schema version %s", ver);
   }
+
+  // return s.genTestTimeline()
   return nil
 }
 
 func (s *sqlite3) TrackPeer(signer string) error {
 	if _, err := s.db.Exec(`
-		INSERT INTO "peers" (peer, first_seen, last_seen, timestamp)
-		VALUES ($1, $2, $2, $2)
+		INSERT INTO "peers" (peer, first_seen, last_seen)
+		VALUES ($1, $2, $2)
 		ON CONFLICT(peer) DO UPDATE SET last_seen=$2
 	`, signer, time.Now().Unix()); err != nil {
 		return fmt.Errorf("set last_seen: %w", err)
@@ -457,4 +482,49 @@ func (s *sqlite3) LogPeerCrawl(peer string, ts int64) error {
     INSERT INTO census (peer, timestamp) VALUES (?, ?)
   `, peer, ts)
   return err
+}
+
+func (s *sqlite3) GetPeerTracking(ctx context.Context, cur chan<- *TimeProfile, args ...any) error {
+  defer close(cur)
+  q := `SELECT * FROM "peers";`
+  rows, err := s.db.Query(q)
+  if err != nil {
+    return fmt.Errorf("GetPeerTracking SELECT: %w", err)
+  }
+  defer rows.Close()
+  for rows.Next() {
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
+    }
+    d := &TimeProfile{}
+    if err := rows.Scan(&d.Name, &d.Start, &d.End); err != nil {
+      return fmt.Errorf("GetPeerTracking scan: %w", err)
+    }
+    cur<- d
+  }
+  return nil
+}
+func (s *sqlite3) GetPeerTimeline(ctx context.Context, cur chan<- *DataPoint, args ...any) error {
+  defer close(cur)
+  q := `SELECT timestamp, COUNT(*) FROM "census" GROUP BY timestamp ORDER BY timestamp ASC LIMIT 10000;`
+  rows, err := s.db.Query(q)
+  if err != nil {
+    return fmt.Errorf("GetPeerTimeline SELECT: %w", err)
+  }
+  defer rows.Close()
+  for rows.Next() {
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
+    }
+    d := &DataPoint{}
+    if err := rows.Scan(&d.Timestamp, &d.Value); err != nil {
+      return fmt.Errorf("GetPeerTimeline scan: %w", err)
+    }
+    cur<- d 
+  }
+  return nil
 }
