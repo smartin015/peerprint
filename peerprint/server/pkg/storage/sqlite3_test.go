@@ -171,8 +171,3 @@ func TestSignedCompletionsSetGet(t *testing.T) {
     t.Errorf("Get: %v, %v, want %v, nil", got, err, want)
   }
 }
-
-func TestCleanup(t *testing.T) {
-  // db := testingDB()
-  t.Errorf("TODO")
-}

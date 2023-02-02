@@ -89,7 +89,7 @@ func TestCrawlExcessiveMultiAddr(t *testing.T) {
   }
 }
 
-func runCmdTest(t *testing.T, d *Driver, req_addr string, snd proto.Message, want proto.Message) {
+func runCmdTest(t *testing.T, d *Driver, req_addr string, snd proto.Message) proto.Message {
   req, err := goczmq.NewReq(req_addr)
   if err != nil {
     panic(err)
@@ -110,9 +110,7 @@ func runCmdTest(t *testing.T, d *Driver, req_addr string, snd proto.Message, wan
   if err != nil {
     t.Fatal(err)
   }
-  if !proto.Equal(got, want) {
-    t.Errorf("reply: want %+v got %+v", want, got)
-  }
+  return got
 }
 
 func TestReceiveHealthCheck(t *testing.T) {
@@ -120,7 +118,10 @@ func TestReceiveHealthCheck(t *testing.T) {
   defer done()
   reqrep := makeIPC(t)
   go d.Loop(ctx, reqrep, makeIPC(t), 10*time.Second)
-  runCmdTest(t, d, reqrep, &pb.HealthCheck{}, &pb.HealthCheck{})
+  want := &pb.HealthCheck{}
+  if got := runCmdTest(t, d, reqrep, &pb.HealthCheck{}); !proto.Equal(got, want) {
+    t.Errorf("reply: want %+v got %+v", want, got)
+  }
 }
 
 func TestReceiveUnknownCommand(t *testing.T) {
@@ -128,7 +129,11 @@ func TestReceiveUnknownCommand(t *testing.T) {
   defer done()
   reqrep := makeIPC(t)
   go d.Loop(ctx, reqrep, makeIPC(t), 10*time.Second)
-  runCmdTest(t, d, reqrep, &pb.Ok{}, &pb.Error{Reason: "Unrecognized command"})
+  want :=  &pb.Error{Reason: "Unrecognized command"}
+  runCmdTest(t, d, reqrep, &pb.Ok{})
+  if got := runCmdTest(t, d, reqrep, &pb.Ok{}); !proto.Equal(got, want) {
+    t.Errorf("reply: want %+v got %+v", want, got)
+  }
 }
 
 func TestReceiveGetId(t *testing.T) {
@@ -136,15 +141,38 @@ func TestReceiveGetId(t *testing.T) {
   defer done()
   reqrep := makeIPC(t)
   go d.Loop(ctx, reqrep, makeIPC(t), 10*time.Second)
-  runCmdTest(t, d, reqrep, &pb.GetID{}, &pb.IDResponse{Id: d.s.ID()})
+  want := &pb.IDResponse{Id: d.s.ID()}
+  if got := runCmdTest(t, d, reqrep, &pb.GetID{}); !proto.Equal(got, want) {
+    t.Errorf("reply: want %+v got %+v", want, got)
+  }
 }
 
 func TestReceiveRecordCommand(t *testing.T) {
-  t.Skip("TODO")
+  d, ctx, done := newTestDriver()
+  defer done()
+  reqrep := makeIPC(t)
+  go d.Loop(ctx, reqrep, makeIPC(t), 10*time.Second)
+  got := runCmdTest(t, d, reqrep, &pb.Record{
+    Uuid: "r1",
+    Rank: &pb.Rank{},
+  }).(*pb.SignedRecord)
+  if got.Record.Uuid != "r1" {
+    t.Errorf("reply: %+v want ID r1", got)
+  }
 }
 
 func TestReceiveCompletionCommand(t *testing.T) {
-  t.Skip("TODO")
+  d, ctx, done := newTestDriver()
+  defer done()
+  reqrep := makeIPC(t)
+  go d.Loop(ctx, reqrep, makeIPC(t), 10*time.Second)
+  got := runCmdTest(t, d, reqrep, &pb.Completion{
+    Uuid: "r1",
+    CompleterState: []byte("foo"),
+  }).(*pb.SignedCompletion)
+  if got.Completion.Uuid != "r1" {
+    t.Errorf("reply: %+v want ID r1", got)
+  }
 }
 
 func TestWatchdog(t *testing.T) {
