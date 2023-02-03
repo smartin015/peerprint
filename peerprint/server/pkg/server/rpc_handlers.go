@@ -11,7 +11,7 @@ type PeerPrintService struct {
   base *Server
 }
 
-func (s *Server) GetService() interface{} {
+func (s *Server) getService() interface{} {
   return &PeerPrintService{
     base: s,
   }

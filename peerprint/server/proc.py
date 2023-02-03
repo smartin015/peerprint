@@ -3,8 +3,17 @@ import signal
 import asyncio
 from dataclasses import dataclass, fields
 
+class ProcessOptsBase():
+    def render(self, binary_path):
+        args = [binary_path]
+        for field in fields(self):
+            val = getattr(self, field.name)
+            if val is not None:
+                args.append(f"-{field.name}={val}")
+        return args
+
 @dataclass
-class ServerProcessOpts():
+class ServerProcessOpts(ProcessOptsBase):
     # See cmd/server/main.go for flag defs and defaults
     addr: str = None
     www: str = None
@@ -28,14 +37,6 @@ class ServerProcessOpts():
     zmq: str = None
     zmqPush: str = None
     zmqLog: str = None
-
-    def render(self, binary_path):
-        args = [binary_path]
-        for field in fields(self):
-            val = getattr(self, field.name)
-            if val is not None:
-                args.append(f"-{field.name}={val}")
-        return args
 
 
 class IPFSDaemonProcess():

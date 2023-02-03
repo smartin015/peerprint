@@ -46,11 +46,12 @@ type Interface interface {
 }
 
 type Opts struct {
-  PubsubAddr string
+  Addr string
   Rendezvous string
   Local bool
   PrivKey crypto.PrivKey
   PubKey crypto.PubKey
+  OnlyRPC bool
   PSK pnet.PSK
   ConnectTimeout time.Duration
   Topics []string
@@ -81,14 +82,18 @@ func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error)
   pid := libp2p.Identity(opts.PrivKey)
 
   // Initialize base pubsub infra
-	h, err := libp2p.New(libp2p.ListenAddrStrings(opts.PubsubAddr), libp2p.PrivateNetwork(opts.PSK), pid)
+	h, err := libp2p.New(libp2p.ListenAddrStrings(opts.Addr), libp2p.PrivateNetwork(opts.PSK), pid)
 	if err != nil {
     return nil, fmt.Errorf("PubSub host creation failure: %w", err)
 	}
-  // TODO switch to using pubsub.WithDiscovery
-	ps, err := pubsub.NewGossipSub(ctx, h)
-	if err != nil {
-    return nil, fmt.Errorf("GossipSub creation failure: %w", err)
+
+  var ps *pubsub.PubSub
+  if !opts.OnlyRPC {
+    // TODO switch to using pubsub.WithDiscovery
+    ps, err = pubsub.NewGossipSub(ctx, h)
+    if err != nil {
+      return nil, fmt.Errorf("GossipSub creation failure: %w", err)
+    }
   }
 
   // Initialize discovery service for pubsub
@@ -108,15 +113,17 @@ func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error)
     l: logger,
   }
 
-  // Join topics
-  opts.Topics = append(opts.Topics)
-  for _, t := range(opts.Topics) {
-    c, err := topic.NewTopicChannel(ctx, s.recvChan, s.ID(), ps, t, s.errChan)
-    if err != nil {
-      return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
+  if !opts.OnlyRPC {
+    // Join topics
+    opts.Topics = append(opts.Topics)
+    for _, t := range(opts.Topics) {
+      c, err := topic.NewTopicChannel(ctx, s.recvChan, s.ID(), ps, t, s.errChan)
+      if err != nil {
+        return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
+      }
+      logger.Printf("Joined topic: %q\n", t)
+      s.pubChan[t] = c
     }
-    logger.Printf("Joined topic: %q\n", t)
-    s.pubChan[t] = c
   }
   return s, nil
 }

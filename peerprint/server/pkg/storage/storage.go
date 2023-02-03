@@ -28,6 +28,7 @@ type DBEvent struct {
 
 type Interface interface {
   SetId(id string)
+  SetNetwork(uuid string)
 
   ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer int64, maxTrackedPeers int64) error
   SetSignedRecord(*pb.SignedRecord) error
@@ -48,6 +49,13 @@ type Interface interface {
   LogPeerCrawl(peer string, ts int64) error
   GetPeerTracking(context.Context, chan<- *TimeProfile, ...any) error
   GetPeerTimeline(context.Context, chan<- *DataPoint, ...any) error
+}
+
+type Registry interface {
+  UpsertConfig(*pb.NetworkConfig, []byte, string) error
+  SignConfig(uuid string, sig []byte) error
+  UpsertStats(uuid string, stats *pb.NetworkStats) error
+  GetNetworks(context.Context,  chan<- *pb.Network) error
 }
 
 func SetPanicHandler(s Interface) {

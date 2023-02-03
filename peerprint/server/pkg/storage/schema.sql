@@ -54,4 +54,3 @@ CREATE TABLE census (
 
   PRIMARY KEY (peer, timestamp)
 );
-

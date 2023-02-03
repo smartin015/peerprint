@@ -101,6 +101,12 @@ func (d *Driver) handleCommand(ctx context.Context, c proto.Message) (proto.Mess
       d.l.Error(err)
     }
     return &pb.CrawlResult{Remaining: int32(remaining)}, nil
+  case *pb.Network:
+    if err := d.st.RegisterNetwork(v); err != nil {
+      return nil, err
+    } else {
+      return &pb.Ok{}, nil
+    }
   default:
     return nil, fmt.Errorf("Unrecognized command")
   }

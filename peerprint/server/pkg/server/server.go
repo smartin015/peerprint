@@ -30,7 +30,6 @@ type Opts struct {
 type Interface interface {
   ID() string
   ShortID() string
-  GetService() interface{}
 
   IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
   IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
@@ -72,7 +71,7 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     lastSyncEnd: time.Unix(0,0),
     lastMsg: time.Unix(0,0),
   }
-  if err := t.Register(PeerPrintProtocol, srv.GetService()); err != nil {
+  if err := t.Register(PeerPrintProtocol, srv.getService()); err != nil {
     panic(fmt.Errorf("Failed to register RPC server: %w", err))
   }
   return srv
@@ -81,7 +80,6 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
 func (s *Server) ID() string {
   return s.t.ID()
 }
-
 
 func (s *Server) OnUpdate() <-chan proto.Message {
   return s.updateChan

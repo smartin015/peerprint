@@ -24,3 +24,33 @@ message GetPeersResponse {
   repeated AddrInfo Addresses = 1;
 }
 
+// NetworkConfig describes a print network of multiple peers.
+// This is passed among peers via DHT/MDNS discovery and RPC
+// to provide users a list of places they can join.
+message NetworkConfig {
+  string uuid = 1;
+  string name = 2;
+  string description = 3;
+  repeated string tags = 4;
+  repeated string links = 5;
+  string location = 6;
+  string rendezvous = 7;
+  string creator = 9; // Public key of the creator of this network
+  int64 created = 10;
+}
+
+// NetworkStats describes live and historical information about
+// the network, other than its config
+message NetworkStats {
+  int64 population = 1;
+  int64 completions_last7days = 2;
+  int64 records = 3;
+  int64 idle_records = 4;
+  int64 avg_completion_time = 5;
+}
+
+message Network {
+  NetworkConfig config = 1;
+  bytes signature = 2;
+  NetworkStats stats = 3;
+}

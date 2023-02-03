@@ -105,7 +105,7 @@ func main() {
 
   ctx := context.Background()
   t, err := transport.New(&transport.Opts{
-    PubsubAddr: *addrFlag,
+    Addr: *addrFlag,
     Rendezvous: *rendezvousFlag,
     Local: *localFlag,
     PrivKey: kpriv,
