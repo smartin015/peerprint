@@ -15,28 +15,16 @@ class ProcessOptsBase():
 @dataclass
 class ServerProcessOpts(ProcessOptsBase):
     # See cmd/server/main.go for flag defs and defaults
-    addr: str = None
+    cfg: str = None
+
     www: str = None
-    db: str = None
-    privKeyPath: str = None
-    pubKeyPath: str = None
-    
-    rendezvous: str = None
-    psk: str = None
-    local: bool = None
-    displayName: str = None
-    
-    connectTimeout: str = None
-    statusPeriod: str = None
-    syncPeriod: str = None
+    wwwDir: str = None
 
-    maxRecordsPerPeer: int = None
-    maxCompletionsPerPeer: int = None
-    maxTrackedPeers: int = None
-
-    zmq: str = None
-    zmqPush: str = None
-    zmqLog: str = None
+    addr: str = None
+    certsDir: str = None
+    serverCert: str = None
+    serverKey: str = None
+    rootCert: str = None
 
 
 class IPFSDaemonProcess():

@@ -117,7 +117,6 @@ func (s *registry) sync(ctx context.Context) {
     wg.Add(1)
     s.l.Info("Syncing lobby from %s", shorten(p.String()))
     go func(p peer.ID) {
-      defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncPeer(ctx, p)
       s.l.Info("Synced %d rows from %s", n, shorten(p.String()))
@@ -131,7 +130,6 @@ func (s *registry) syncPeer(ctx context.Context, p peer.ID) int {
   rep := make(chan *pb.Network, 5) // Closed by Stream
   n := 0
   go func () {
-    defer storage.HandlePanic()
     if err := s.t.Stream(ctx, p, "GetNetworks", req, rep); err != nil {
       s.l.Error("syncPeer(): %+v", err)
       return

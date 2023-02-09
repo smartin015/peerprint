@@ -4,7 +4,6 @@ import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "database/sql"
   "context"
-  "fmt"
 )
 
 var (
@@ -28,7 +27,6 @@ type DBEvent struct {
 
 type Interface interface {
   SetId(id string)
-  SetNetwork(uuid string)
 
   ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer int64, maxTrackedPeers int64) error
   SetSignedRecord(*pb.SignedRecord) error
@@ -60,13 +58,6 @@ type Registry interface {
 
 func SetPanicHandler(s Interface) {
   handler = s
-}
-
-func  HandlePanic() {
-  if pnk := recover(); pnk != nil {
-    handler.AppendEvent("panic", fmt.Sprintf("%v", pnk)) // Ignore error; best effort
-    panic(pnk)
-  }
 }
 
 type TableStat struct {

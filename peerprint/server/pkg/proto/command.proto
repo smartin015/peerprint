@@ -2,48 +2,107 @@ syntax = "proto3";
 
 option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 
+import "state.proto";
+
 package command;
-
-// Sent via ZMQ PUSH when the server has rendezvous'd with peers and
-// begins its main loop
-message NotifyReady{}
-
-// Sent via ZMQ PUSH when the Sync operation completes
-message NotifySync{}
-
-// Sent via ZMQ PUSH when a message is received over pubsub
-message NotifyMessage{}
 
 // Exchanged between wrapper and process to ensure both are healthy
 message HealthCheck{}
 
-// This message is PUSHed when a Record's owner/signer/approver publishes a 
-// Completion about their own Record - sponsoring an in-progress worker or
-// indicating the record was completed.
-message NotifyProgress{
+message StreamEventsRequest{
+  string network=1;
+}
+message Event {
+  string name = 1;
+  oneof event_details {
+    Progress progress = 2;
+  }
+}
+
+message Progress{
   string uuid = 1;
   string resolved_completer = 2;
   bool completed = 3;
 }
 
-// Catch-all error message for when commands cannot be carried out by the server process.
-message Error {
-  string reason = 1; 
-}
 // Generic "OK" message
 message Ok {}
 
-message GetID {}
-message IDResponse {
+message GetIDRequest {
+  string network = 1;
+}
+message GetIDResponse {
   string id = 1;
 }
 
-message CrawlPeers {
-  bool RestartCrawl = 1; // Whether to start crawling anew
-  int64 BatchSize = 2; // How many peers to query for this step
-  int32 TimeoutMillis = 3; // Max amount of time to crawl before returning
+message CrawlRequest {
+  string network = 1;
+  bool restart_crawl = 2; // Whether to start crawling anew
+  int64 batch_size = 3; // How many peers to query for this step
+  int32 timeout_millis = 4; // Max amount of time to crawl before returning
 }
 
 message CrawlResult {
+  string network = 1;
   int32 remaining = 2;
+  repeated string errors = 3;
+}
+
+message ConnectRequest {
+  string network = 1;
+  string addr = 2;
+  string rendezvous = 3;
+  string psk = 4;
+  bool local = 5;
+  string db_path = 6;
+  string privkey_path = 7;
+  string pubkey_path = 8;
+  string display_name = 9;
+  int64 connect_timeout = 10;
+  int64 sync_period = 11;
+  int64 max_records_per_peer = 12;
+  int64 max_tracked_peers = 13;
+}
+
+message DisconnectRequest {
+  string network = 1;
+}
+
+message SetRecordRequest {
+  string network = 1;
+  state.Record record = 2;
+}
+
+message SetCompletionRequest {
+  string network = 1;
+  state.Completion completion = 2;
+}
+
+message GetNetworksRequest {}
+message GetNetworksResponse {
+  repeated ConnectRequest networks = 1;
+}
+
+message StreamCompletionsRequest {
+  string network = 1;
+}
+message StreamRecordsRequest {
+  string network = 1;
+}
+
+service Command {
+  rpc Ping(HealthCheck) returns (Ok) {}
+  rpc GetId(GetIDRequest) returns (GetIDResponse) {}
+
+  rpc GetNetworks(GetNetworksRequest) returns (GetNetworksResponse) {}
+  rpc Connect(ConnectRequest) returns (Ok) {}
+  rpc Disconnect(DisconnectRequest) returns (Ok) {}
+
+  rpc SetRecord(SetRecordRequest) returns (Ok) {}
+  rpc SetCompletion(SetCompletionRequest) returns (Ok) {}
+  rpc Crawl(CrawlRequest) returns (CrawlResult) {} 
+
+  rpc StreamEvents(StreamEventsRequest) returns (stream Event) {}
+  rpc StreamRecords(StreamRecordsRequest) returns (stream state.SignedRecord) {}
+  rpc StreamCompletions(StreamCompletionsRequest) returns (stream state.SignedCompletion) {}
 }

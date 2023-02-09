@@ -21,7 +21,7 @@ class MutexSock():
     def __init__(self, ctx, typ, mut, logger, addr=None):
         self._logger = logger
         self._ctx = ctx
-        self._addr = addr  # only needed for req/rep lazy pirate reconnection
+        self._addr = addr  # only needed for lazy pirate reconnection
         self._sock = ctx.socket(typ)
         self._mut = mut
 
@@ -59,7 +59,7 @@ class MutexSock():
                     raise zmq.error.ZMQError("Max retries exceeded")
                 
                 self._logger.warning("No response from server - reconnecting and resending")
-                self._sock = self._ctx.socket(zmq.REQ)
+                self._sock = self._ctx.socket(zmq.DEALER)
                 self._sock.connect(self._addr)
                 self._sock.send(req)
 
@@ -68,6 +68,7 @@ class MutexSock():
 
 
 class ZMQLogSink():
+    # TODO probably not necessary
     def __init__(self, addr, mut, logger):
         self._logger = logger
         self._context = zmq.Context()
@@ -98,7 +99,7 @@ class ZMQClient():
         self._logger = logger
         self._cb = cb
         self._context = zmq.Context()
-        self._sock = MutexSock(self._context, zmq.REQ, req_mut, self._logger, req_addr)
+        self._sock = MutexSock(self._context, zmq.DEALER, req_mut, self._logger, req_addr)
         self._sock.connect(req_addr) # connect to bound REP socket in golang code
         self._pull = MutexSock(self._context, zmq.PULL, pull_mut, self._logger)
         self._pull.bind(pull_addr) # bind for connecting PUSH socket in golang code

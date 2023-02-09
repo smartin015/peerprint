@@ -54,3 +54,12 @@ message Network {
   bytes signature = 2;
   NetworkStats stats = 3;
 }
+
+message PubKeyExchange {
+  bytes pubkey = 1;
+  bytes salt = 2;
+}
+
+message EncryptedPSK {
+  bytes encrypted = 1;
+}

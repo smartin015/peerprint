@@ -2,7 +2,6 @@
 package transport
 
 import (
-  "log"
   "time"
   "context"
   "fmt"
@@ -19,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/smartin015/peerprint/p2pgit/pkg/topic"
 	"github.com/smartin015/peerprint/p2pgit/pkg/discovery"
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -75,10 +75,10 @@ type Transport struct {
   pubChan map[string] chan<- proto.Message
   protocol protocol.ID
   server *rpc.Server
-  l *log.Logger
+  l *log.Sublog
 }
 
-func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error) {
+func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error) {
   pid := libp2p.Identity(opts.PrivKey)
 
   // Initialize base pubsub infra
@@ -121,7 +121,7 @@ func New(opts *Opts, ctx context.Context, logger *log.Logger) (Interface, error)
       if err != nil {
         return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
       }
-      logger.Printf("Joined topic: %q\n", t)
+      logger.Info("Joined topic: %q\n", t)
       s.pubChan[t] = c
     }
   }
@@ -182,7 +182,7 @@ func (s *Transport) Publish(topic string, msg proto.Message) error {
 }
 
 func (s *Transport) Run(ctx context.Context) {
-	s.l.Printf("Discovering pubsub peers (self ID %v, timeout %v)\n", s.ID(), s.opts.ConnectTimeout)
+	s.l.Info("Discovering pubsub peers (self ID %v, timeout %v)\n", s.ID(), s.opts.ConnectTimeout)
 	connectCtx, cancel := context.WithTimeout(ctx, s.opts.ConnectTimeout)
 	defer cancel()
 

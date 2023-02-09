@@ -5,16 +5,15 @@ package discovery
 import (
 	"context"
   "fmt"
-	"log"
 	"sync"
 
+  "github.com/smartin015/peerprint/p2pgit/pkg/log"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
-  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
 )
 
 type Method int64
@@ -28,7 +27,7 @@ type Discovery struct {
 	h            host.Host
 	onReady      chan bool
 	newConn      chan bool
-  l *log.Logger
+  l *log.Sublog
   method Method
   rendezvous string
 }
@@ -41,7 +40,7 @@ func SetBootstrapPeers(bp []peer.AddrInfo) {
   bootstrapPeers = bp
 }
 
-func New(ctx context.Context, m Method, h host.Host, rendezvous string, logger *log.Logger) *Discovery {
+func New(ctx context.Context, m Method, h host.Host, rendezvous string, logger *log.Sublog) *Discovery {
 	c := &Discovery{
 		ctx:          ctx,
 		h:            h,
@@ -71,10 +70,9 @@ func (c *Discovery) Run() {
 }
 
 func (c *Discovery) bootstrapPeer(peer peer.AddrInfo, wg *sync.WaitGroup) {
-  defer storage.HandlePanic()
   defer wg.Done()
   if err := c.h.Connect(c.ctx, peer); err != nil {
-    c.l.Printf("Bootstrap warning: %s\n", err)
+    c.l.Warning("Bootstrap: %s\n", err)
   }
 }
 

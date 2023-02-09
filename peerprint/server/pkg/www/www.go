@@ -9,8 +9,8 @@ import (
   "net/http"
   "encoding/json"
   "github.com/smartin015/peerprint/p2pgit/pkg/log"
-  "github.com/smartin015/peerprint/p2pgit/pkg/server"
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "github.com/smartin015/peerprint/p2pgit/pkg/driver"
   "embed"
 )
 
@@ -23,24 +23,36 @@ var static embed.FS
 
 type webserver struct {
   l *log.Sublog
-  s server.Interface
-  st storage.Interface
+  d *driver.Driver 
 }
 
-func New(logger *log.Sublog, srv server.Interface, st storage.Interface) *webserver {
+func New(l *log.Sublog, d *driver.Driver) *webserver {
   return &webserver {
-    l: logger,
-    s: srv,
-    st: st,
+    l: l,
+    d: d,
   }
 }
 
+func (s *webserver) getInstance(r *http.Request, w http.ResponseWriter) *driver.Instance {
+  n := s.d.GetInstance(r.FormValue("instance"))
+  if n == nil {
+    w.WriteHeader(404)
+    w.Write([]byte("instance not found"))
+    return nil
+  }
+  return n
+}
+
 func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
+
   cur := make(chan storage.DBEvent, 5)
   var wg sync.WaitGroup
   wg.Add(1)
   go func() {
-    defer storage.HandlePanic()
     defer wg.Done()
     for v := range cur {
       if data, err := json.Marshal(v); err != nil {
@@ -54,7 +66,7 @@ func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
     }
   }()
   ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.st.GetEvents(ctx, cur, 1000); err != nil {
+  if err := n.St.GetEvents(ctx, cur, 1000); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -62,11 +74,14 @@ func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetTimeline(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
   cur := make(chan *storage.DataPoint, 5)
   var wg sync.WaitGroup
   wg.Add(1)
   go func() {
-    defer storage.HandlePanic()
     defer wg.Done()
     for v := range cur {
       if data, err := json.Marshal(v); err != nil {
@@ -80,19 +95,33 @@ func (s *webserver) handleGetTimeline(w http.ResponseWriter, r *http.Request) {
     }
   }()
   ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.st.GetPeerTimeline(ctx, cur); err != nil {
+  if err := n.St.GetPeerTimeline(ctx, cur); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
   wg.Wait()
 }
 
+func (s *webserver) handleGetInstances(w http.ResponseWriter, r *http.Request) {
+  v := s.d.InstanceNames()
+  if data, err := json.Marshal(v); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+    return
+  } else {
+    w.Write(data)
+  }
+}
+
 func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
   cur := make(chan *storage.TimeProfile, 5)
   var wg sync.WaitGroup
   wg.Add(1)
   go func() {
-    defer storage.HandlePanic()
     defer wg.Done()
     for v := range cur {
       if data, err := json.Marshal(v); err != nil {
@@ -106,7 +135,7 @@ func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
     }
   }()
   ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.st.GetPeerTracking(ctx, cur); err != nil {
+  if err := n.St.GetPeerTracking(ctx, cur); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -114,7 +143,11 @@ func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleServerSummary(w http.ResponseWriter, r *http.Request) {
-  data, err := json.Marshal(s.s.GetSummary())
+  n  := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
+  data, err := json.Marshal(n.S.GetSummary())
   if err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
@@ -123,7 +156,11 @@ func (s *webserver) handleServerSummary(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *webserver) handleStorageSummary(w http.ResponseWriter, r *http.Request) {
-  summary, errs := s.st.GetSummary()
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
+  summary, errs := n.St.GetSummary()
   for _, e := range errs {
     s.l.Error("handleStorageSummary: %v", e)
   }
@@ -147,6 +184,7 @@ func (s *webserver) Serve(addr string, ctx context.Context, liveDir string) {
     s.l.Info("Serving www assets from %s", liveDir)
   }
 
+  http.HandleFunc("/instances", s.handleGetInstances)
   http.HandleFunc("/timeline", s.handleGetTimeline)
   http.HandleFunc("/peerLogs", s.handleGetPeerLogs)
   http.HandleFunc("/events", s.handleGetEvents)

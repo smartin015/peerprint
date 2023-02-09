@@ -3,8 +3,8 @@ FROM golang:1.19
 FROM python:3.7
 ENV PROTOC_ZIP=protoc-21.9-linux-x86_64.zip
 
-RUN pip3 install --upgrade protobuf pyzmq
-RUN apt-get update && apt-get -y install --no-install-recommends libczmq-dev libzmq5 unzip curl && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --upgrade protobuf pyopenssl
+RUN apt-get update && apt-get -y install --no-install-recommends unzip curl && rm -rf /var/lib/apt/lists/*
 
 RUN wget https://dist.ipfs.tech/kubo/v0.16.0/kubo_v0.16.0_linux-amd64.tar.gz && tar -xvzf kubo_v0.16.0_linux-amd64.tar.gz \
  && cd kubo && ./install.sh && ipfs --version

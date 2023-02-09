@@ -5,7 +5,6 @@ import (
   "context"
   "time"
   "fmt"
-  "google.golang.org/protobuf/proto"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
   "github.com/libp2p/go-libp2p/core/peer"
@@ -30,24 +29,25 @@ type Opts struct {
 type Interface interface {
   ID() string
   ShortID() string
+  RegisterEventCallback(cb EventCallback)
 
   IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
   IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
   Sync(context.Context)
 
   Run(context.Context)
-  OnUpdate() <-chan proto.Message
 
   GetSummary() *Summary
 }
+
+type EventCallback chan<-*pb.Event
 
 type Server struct {
   opts *Opts
   t transport.Interface
   s storage.Interface
   l *log.Sublog
-
-  updateChan chan proto.Message
+  cb []EventCallback
 
   // Tickers for periodic network activity
   syncTicker *time.Ticker
@@ -63,8 +63,8 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     t: t,
     s: s,
     l: l,
+    cb: []EventCallback{},
     opts: opts,
-    updateChan: make(chan proto.Message, UpdateChannelBufferSize),
     syncTicker: time.NewTicker(opts.SyncPeriod),
     connStr: "Initializing",
     lastSyncStart: time.Unix(0,0),
@@ -79,10 +79,6 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
 
 func (s *Server) ID() string {
   return s.t.ID()
-}
-
-func (s *Server) OnUpdate() <-chan proto.Message {
-  return s.updateChan
 }
 
 func pretty(i interface{}) string {
@@ -158,7 +154,6 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
   rep := make(chan *pb.SignedRecord, 5) // Closed by Stream
   n := 0
   go func () {
-    defer storage.HandlePanic()
     if err := s.t.Stream(ctx, p, "GetSignedRecords", req, rep); err != nil {
       s.l.Error("syncRecords(): %+v", err)
       return
@@ -202,7 +197,6 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
   rep := make(chan *pb.SignedCompletion, 5) // Closed by Stream
   n := 0
   go func () {
-    defer storage.HandlePanic()
     if err := s.t.Stream(ctx, p, "GetSignedCompletions", req, rep); err != nil {
       s.l.Error("syncCompletions(): %+v", err)
       return
@@ -264,7 +258,6 @@ func (s *Server) Sync(ctx context.Context) {
     wg.Add(1)
     s.l.Info("Syncing records from %s", shorten(p.String()))
     go func(p peer.ID) {
-      defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncRecords(ctx, p)
       s.l.Info("Synced %d records from %s", n, shorten(p.String()))
@@ -279,7 +272,6 @@ func (s *Server) Sync(ctx context.Context) {
     wg.Add(1)
     s.l.Info("Syncing completions from %s", shorten(p.String()))
     go func(p peer.ID) {
-      defer storage.HandlePanic()
       defer wg.Done()
       n := s.syncCompletions(ctx, p)
       s.l.Info("Synced %d completions from %s", n, shorten(p.String()))
@@ -304,13 +296,11 @@ func (s *Server) Run(ctx context.Context) {
   }
 
   s.l.Info("Running server main loop")
-  s.notify(&pb.NotifyReady{})
+  s.notify(&pb.Event{Name:"mainloop"})
   if err := s.s.AppendEvent("server", "main loop entered"); err != nil {
     s.l.Error("enter main loop: %v", err)
   }
   go func() {
-    defer storage.HandlePanic()
-    defer close(s.updateChan)
     for {
       select {
       case tm := <-s.t.OnMessage():
@@ -329,7 +319,7 @@ func (s *Server) Run(ctx context.Context) {
               s.l.Error("handleRecord(%s, _, _): %v", shorten(tm.Peer), err)
             }
         }
-        s.notify(&pb.NotifyMessage{})
+        s.notify(&pb.Event{Name:"message"})
       case <-s.syncTicker.C:
         if num, err := s.s.Cleanup(s.opts.MaxRecordsPerPeer/2); err != nil {
           s.l.Error("Sync cleanup: %v", err)
@@ -337,7 +327,7 @@ func (s *Server) Run(ctx context.Context) {
           s.l.Info("Cleaned up %d records", num)
         }
         go s.Sync(ctx)
-        s.notify(&pb.NotifySync{})
+        s.notify(&pb.Event{Name:"sync"})
       case <-ctx.Done():
         return
       }
@@ -345,10 +335,17 @@ func (s *Server) Run(ctx context.Context) {
   }()
 }
 
-func (s *Server) notify(m proto.Message) {
-  select {
-  case s.updateChan<- m:
-  default:
+
+func (s *Server) RegisterEventCallback(cb EventCallback) {
+  s.cb = append(s.cb, cb)
+}
+
+func (s *Server) notify(m *pb.Event) {
+  for _, cb := range s.cb {
+    select {
+    case cb<- m:
+    default:
+    }
   }
 }
 
@@ -396,10 +393,13 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
     if err := s.s.CollapseCompletions(c.Uuid, peer); err != nil {
       return fmt.Errorf("CollapseCompletions: %w", err)
     }
-    s.notify(&pb.NotifyProgress{
-      Uuid: c.Uuid,
-      ResolvedCompleter: c.Completer,
-      Completed: c.Timestamp != 0,
+    s.notify(&pb.Event{
+      Name:"progress",
+      EventDetails: &pb.Event_Progress{Progress: &pb.Progress{
+        Uuid: c.Uuid,
+        ResolvedCompleter: c.Completer,
+        Completed: c.Timestamp != 0,
+      }},
     })
     return nil
   } else {
@@ -417,6 +417,7 @@ func (s *Server) handleRecord(peer string, r *pb.Record, sig *pb.Signature) erro
   if err := s.s.ValidateRecord(r, peer, s.opts.MaxRecordsPerPeer, s.opts.MaxTrackedPeers); err != nil {
     return fmt.Errorf("handleRecord validation: %w", err)
   }
+  s.l.Info("Received record: %s", pretty(r))
   return s.s.SetSignedRecord(&pb.SignedRecord{
     Record: r,
     Signature: sig,

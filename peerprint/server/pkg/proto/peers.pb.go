@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.28.1
 // 	protoc        v3.21.5
-// source: proto/peers.proto
+// source: peers.proto
 
 package proto
 
@@ -31,7 +31,7 @@ type PeerStatus struct {
 func (x *PeerStatus) Reset() {
 	*x = PeerStatus{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[0]
+		mi := &file_peers_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -44,7 +44,7 @@ func (x *PeerStatus) String() string {
 func (*PeerStatus) ProtoMessage() {}
 
 func (x *PeerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[0]
+	mi := &file_peers_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +57,7 @@ func (x *PeerStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerStatus.ProtoReflect.Descriptor instead.
 func (*PeerStatus) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{0}
+	return file_peers_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PeerStatus) GetName() string {
@@ -81,7 +81,7 @@ type AddrInfo struct {
 func (x *AddrInfo) Reset() {
 	*x = AddrInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[1]
+		mi := &file_peers_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -94,7 +94,7 @@ func (x *AddrInfo) String() string {
 func (*AddrInfo) ProtoMessage() {}
 
 func (x *AddrInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[1]
+	mi := &file_peers_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -107,7 +107,7 @@ func (x *AddrInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddrInfo.ProtoReflect.Descriptor instead.
 func (*AddrInfo) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{1}
+	return file_peers_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *AddrInfo) GetId() string {
@@ -137,7 +137,7 @@ type GetPeersRequest struct {
 func (x *GetPeersRequest) Reset() {
 	*x = GetPeersRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[2]
+		mi := &file_peers_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -150,7 +150,7 @@ func (x *GetPeersRequest) String() string {
 func (*GetPeersRequest) ProtoMessage() {}
 
 func (x *GetPeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[2]
+	mi := &file_peers_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -163,7 +163,7 @@ func (x *GetPeersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPeersRequest.ProtoReflect.Descriptor instead.
 func (*GetPeersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{2}
+	return file_peers_proto_rawDescGZIP(), []int{2}
 }
 
 type GetPeersResponse struct {
@@ -177,7 +177,7 @@ type GetPeersResponse struct {
 func (x *GetPeersResponse) Reset() {
 	*x = GetPeersResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[3]
+		mi := &file_peers_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -190,7 +190,7 @@ func (x *GetPeersResponse) String() string {
 func (*GetPeersResponse) ProtoMessage() {}
 
 func (x *GetPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[3]
+	mi := &file_peers_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -203,7 +203,7 @@ func (x *GetPeersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPeersResponse.ProtoReflect.Descriptor instead.
 func (*GetPeersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{3}
+	return file_peers_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetPeersResponse) GetAddresses() []*AddrInfo {
@@ -228,15 +228,14 @@ type NetworkConfig struct {
 	Links       []string `protobuf:"bytes,5,rep,name=links,proto3" json:"links,omitempty"`
 	Location    string   `protobuf:"bytes,6,opt,name=location,proto3" json:"location,omitempty"`
 	Rendezvous  string   `protobuf:"bytes,7,opt,name=rendezvous,proto3" json:"rendezvous,omitempty"`
-	Private     bool     `protobuf:"varint,8,opt,name=private,proto3" json:"private,omitempty"` // Whether or not to share when asked
-	Creator     string   `protobuf:"bytes,9,opt,name=creator,proto3" json:"creator,omitempty"`  // Public key of the creator of this network
+	Creator     string   `protobuf:"bytes,9,opt,name=creator,proto3" json:"creator,omitempty"` // Public key of the creator of this network
 	Created     int64    `protobuf:"varint,10,opt,name=created,proto3" json:"created,omitempty"`
 }
 
 func (x *NetworkConfig) Reset() {
 	*x = NetworkConfig{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[4]
+		mi := &file_peers_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -249,7 +248,7 @@ func (x *NetworkConfig) String() string {
 func (*NetworkConfig) ProtoMessage() {}
 
 func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[4]
+	mi := &file_peers_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +261,7 @@ func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkConfig.ProtoReflect.Descriptor instead.
 func (*NetworkConfig) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{4}
+	return file_peers_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NetworkConfig) GetUuid() string {
@@ -314,13 +313,6 @@ func (x *NetworkConfig) GetRendezvous() string {
 	return ""
 }
 
-func (x *NetworkConfig) GetPrivate() bool {
-	if x != nil {
-		return x.Private
-	}
-	return false
-}
-
 func (x *NetworkConfig) GetCreator() string {
 	if x != nil {
 		return x.Creator
@@ -352,7 +344,7 @@ type NetworkStats struct {
 func (x *NetworkStats) Reset() {
 	*x = NetworkStats{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[5]
+		mi := &file_peers_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -365,7 +357,7 @@ func (x *NetworkStats) String() string {
 func (*NetworkStats) ProtoMessage() {}
 
 func (x *NetworkStats) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[5]
+	mi := &file_peers_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -378,7 +370,7 @@ func (x *NetworkStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkStats.ProtoReflect.Descriptor instead.
 func (*NetworkStats) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{5}
+	return file_peers_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NetworkStats) GetPopulation() int64 {
@@ -429,7 +421,7 @@ type Network struct {
 func (x *Network) Reset() {
 	*x = Network{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_peers_proto_msgTypes[6]
+		mi := &file_peers_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -442,7 +434,7 @@ func (x *Network) String() string {
 func (*Network) ProtoMessage() {}
 
 func (x *Network) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_peers_proto_msgTypes[6]
+	mi := &file_peers_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -455,7 +447,7 @@ func (x *Network) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Network.ProtoReflect.Descriptor instead.
 func (*Network) Descriptor() ([]byte, []int) {
-	return file_proto_peers_proto_rawDescGZIP(), []int{6}
+	return file_peers_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Network) GetConfig() *NetworkConfig {
@@ -479,35 +471,135 @@ func (x *Network) GetStats() *NetworkStats {
 	return nil
 }
 
-var File_proto_peers_proto protoreflect.FileDescriptor
+type PubKeyExchange struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
 
-var file_proto_peers_proto_rawDesc = []byte{
-	0x0a, 0x11, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x73, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x12, 0x05, 0x70, 0x65, 0x65, 0x72, 0x73, 0x22, 0x20, 0x0a, 0x0a, 0x50, 0x65,
-	0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x30, 0x0a, 0x08,
-	0x41, 0x64, 0x64, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x64, 0x64, 0x72,
-	0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x22, 0x11,
-	0x0a, 0x0f, 0x47, 0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x22, 0x41, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2d, 0x0a, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73,
-	0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x70, 0x65, 0x65, 0x72, 0x73,
-	0x2e, 0x41, 0x64, 0x64, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65,
-	0x73, 0x73, 0x65, 0x73, 0x22, 0x8d, 0x02, 0x0a, 0x0d, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b,
-	0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61,
-	0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x20,
-	0x0a, 0x0b, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x0b, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e,
-	0x12, 0x12, 0x0a, 0x04, 0x74, 0x61, 0x67, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04,
-	0x74, 0x61, 0x67, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x6c, 0x69, 0x6e, 0x6b, 0x73, 0x18, 0x05, 0x20,
-	0x03, 0x28, 0x09, 0x52, 0x05, 0x6c, 0x69, 0x6e, 0x6b, 0x73, 0x12, 0x1a, 0x0a, 0x08, 0x6c, 0x6f,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x6f,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1e, 0x0a, 0x0a, 0x72, 0x65, 0x6e, 0x64, 0x65, 0x7a,
-	0x76, 0x6f, 0x75, 0x73, 0x18, 0x07, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x72, 0x65, 0x6e, 0x64,
-	0x65, 0x7a, 0x76, 0x6f, 0x75, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61, 0x74,
-	0x65, 0x18, 0x08, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x70, 0x72, 0x69, 0x76, 0x61, 0x74, 0x65,
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+	Salt   []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+}
+
+func (x *PubKeyExchange) Reset() {
+	*x = PubKeyExchange{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_peers_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PubKeyExchange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PubKeyExchange) ProtoMessage() {}
+
+func (x *PubKeyExchange) ProtoReflect() protoreflect.Message {
+	mi := &file_peers_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PubKeyExchange.ProtoReflect.Descriptor instead.
+func (*PubKeyExchange) Descriptor() ([]byte, []int) {
+	return file_peers_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PubKeyExchange) GetPubkey() []byte {
+	if x != nil {
+		return x.Pubkey
+	}
+	return nil
+}
+
+func (x *PubKeyExchange) GetSalt() []byte {
+	if x != nil {
+		return x.Salt
+	}
+	return nil
+}
+
+type EncryptedPSK struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Encrypted []byte `protobuf:"bytes,1,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
+}
+
+func (x *EncryptedPSK) Reset() {
+	*x = EncryptedPSK{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_peers_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *EncryptedPSK) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EncryptedPSK) ProtoMessage() {}
+
+func (x *EncryptedPSK) ProtoReflect() protoreflect.Message {
+	mi := &file_peers_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EncryptedPSK.ProtoReflect.Descriptor instead.
+func (*EncryptedPSK) Descriptor() ([]byte, []int) {
+	return file_peers_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *EncryptedPSK) GetEncrypted() []byte {
+	if x != nil {
+		return x.Encrypted
+	}
+	return nil
+}
+
+var File_peers_proto protoreflect.FileDescriptor
+
+var file_peers_proto_rawDesc = []byte{
+	0x0a, 0x0b, 0x70, 0x65, 0x65, 0x72, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x05, 0x70,
+	0x65, 0x65, 0x72, 0x73, 0x22, 0x20, 0x0a, 0x0a, 0x50, 0x65, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74,
+	0x75, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x30, 0x0a, 0x08, 0x41, 0x64, 0x64, 0x72, 0x49, 0x6e,
+	0x66, 0x6f, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02,
+	0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x09, 0x52, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x22, 0x11, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x50,
+	0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x41, 0x0a, 0x10, 0x47,
+	0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x2d, 0x0a, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x70, 0x65, 0x65, 0x72, 0x73, 0x2e, 0x41, 0x64, 0x64, 0x72, 0x49,
+	0x6e, 0x66, 0x6f, 0x52, 0x09, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x65, 0x73, 0x22, 0xf3,
+	0x01, 0x0a, 0x0d, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67,
+	0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
+	0x75, 0x75, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x20, 0x0a, 0x0b, 0x64, 0x65, 0x73, 0x63,
+	0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x64,
+	0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x61,
+	0x67, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04, 0x74, 0x61, 0x67, 0x73, 0x12, 0x14,
+	0x0a, 0x05, 0x6c, 0x69, 0x6e, 0x6b, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x6c,
+	0x69, 0x6e, 0x6b, 0x73, 0x12, 0x1a, 0x0a, 0x08, 0x6c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x12, 0x1e, 0x0a, 0x0a, 0x72, 0x65, 0x6e, 0x64, 0x65, 0x7a, 0x76, 0x6f, 0x75, 0x73, 0x18, 0x07,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x72, 0x65, 0x6e, 0x64, 0x65, 0x7a, 0x76, 0x6f, 0x75, 0x73,
 	0x12, 0x18, 0x0a, 0x07, 0x63, 0x72, 0x65, 0x61, 0x74, 0x6f, 0x72, 0x18, 0x09, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x07, 0x63, 0x72, 0x65, 0x61, 0x74, 0x6f, 0x72, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x72,
 	0x65, 0x61, 0x74, 0x65, 0x64, 0x18, 0x0a, 0x20, 0x01, 0x28, 0x03, 0x52, 0x07, 0x63, 0x72, 0x65,
@@ -532,27 +624,33 @@ var file_proto_peers_proto_rawDesc = []byte{
 	0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x12,
 	0x29, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13,
 	0x2e, 0x70, 0x65, 0x65, 0x72, 0x73, 0x2e, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x53, 0x74,
-	0x61, 0x74, 0x73, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x73, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e,
-	0x30, 0x31, 0x35, 0x2f, 0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75,
-	0x62, 0x73, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x33,
+	0x61, 0x74, 0x73, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x73, 0x22, 0x3c, 0x0a, 0x0e, 0x50, 0x75,
+	0x62, 0x4b, 0x65, 0x79, 0x45, 0x78, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x12, 0x16, 0x0a, 0x06,
+	0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x75,
+	0x62, 0x6b, 0x65, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x61, 0x6c, 0x74, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0c, 0x52, 0x04, 0x73, 0x61, 0x6c, 0x74, 0x22, 0x2c, 0x0a, 0x0c, 0x45, 0x6e, 0x63, 0x72,
+	0x79, 0x70, 0x74, 0x65, 0x64, 0x50, 0x53, 0x4b, 0x12, 0x1c, 0x0a, 0x09, 0x65, 0x6e, 0x63, 0x72,
+	0x79, 0x70, 0x74, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x65, 0x6e, 0x63,
+	0x72, 0x79, 0x70, 0x74, 0x65, 0x64, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
+	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x30, 0x31, 0x35, 0x2f,
+	0x70, 0x65, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62,
+	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
-	file_proto_peers_proto_rawDescOnce sync.Once
-	file_proto_peers_proto_rawDescData = file_proto_peers_proto_rawDesc
+	file_peers_proto_rawDescOnce sync.Once
+	file_peers_proto_rawDescData = file_peers_proto_rawDesc
 )
 
-func file_proto_peers_proto_rawDescGZIP() []byte {
-	file_proto_peers_proto_rawDescOnce.Do(func() {
-		file_proto_peers_proto_rawDescData = protoimpl.X.CompressGZIP(file_proto_peers_proto_rawDescData)
+func file_peers_proto_rawDescGZIP() []byte {
+	file_peers_proto_rawDescOnce.Do(func() {
+		file_peers_proto_rawDescData = protoimpl.X.CompressGZIP(file_peers_proto_rawDescData)
 	})
-	return file_proto_peers_proto_rawDescData
+	return file_peers_proto_rawDescData
 }
 
-var file_proto_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_proto_peers_proto_goTypes = []interface{}{
+var file_peers_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_peers_proto_goTypes = []interface{}{
 	(*PeerStatus)(nil),       // 0: peers.PeerStatus
 	(*AddrInfo)(nil),         // 1: peers.AddrInfo
 	(*GetPeersRequest)(nil),  // 2: peers.GetPeersRequest
@@ -560,8 +658,10 @@ var file_proto_peers_proto_goTypes = []interface{}{
 	(*NetworkConfig)(nil),    // 4: peers.NetworkConfig
 	(*NetworkStats)(nil),     // 5: peers.NetworkStats
 	(*Network)(nil),          // 6: peers.Network
+	(*PubKeyExchange)(nil),   // 7: peers.PubKeyExchange
+	(*EncryptedPSK)(nil),     // 8: peers.EncryptedPSK
 }
-var file_proto_peers_proto_depIdxs = []int32{
+var file_peers_proto_depIdxs = []int32{
 	1, // 0: peers.GetPeersResponse.Addresses:type_name -> peers.AddrInfo
 	4, // 1: peers.Network.config:type_name -> peers.NetworkConfig
 	5, // 2: peers.Network.stats:type_name -> peers.NetworkStats
@@ -572,13 +672,13 @@ var file_proto_peers_proto_depIdxs = []int32{
 	0, // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_proto_peers_proto_init() }
-func file_proto_peers_proto_init() {
-	if File_proto_peers_proto != nil {
+func init() { file_peers_proto_init() }
+func file_peers_proto_init() {
+	if File_peers_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_proto_peers_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PeerStatus); i {
 			case 0:
 				return &v.state
@@ -590,7 +690,7 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*AddrInfo); i {
 			case 0:
 				return &v.state
@@ -602,7 +702,7 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetPeersRequest); i {
 			case 0:
 				return &v.state
@@ -614,7 +714,7 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetPeersResponse); i {
 			case 0:
 				return &v.state
@@ -626,7 +726,7 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NetworkConfig); i {
 			case 0:
 				return &v.state
@@ -638,7 +738,7 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NetworkStats); i {
 			case 0:
 				return &v.state
@@ -650,8 +750,32 @@ func file_proto_peers_proto_init() {
 				return nil
 			}
 		}
-		file_proto_peers_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_peers_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Network); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_peers_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PubKeyExchange); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_peers_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*EncryptedPSK); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -667,18 +791,18 @@ func file_proto_peers_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_proto_peers_proto_rawDesc,
+			RawDescriptor: file_peers_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_proto_peers_proto_goTypes,
-		DependencyIndexes: file_proto_peers_proto_depIdxs,
-		MessageInfos:      file_proto_peers_proto_msgTypes,
+		GoTypes:           file_peers_proto_goTypes,
+		DependencyIndexes: file_peers_proto_depIdxs,
+		MessageInfos:      file_peers_proto_msgTypes,
 	}.Build()
-	File_proto_peers_proto = out.File
-	file_proto_peers_proto_rawDesc = nil
-	file_proto_peers_proto_goTypes = nil
-	file_proto_peers_proto_depIdxs = nil
+	File_peers_proto = out.File
+	file_peers_proto_rawDesc = nil
+	file_peers_proto_goTypes = nil
+	file_peers_proto_depIdxs = nil
 }

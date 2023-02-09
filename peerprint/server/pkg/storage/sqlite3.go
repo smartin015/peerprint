@@ -395,7 +395,7 @@ func NewSqlite3(path string) (*sqlite3, error) {
     lastCleanupEnd: time.Unix(0,0),
   }
   if err := s.createTables(); err != nil {
-    return nil, fmt.Errorf("failed to create tables: %w", err)
+    return nil, fmt.Errorf("failed to create tables (%s): %w", path, err)
   }
   return s, nil
 }

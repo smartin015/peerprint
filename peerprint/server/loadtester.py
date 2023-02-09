@@ -57,18 +57,35 @@ class LoadTester:
         self._logger = logger
 
         self.debug("Creating queue")
-        opts = ServerProcessOpts(
+        # TODO randomly generate paths
+        # if self._opts.privKeyPath is None:
+        #     self._opts.privKeyPath = f"{self._tmpdir.name}/key.priv"
+        # if self._opts.pubKeyPath is None:
+        #     self._opts.pubKeyPath = f"{self._tmpdir.name}/key.pub"
+        # if self._opts.db is None:
+        #     self._opts.db = f"{self._tmpdir.name}/state.db"
+        net = cpb.NetworkSetting(
+            network="testnet",
+            addr="/ip4/0.0.0.0/tcp/80", 
             rendezvous="testing",
             psk="12345",
             local=True,
-            displayName="Test server",
-	    syncPeriod="30s",
+            db_path="/tmp/test.db",
+            privkey_path="/tmp/priv.key",
+            pubkey_path="/tmp/pub.key",
+            display_name="loadtester",
+            connect_timeout=10,
+            sync_period=60*10,
+            max_records_per_peer=100,
+            max_tracked_peers=100,
         )
+
+        opts = ServerProcessOpts()
 
         if len(sys.argv) > 1 and sys.argv[1] != "":
             opts.www=sys.argv[1] # e.g. 0.0.0.0:5000
 
-        self.q = P2PQueue(opts, BINPATH, self._logger.getChild("queue"))
+        self.q = P2PServer(opts, BINPATH, self._logger.getChild("queue"))
 
         self.debug("Connecting and waiting for response")
         self.q.connect()

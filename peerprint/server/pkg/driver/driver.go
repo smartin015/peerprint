@@ -1,20 +1,25 @@
 package driver
 
 import (
+  "crypto/tls"
+  "crypto/x509"
+  "encoding/json"
+  "path/filepath"
+  //"google.golang.org/protobuf/proto"
+  "google.golang.org/grpc"
   "google.golang.org/protobuf/proto"
+  "google.golang.org/grpc/credentials"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
-  "github.com/smartin015/peerprint/p2pgit/pkg/transport"
-  "github.com/smartin015/peerprint/p2pgit/pkg/storage"
   "github.com/smartin015/peerprint/p2pgit/pkg/crawl"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
-  "github.com/smartin015/peerprint/p2pgit/pkg/server"
-  "github.com/smartin015/peerprint/p2pgit/pkg/cmd"
-	"github.com/libp2p/go-libp2p/core/peer"
+  //"github.com/smartin015/peerprint/p2pgit/pkg/cmd"
+  "strings"
+  "net"
   "context"
   "fmt"
+  "os"
   "time"
   "errors"
-  "strings"
 )
 
 const (
@@ -22,128 +27,186 @@ const (
 )
 
 var (
-  ErrWatchdog = errors.New("Watchdog timeout")
   ErrContext = errors.New("Context canceled")
 )
 
+type Opts struct {
+  Addr string
+  CertsDir string
+  ServerCert string
+  ServerKey string
+  RootCert string
+  ConfigPath string
+}
+
 type Driver struct {
-  s server.Interface
-  st storage.Interface
-  t transport.Interface
-  c *crawl.Crawler
   l *pplog.Sublog
+  opts *Opts
+  inst map[string]*Instance
+  //cmdPush chan<- proto.Message
+  config map[string]*pb.ConnectRequest
 }
 
-func NewDriver(srv server.Interface, st storage.Interface, t transport.Interface, l *pplog.Sublog) *Driver {
+func NewDriver(opts *Opts, l *pplog.Sublog) *Driver {
   return &Driver{
-    s: srv,
-    st: st,
-    t: t,
-    c: nil,
     l: l,
+    opts: opts,
+    inst: make(map[string]*Instance),
+    config: make(map[string]*pb.ConnectRequest),
   }
 }
 
-func (d *Driver) Loop(ctx context.Context, repPath, pushPath string, watchdog time.Duration) error {
-  cmdRecv := make(chan proto.Message, 5)
-  errChan := make(chan error, 5)
-  cmdSend, cmdPush, destroyComm := cmd.New(repPath, pushPath, cmdRecv, errChan)
-  defer destroyComm()
-  wdt := time.NewTimer(watchdog)
-  if watchdog== 0 {
-    wdt.Stop()
+func (d *Driver) InstanceNames() []string {
+  nn := []string{}
+  for k, _ := range d.inst {
+    nn = append(nn, k)
   }
-  for {
-    select {
-    case m := <-d.s.OnUpdate():
-      cmdPush<- m
-    case e := <-errChan:
-      d.l.Error(e.Error())
-    case c := <-cmdRecv:
-      rep, err := d.handleCommand(ctx, c)
-      if err != nil {
-        cmdSend<- &pb.Error{Reason: err.Error()}
-      } else {
-        cmdSend<- rep
-      }
-    case <-wdt.C:
-      d.l.Error("Watchdog timeout, exiting")
-      return ErrWatchdog
-    case <- ctx.Done():
-      d.l.Info("Context completed, exiting")
-      return ErrContext
-    }
-    if watchdog > 0 {
-      wdt.Reset(watchdog)
-    }
-  }
+  return nn
 }
 
-func (d *Driver) handleCommand(ctx context.Context, c proto.Message) (proto.Message, error) {
-  switch v := c.(type) {
-  case *pb.HealthCheck:
-    return &pb.HealthCheck{}, nil
-  case *pb.GetID:
-    return &pb.IDResponse{
-      Id: d.s.ID(),
-    }, nil
-  case *pb.Record:
-    return d.s.IssueRecord(v, true)
-  case *pb.Completion:
-    return d.s.IssueCompletion(v, true)
-  case *pb.CrawlPeers:
-    if v.RestartCrawl || d.c == nil {
-      d.c = crawl.NewCrawler(d.t.GetPeerAddresses(), d.crawlPeer)
+func (d *Driver) GetConfigs(sanitized bool) []*pb.ConnectRequest {
+  result := []*pb.ConnectRequest{}
+  for _, conf := range d.config {
+    c2 := proto.Clone(conf).(*pb.ConnectRequest)
+    if sanitized {
+      c2.Psk = ""
     }
-    ctx2, _ := context.WithTimeout(ctx, time.Duration(v.TimeoutMillis) * time.Millisecond)
-    remaining, errs := d.c.Step(ctx2, v.BatchSize)
-    for _, err := range errs {
-      d.l.Error(err)
+    result = append(result, c2)
+  }
+  return result
+}
+
+func (d *Driver) GetInstance(name string) *Instance {
+  inst, ok := d.inst[name]
+  if !ok {
+    return nil
+  }
+  return inst
+}
+
+func (d *Driver) Loop(ctx context.Context) error {
+  if _, err := os.Stat(d.opts.ConfigPath); !os.IsNotExist(err) {
+    if err := d.readConfig(); err != nil {
+      return fmt.Errorf("Read config: %w", err)
     }
-    return &pb.CrawlResult{Remaining: int32(remaining)}, nil
-  case *pb.Network:
-    if err := d.st.RegisterNetwork(v); err != nil {
-      return nil, err
+  }
+
+  /*
+  d.l.Info("Initializing %d saved networks", len(d.config))
+  for _, n := range d.config {
+    if err := d.handleConnect(n); err != nil {
+      d.l.Error(fmt.Errorf("Init %s: %w", n.Network, err))
+    }
+  }*/
+
+  scp := filepath.Join(d.opts.CertsDir, d.opts.ServerCert)
+  skp := filepath.Join(d.opts.CertsDir, d.opts.ServerKey)
+  d.l.Info("Loading command server credentials - cert from %s, key from %s", scp, skp)
+  cert, err := tls.LoadX509KeyPair(scp, skp)
+  if err != nil {
+    return fmt.Errorf("Load server cert: %w", err)
+  }
+
+  rcp := filepath.Join(d.opts.CertsDir, d.opts.RootCert)
+  rcp_pem, err := os.ReadFile(rcp)
+  if err != nil {
+    return fmt.Errorf("read rcp file %w", err)
+  }
+  ccp := x509.NewCertPool()
+  if ok := ccp.AppendCertsFromPEM(rcp_pem); !ok {
+    return fmt.Errorf("failed to parse any root certificates from %s", rcp_pem)
+  }
+
+  creds := credentials.NewTLS(&tls.Config{
+    Certificates: []tls.Certificate{cert},
+    InsecureSkipVerify: true,
+    RootCAs: ccp,
+    ClientCAs: ccp,
+    ClientAuth: tls.RequireAndVerifyClientCert,
+  })
+  grpcServer := grpc.NewServer(grpc.Creds(creds))
+  pb.RegisterCommandServer(grpcServer, newCmdServer(d))
+  lis, err := net.Listen("tcp", d.opts.Addr)
+  if err != nil {
+    return fmt.Errorf("Listen: %w", err)
+  }
+  d.l.Info("Command server listening on %s", d.opts.Addr)
+  return grpcServer.Serve(lis)
+}
+
+func (d *Driver) readConfig() error {
+  if len(d.config) > 0 {
+    return fmt.Errorf("readConfig after init")
+  }
+  data, err := os.ReadFile(d.opts.ConfigPath)
+  if err != nil {
+    return err
+  }
+  for _, line := range strings.Split(string(data), "\n") {
+    var v *pb.ConnectRequest
+    if err := json.Unmarshal([]byte(line), v); err != nil {
+      return err
+    }
+    d.config[v.Network] = v
+  }
+  return nil
+}
+
+func (d *Driver) writeConfig() error {
+  f, err := os.Create(d.opts.ConfigPath)
+  if err != nil {
+    return err
+  }
+  defer f.Close()
+  for _, n := range d.config {
+    if data, err := json.Marshal(n); err != nil {
+      f.Close()
+      return err
     } else {
-      return &pb.Ok{}, nil
+      f.Write(data)
+      f.WriteString("\n")
     }
-  default:
-    return nil, fmt.Errorf("Unrecognized command")
   }
+  return nil
 }
 
-func (d *Driver) handleGetPeersResponse(rep *pb.GetPeersResponse) []*peer.AddrInfo {
-  ais := []*peer.AddrInfo{}
-  naddr := 0
-  for _, a := range rep.Addresses {
-    if naddr >= MaxAddrPerPeer {
-      break
-    }
-    if r, err := transport.ProtoToPeerAddrInfo(a); err != nil {
-      d.l.Error("ProtoToPeerAddrInfo: %v", err)
-    } else {
-      ais = append(ais, r)
-      naddr++
-    }
-  }
-  return ais
-}
-
-func (d *Driver) crawlPeer(ctx context.Context, ai *peer.AddrInfo) ([]*peer.AddrInfo, error) {
-  if err := d.st.LogPeerCrawl(ai.ID.String(), d.c.Started.Unix()); err != nil {
-    if !strings.HasPrefix(err.Error(), "UNIQUE constraint failed") {
-      // Only log as error if it's not because we already inserted - which 
-      // is expected.
-      return nil, fmt.Errorf("LogPeerCrawl: %v", err)
-    }
-    return []*peer.AddrInfo{}, nil
-  }
-
-  rep := &pb.GetPeersResponse{}
-  d.t.AddTempPeer(ai)
-  if err := d.t.Call(ctx, ai.ID, "GetPeers", &pb.GetPeersRequest{}, rep); err != nil {
-    return nil, fmt.Errorf("GetPeers of %s: %v", ai.ID.String(), err)
+func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
+  if i, err := NewInstance(v, pplog.New(v.Network, d.l)); err != nil {
+    return fmt.Errorf("Connect: %w", err)
   } else {
-    return d.handleGetPeersResponse(rep), nil
+    d.inst[v.Network] = i
+    // TODO use base context from driver
+    go i.Run(context.Background())
+    d.config[v.Network] = v
+    d.writeConfig()
   }
+  return nil
+}
+
+func (d *Driver) handleDisconnect(v *pb.DisconnectRequest) error {
+  if i, ok := d.inst[v.Network]; !ok {
+    return fmt.Errorf("Instance with rendezvous %q not found", v.Network) 
+  } else {
+    delete(d.config, v.Network)
+    d.writeConfig()
+    return i.Destroy()
+  }
+}
+
+func (d *Driver) handleCrawl(ctx context.Context, inst *Instance, req *pb.CrawlRequest) (*pb.CrawlResult, error) {
+  if req.RestartCrawl || inst.c == nil {
+    inst.c = crawl.NewCrawler(inst.t.GetPeerAddresses(), inst.crawlPeer)
+  }
+  ctx2, _ := context.WithTimeout(ctx, time.Duration(req.TimeoutMillis) * time.Millisecond)
+  remaining, errs := inst.c.Step(ctx2, req.BatchSize)
+
+  errStrs := []string{}
+  for _, err := range errs {
+    errStrs = append(errStrs, err.Error())
+  }
+  return &pb.CrawlResult{
+    Network: req.Network,
+    Remaining: int32(remaining),
+    Errors: errStrs,
+  }, nil
 }
