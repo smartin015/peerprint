@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+import "state.proto";
+import "peers.proto";
+
+package command;
+
+// Exchanged between wrapper and process to ensure both are healthy
+message HealthCheck{}
+
+message SetStatusRequest{
+  string network = 1;
+  peers.PeerStatus status = 2;
+}
+message StreamEventsRequest{
+  string network=1;
+}
+message Event {
+  string name = 1;
+  oneof event_details {
+    Progress progress = 2;
+  }
+}
+
+message Progress{
+  string uuid = 1;
+  string resolved_completer = 2;
+  bool completed = 3;
+}
+
+message Ok {}
+
+message GetIDRequest {
+  string network = 1;
+}
+message GetIDResponse {
+  string id = 1;
+}
+
+message CrawlRequest {
+  string network = 1;
+  bool restart_crawl = 2; // Whether to start crawling anew
+  int64 batch_size = 3; // How many peers to query for this step
+  int32 timeout_millis = 4; // Max amount of time to crawl before returning
+}
+
+message CrawlResult {
+  string network = 1;
+  int32 remaining = 2;
+  repeated string errors = 3;
+}
+
+message ConnectRequest {
+  string network = 1;
+  string addr = 2;
+  string rendezvous = 3;
+  string psk = 4;
+  bool local = 5;
+  string db_path = 6;
+  string privkey_path = 7;
+  string pubkey_path = 8;
+  string display_name = 9;
+  int64 connect_timeout = 10;
+  int64 sync_period = 11;
+  int64 max_records_per_peer = 12;
+  int64 max_tracked_peers = 13;
+}
+
+message DisconnectRequest {
+  string network = 1;
+}
+
+message SetRecordRequest {
+  string network = 1;
+  state.Record record = 2;
+}
+
+message SetCompletionRequest {
+  string network = 1;
+  state.Completion completion = 2;
+}
+
+message GetConnectionsRequest {}
+message GetConnectionsResponse {
+  repeated ConnectRequest networks = 1;
+}
+
+message StreamRecordsRequest {
+  string network = 1;
+  string uuid = 2;
+}
+message StreamCompletionsRequest {
+  string network = 1;
+  string uuid = 2;
+}
+message StreamNetworksRequest {
+  bool local = 1;
+}
+message StreamAdvertisementsRequest {
+  bool local = 1;
+}
+message StreamPeersRequest {
+  string network = 1;
+}
+message AdvertiseRequest {
+  bool local = 1;
+  peers.NetworkConfig config = 2;
+}
+message StopAdvertisingRequest {
+  bool local = 1;
+  string uuid = 2;
+}
+
+service Command {
+  rpc Ping(HealthCheck) returns (Ok) {}
+  rpc GetId(GetIDRequest) returns (GetIDResponse) {}
+
+  rpc Connect(ConnectRequest) returns (Ok) {}
+  rpc Disconnect(DisconnectRequest) returns (Ok) {}
+  rpc GetConnections(GetConnectionsRequest) returns (GetConnectionsResponse) {}
+
+  rpc SetRecord(SetRecordRequest) returns (Ok) {}
+  rpc StreamRecords(StreamRecordsRequest) returns (stream state.SignedRecord) {}
+
+  rpc SetCompletion(SetCompletionRequest) returns (Ok) {}
+  rpc StreamCompletions(StreamCompletionsRequest) returns (stream state.SignedCompletion) {}
+
+  rpc Crawl(CrawlRequest) returns (CrawlResult) {} 
+
+  rpc StreamEvents(StreamEventsRequest) returns (stream Event) {}
+
+  rpc Advertise(AdvertiseRequest) returns (Ok) {}
+  rpc StopAdvertising(StopAdvertisingRequest) returns (Ok) {}
+  rpc StreamNetworks(StreamNetworksRequest) returns (stream peers.Network) {}
+  rpc StreamAdvertisements(StreamAdvertisementsRequest) returns (stream peers.NetworkConfig) {}
+
+  rpc SetStatus(SetStatusRequest) returns (Ok) {}
+  rpc StreamPeers(StreamPeersRequest) returns (stream peers.PeerStatus) {}
+}

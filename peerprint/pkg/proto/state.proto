@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+option go_package = "github.com/smartin015/peerprint/pubsub/proto";
+
+package state;
+
+enum LocationType {
+  UNKNOWN = 0;
+  IPFS_CID = 1;
+}
+
+message Signature {
+  string signer = 1;
+  bytes data = 2;
+}
+
+message SignedRecord {
+  Record record = 1;
+  Signature signature = 2;
+}
+
+message Rank {
+  uint64 num = 1;
+  uint64 den = 2;
+  double gen = 3; // rendered as `num/den`, lossy
+}
+
+message Record {
+  string uuid = 1; // UUID unique to this record
+  string approver = 2; // Who to go to for a Completion
+
+  repeated string tags = 3; // Tags for qualified search of records without having to fetch each `location`
+
+  Rank rank = 4;
+  string manifest = 5;
+  int64 created = 6;
+
+  // TODO min trust accepted
+  // Estimated time to complete
+  // Approx destination for shipping
+}
+
+message SignedCompletion {
+  Completion completion = 1;
+  Signature signature = 2;
+}
+
+message Completion {
+  string uuid = 1;  
+  string completer = 3;
+  int64 timestamp = 4;
+  bytes completer_state = 5;
+}
