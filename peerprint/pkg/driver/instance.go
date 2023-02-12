@@ -55,11 +55,11 @@ func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
   }
 
   var psk pnet.PSK
-  if v.Psk == "" {
-    l.Warning("\n\n\n ================= WARNING =================\n\n",
-      "No PSK path is set - your session will be INSECURE\n",
-      "It is STRONGLY RECOMMENDED to specify a PSK file with -pskPath\n",
-      "or else anybody can become a node in your network\n",
+  if v.Psk == "" && !v.Local {
+    l.Warning("\n\n\n ================= WARNING =================\n\n" +
+      "No PSK path is set - your GLOBAL network will be INSECURE!\n" +
+      "It is STRONGLY RECOMMENDED to specify a PSK in your connection\n" +
+      "or else anybody can become a node in your network\n" +
       "\n ================= WARNING =================\n\n\n")
   } else {
     psk = crypto.LoadPSK(v.Psk)

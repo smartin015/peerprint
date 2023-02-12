@@ -3,11 +3,11 @@ package driver
 import (
   "crypto/tls"
   "crypto/x509"
-  "encoding/json"
   "path/filepath"
   //"google.golang.org/protobuf/proto"
   "google.golang.org/grpc"
   "google.golang.org/protobuf/proto"
+  "google.golang.org/protobuf/encoding/protojson"
   "google.golang.org/grpc/credentials"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/crawl"
@@ -95,15 +95,12 @@ func (d *Driver) Loop(ctx context.Context) error {
       return fmt.Errorf("Read config: %w", err)
     }
   }
-
-  /*
   d.l.Info("Initializing %d saved networks", len(d.config))
   for _, n := range d.config {
     if err := d.handleConnect(n); err != nil {
       d.l.Error(fmt.Errorf("Init %s: %w", n.Network, err))
     }
-  }*/
-
+  }
   scp := filepath.Join(d.opts.CertsDir, d.opts.ServerCert)
   skp := filepath.Join(d.opts.CertsDir, d.opts.ServerKey)
   d.l.Info("Loading command server credentials - cert from %s, key from %s", scp, skp)
@@ -148,8 +145,12 @@ func (d *Driver) readConfig() error {
     return err
   }
   for _, line := range strings.Split(string(data), "\n") {
-    var v *pb.ConnectRequest
-    if err := json.Unmarshal([]byte(line), v); err != nil {
+    if strings.TrimSpace(line) == "" {
+      continue
+    }
+    v := &pb.ConnectRequest{}
+    d.l.Info("Parsing config line: %q", line)
+    if err := protojson.Unmarshal([]byte(line), v); err != nil {
       return err
     }
     d.config[v.Network] = v
@@ -164,7 +165,7 @@ func (d *Driver) writeConfig() error {
   }
   defer f.Close()
   for _, n := range d.config {
-    if data, err := json.Marshal(n); err != nil {
+    if data, err := protojson.Marshal(n); err != nil {
       f.Close()
       return err
     } else {

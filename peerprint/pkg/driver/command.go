@@ -264,10 +264,11 @@ func (s *commandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest
 
 
 func (s *commandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {
+  s.d.l.Info("TODO handle StreamPeers")
+  return nil
   /*
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
   }*/
-  return status.Errorf(codes.Unimplemented, "TODO")
 }

@@ -15,6 +15,8 @@ import peerprint.pkg.proto.command_pb2_grpc as command_grpc
 from google.protobuf.any_pb2 import Any
 from enum import Enum
 
+RpcError = grpc.RpcError
+
 class P2PServerOpts(ServerProcessOpts):
     pass
 
@@ -89,8 +91,8 @@ class P2PServer():
         rep = self._call("GetId", cpb.GetIDRequest(network=network))
         return rep.id
 
-    def get_networks(self):
-        rep = self._call("GetNetworks", cpb.GetNetworksRequest())
+    def get_connections(self):
+        rep = self._call("GetConnections", cpb.GetConnectionsRequest())
         return rep.networks
 
     def connect(self, **kwargs):
@@ -122,6 +124,10 @@ class P2PServer():
 
     def stream_events(self, network):
         for v in self._stream("StreamEvents", cpb.StreamEventsRequest(network=network)):
+            yield v
+
+    def get_networks(self):
+        for v in self._stream("StreamNetworks", cpb.StreamNetworksRequest()):
             yield v
 
     def get_peers(self, network):
