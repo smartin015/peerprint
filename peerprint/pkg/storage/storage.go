@@ -55,7 +55,7 @@ type Registry interface {
   DeleteConfig(uuid string, tbl string) error
   SignConfig(uuid string, sig []byte) error
   UpsertStats(uuid string, stats *pb.NetworkStats) error
-  GetNetworks(context.Context, chan<- *pb.Network) error
+  GetNetworks(context.Context, chan<- *pb.Network, bool) error
   GetLobby(ctx context.Context, cur chan<- *pb.NetworkConfig) error
 }
 

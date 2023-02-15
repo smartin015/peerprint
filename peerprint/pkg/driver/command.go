@@ -12,13 +12,13 @@ import (
   "sync"
 )
 
-type commandServer struct {
+type CommandServer struct {
   pb.UnimplementedCommandServer
   d *Driver
 }
 
-func newCmdServer(d *Driver) *commandServer {
-  return &commandServer{d:d}
+func newCmdServer(d *Driver) *CommandServer {
+  return &CommandServer{d:d}
 }
 
 func verifyPeer(ctx context.Context) error {
@@ -39,14 +39,14 @@ func verifyPeer(ctx context.Context) error {
 }
 
 
-func (s *commandServer) Ping(ctx context.Context, req *pb.HealthCheck) (*pb.Ok, error) {
+func (s *CommandServer) Ping(ctx context.Context, req *pb.HealthCheck) (*pb.Ok, error) {
   if err := verifyPeer(ctx); err != nil {
     return nil, err
   }
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) GetId(ctx context.Context, req *pb.GetIDRequest) (*pb.GetIDResponse, error) {
+func (s *CommandServer) GetId(ctx context.Context, req *pb.GetIDRequest) (*pb.GetIDResponse, error) {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -56,13 +56,13 @@ func (s *commandServer) GetId(ctx context.Context, req *pb.GetIDRequest) (*pb.Ge
   }, nil
 }
 
-func (s *commandServer) GetConnections(ctx context.Context, req *pb.GetConnectionsRequest) (*pb.GetConnectionsResponse, error) {
+func (s *CommandServer) GetConnections(ctx context.Context, req *pb.GetConnectionsRequest) (*pb.GetConnectionsResponse, error) {
   return &pb.GetConnectionsResponse{
     Networks: s.d.GetConfigs(true),
   }, nil
 }
 
-func (s *commandServer) SetStatus(ctx context.Context, req *pb.SetStatusRequest) (*pb.Ok, error) {
+func (s *CommandServer) SetStatus(ctx context.Context, req *pb.SetStatusRequest) (*pb.Ok, error) {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -71,7 +71,7 @@ func (s *commandServer) SetStatus(ctx context.Context, req *pb.SetStatusRequest)
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.Ok, error) {
+func (s *CommandServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.Ok, error) {
   if err := s.d.handleConnect(req); err != nil {
     return nil, status.Errorf(codes.Internal, "Connect: %w", err)
   } else {
@@ -79,7 +79,7 @@ func (s *commandServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*p
   }
 }
 
-func (s *commandServer) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (*pb.Ok, error) {
+func (s *CommandServer) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (*pb.Ok, error) {
   if err := s.d.handleDisconnect(req); err != nil {
     return nil, status.Errorf(codes.Internal, "Disconnect: %w", err)
   } else {
@@ -87,7 +87,7 @@ func (s *commandServer) Disconnect(ctx context.Context, req *pb.DisconnectReques
   }
 }
 
-func (s *commandServer) SetRecord(ctx context.Context, req *pb.SetRecordRequest) (*pb.Ok, error) {
+func (s *CommandServer) SetRecord(ctx context.Context, req *pb.SetRecordRequest) (*pb.Ok, error) {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -98,7 +98,7 @@ func (s *commandServer) SetRecord(ctx context.Context, req *pb.SetRecordRequest)
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) SetCompletion(ctx context.Context, req *pb.SetCompletionRequest) (*pb.Ok, error) {
+func (s *CommandServer) SetCompletion(ctx context.Context, req *pb.SetCompletionRequest) (*pb.Ok, error) {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -109,7 +109,7 @@ func (s *commandServer) SetCompletion(ctx context.Context, req *pb.SetCompletion
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) Crawl(ctx context.Context, req *pb.CrawlRequest) (*pb.CrawlResult, error) {
+func (s *CommandServer) Crawl(ctx context.Context, req *pb.CrawlRequest) (*pb.CrawlResult, error) {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -117,7 +117,7 @@ func (s *commandServer) Crawl(ctx context.Context, req *pb.CrawlRequest) (*pb.Cr
   return s.d.handleCrawl(ctx, inst, req)
 }
 
-func (s *commandServer) StreamEvents(req *pb.StreamEventsRequest, stream pb.Command_StreamEventsServer) error {
+func (s *CommandServer) StreamEvents(req *pb.StreamEventsRequest, stream pb.Command_StreamEventsServer) error {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -140,7 +140,7 @@ func (s *commandServer) StreamEvents(req *pb.StreamEventsRequest, stream pb.Comm
   }
 }
 
-func (s *commandServer) StreamRecords(req *pb.StreamRecordsRequest, stream pb.Command_StreamRecordsServer) error {
+func (s *CommandServer) StreamRecords(req *pb.StreamRecordsRequest, stream pb.Command_StreamRecordsServer) error {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -169,7 +169,7 @@ func (s *commandServer) StreamRecords(req *pb.StreamRecordsRequest, stream pb.Co
   return cherr
 }
 
-func (s *commandServer) StreamCompletions(req *pb.StreamCompletionsRequest, stream pb.Command_StreamCompletionsServer) error {
+func (s *CommandServer) StreamCompletions(req *pb.StreamCompletionsRequest, stream pb.Command_StreamCompletionsServer) error {
   inst, ok := s.d.inst[req.Network]
   if !ok {
     return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
@@ -198,7 +198,7 @@ func (s *commandServer) StreamCompletions(req *pb.StreamCompletionsRequest, stre
   return cherr
 }
 
-func (s *commandServer) resolveRegistry(local bool) *registry.Registry {
+func (s *CommandServer) ResolveRegistry(local bool) *registry.Registry {
   if local {
     return s.d.RLocal
   } else {
@@ -206,7 +206,7 @@ func (s *commandServer) resolveRegistry(local bool) *registry.Registry {
   }
 }
 
-func (s *commandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.Command_StreamNetworksServer) error {
+func (s *CommandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.Command_StreamNetworksServer) error {
   ch := make(chan *pb.Network)
   var cherr error
   var wg sync.WaitGroup
@@ -220,28 +220,28 @@ func (s *commandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.
       }
     }
   }()
-  if err := s.resolveRegistry(req.Local).DB.GetNetworks(stream.Context(), ch); err != nil {
+  if err := s.ResolveRegistry(req.Local).DB.GetNetworks(stream.Context(), ch, true); err != nil {
     return err
   }
   wg.Wait()
   return cherr
 }
 
-func (s *commandServer) Advertise(ctx context.Context, req *pb.AdvertiseRequest) (*pb.Ok, error) {
-  if err := s.resolveRegistry(req.Local).DB.UpsertConfig(req.Config, []byte(""), storage.RegistryTable); err != nil {
+func (s *CommandServer) Advertise(ctx context.Context, req *pb.AdvertiseRequest) (*pb.Ok, error) {
+  if err := s.ResolveRegistry(req.Local).DB.UpsertConfig(req.Config, []byte(""), storage.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) StopAdvertising(ctx context.Context, req *pb.StopAdvertisingRequest) (*pb.Ok, error) {
-  if err := s.resolveRegistry(req.Local).DB.DeleteConfig(req.Uuid, storage.RegistryTable); err != nil {
+func (s *CommandServer) StopAdvertising(ctx context.Context, req *pb.StopAdvertisingRequest) (*pb.Ok, error) {
+  if err := s.ResolveRegistry(req.Local).DB.DeleteConfig(req.Uuid, storage.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
 }
 
-func (s *commandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest, stream pb.Command_StreamAdvertisementsServer) error {
+func (s *CommandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest, stream pb.Command_StreamAdvertisementsServer) error {
   ch := make(chan *pb.NetworkConfig)
   var cherr error
   var wg sync.WaitGroup
@@ -255,7 +255,7 @@ func (s *commandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest
       }
     }
   }()
-  if err := s.resolveRegistry(req.Local).DB.GetLobby(stream.Context(), ch); err != nil {
+  if err := s.ResolveRegistry(req.Local).DB.GetLobby(stream.Context(), ch); err != nil {
     return err
   }
   wg.Wait()
@@ -263,7 +263,7 @@ func (s *commandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest
 }
 
 
-func (s *commandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {
+func (s *CommandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {
   s.d.l.Info("TODO handle StreamPeers")
   return nil
   /*

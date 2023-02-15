@@ -30,7 +30,7 @@ type RegistryService struct {
 
 func (s *RegistryService) GetNetworks(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.Network) error {
   s.base.signNew(ctx)
-  return s.base.st.GetNetworks(ctx, repChan) // repChan closed by impl
+  return s.base.st.GetNetworks(ctx, repChan, true) // repChan closed by impl
 }
 
 func NewRegistry(t transport.Interface, st storage.Registry, syncPeriod time.Duration, l *pplog.Sublog) Registry {
@@ -100,7 +100,7 @@ func (s *registry) signNew(ctx context.Context) {
     }
   }()
 
-  if err := s.st.GetNetworks(ctx, nChan); err != nil {
+  if err := s.st.GetNetworks(ctx, nChan, true); err != nil {
     s.l.Error(err)
     return
   }

@@ -1,0 +1,49 @@
+<div class="pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2">Publish Network</h1>
+  <p class="text-muted">Advertise a network to other peers so they can connect with a single click!</p>
+</div>
+
+<form id="newadvert">
+  <div class="mb-3">
+    <label class="form-label" for="name">Network name</label>
+    <input class="form-control" id="name" type="text"></input>
+    <div class="form-text">This is how the network will be named in discovery</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="description">Description</label>
+    <input class="form-control" type="text" id="description"></input>
+    <div class="form-text">For what purpose is this network intended?</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="tags">Tags</label>
+    <input class="form-control" type="text" id="tags"></input>
+    <div class="form-text">Comma-separated list of tags for searching networks</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="links">Links</label>
+    <input class="form-control" type="text" id="links"></input>
+    <div class="form-text">Comma-separated list of links for more information</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="location">Location</label>
+    <input class="form-control" type="text" id="location"></input>
+    <div class="form-text">General description of the physical location of this network</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="rendezvous">Rendezvous</label>
+    <input class="form-control" type="text" id="rendezvous"></input>
+    <div class="form-text">A (unique) string used on bootstrapping; peers with the same rendezvous will find and connect to each other</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="creator">Creator</label>
+    <input class="form-control" type="text" id="creator"></input>
+    <div class="form-text">Who made this network?</div>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" id="local" type="checkbox"></input>
+    <label class="form-check-label" for="local">Local Network Only</label>
+  </div>
+  <div class="form-text mb-5">When checked, PeerPrint will only advertise this PeerPrint network on the local network (i.e. the LAN) using MDNS, rather than publicly over DHT.</div>
+
+  <button class="btn btn-primary" data-bind="click: newAdvert">Publish</button>
+</form>

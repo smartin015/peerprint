@@ -4,100 +4,96 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="icon" type="image/png" href="/CPQ.png">
 	<title>PeerPrint Status</title>
-	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" integrity="sha512-SzlrxWUlpfuzQ+pcUCosxcglQRNAq/DZjVsC0lE40xsADsfeQoEypE+enwcOiGjk/bSuGGKHEyjSoQ1zVisanQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous"/>
+	<link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-	<header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-		<a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6" href="#">PeerPrint</a>
+  <div class="sticky-top">
+    <header class="navbar navbar-dark bg-dark flex-md-nowrap p-0 shadow">
+      <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6" href="#">PeerPrint</a>
 
-		<button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
-			<span class="navbar-toggler-icon"></span>
-		</button>
-	</header>
+      <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </header>
+  </div>
 
 	<div class="container-fluid">
 		<div class="row">
 			<nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
 
-        <select data-bind="options: instances, value: selectedInstance"></select>
-				<div class="position-sticky pt-3 sidebar-sticky">
-					<ul class="nav flex-column nav-pills me-3" id="myTab" role="tablist">
+				<div class="position-sticky sidebar-sticky">
+					<ul class="nav flex-column" id="myTab" role="tablist">
+
+            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+              <span>Network Stats</span>
+            </h6>
+
+      			<select class="form-control w-100 rounded-0 form-select" data-bind="options: instances, value: selectedInstance"></select>
+
 						<li class="nav-item" role="presentation">
-							<button class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="false">Server</button>
+							<a class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="false">Server</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage" aria-selected="false">Storage</button>
+							<a class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage" aria-selected="false">Storage</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events" aria-selected="false">Events</button>
+							<a class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events" aria-selected="false">Events</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<button class="nav-link" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline" type="button" role="tab" aria-controls="timeline" aria-selected="false">Timeline</button>
+							<a class="nav-link" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline" type="button" role="tab" aria-controls="timeline" aria-selected="false">Timeline</a>
+						</li>
+
+            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+              <span>Configure Networks</span>
+            </h6>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="newconn-tab" data-bs-toggle="tab" data-bs-target="#newconn" type="button" role="tab" aria-controls="newconn" aria-selected="false">Join Network</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="conns-tab" data-bs-toggle="tab" data-bs-target="#conns" type="button" role="tab" aria-controls="conns" aria-selected="false">Manage Connections</a>
+						</li>
+						<li class="nav-item" role="presentation">
+              <a class="nav-link" id="newadvert-tab" data-bs-toggle="tab" data-bs-target="#newadvert" type="button" role="tab" aria-controls="newadvert" aria-selected="false">Publish Network</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="adverts-tab" data-bs-toggle="tab" data-bs-target="#adverts" type="button" role="tab" aria-controls="adverts" aria-selected="false">Manage Published</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="lobby-tab" data-bs-toggle="tab" data-bs-target="#lobby" type="button" role="tab" aria-controls="lobby" aria-selected="false">Discover Networks</a>
+						</li>
+
+            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+              <span>Server Settings</span>
+            </h6>	
+
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" aria-controls="security" aria-selected="false">Security</a>
 						</li>
 					</ul>
-				</div>
+        </div> <!-- sidebar-sticky -->
 			</nav>
 			<main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 min-vh-90">    
       <div class="tab-content" id="myTabContent">
-        <div class="tab-pane fade" id="server" role="tabpanel" aria-labelledby="server-tab">
-          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Server</h1>
-          </div>
-          <pre data-bind="text: JSON.stringify(serverSummary(), null, 2)">
-          </pre>
-        </div>
-
-        <div class="tab-pane fade" id="storage" role="tabpanel" aria-labelledby="storage-tab">
-          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Storage</h1>
-          </div>
-          <pre data-bind="text: JSON.stringify(storageSummary(), null, 2)">
-          </pre>
-        </div>
-
-        <div class="tab-pane fade" id="events" role="tabpanel" aria-labelledby="events-tab">
-          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Events</h1>
-          </div>
-          <div data-bind="foreach: events">
-            <div data-bind="text: JSON.stringify($data)">
-            </div>
-          </div>
-        </div>
-
-        <div class="tab-pane fade" id="timeline" role="tabpanel" aria-labelledby="timeline-tab">
-          <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Timeline</h1>
-          </div>
-
-					<div class="my-4 w-100" id="peerTimeline" width="900" height="380"></div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Peer ID</th>
-                <th>First Seen</th>
-                <th>Last Seen</th>
-              </tr>
-            </thead>
-            <tbody data-bind="foreach: peerLogs">
-              <tr>
-                <td data-bind="text: $data.Name"></td>
-                <td data-bind="text: $data.Start"></td>
-                <td data-bind="text: $data.End"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
+        <div class="tab-pane fade" id="server" role="tabpanel" aria-labelledby="server-tab">{{template "server.html"}}</div>
+        <div class="tab-pane fade" id="storage" role="tabpanel" aria-labelledby="storage-tab">{{template "storage.html"}}</div>
+        <div class="tab-pane fade" id="events" role="tabpanel" aria-labelledby="events-tab">{{template "events.html"}}</div>
+        <div class="tab-pane fade" id="timeline" role="tabpanel" aria-labelledby="timeline-tab">{{template "timeline.html"}}</div>
+        <div class="tab-pane fade" id="newconn" role="tabpanel" aria-labelledby="newconn-tab">{{template "newconn.html"}}</div>
+        <div class="tab-pane fade" id="lobby" role="tabpanel" aria-labelledby="lobby-tab">{{template "lobby.html"}}</div>
+        <div class="tab-pane fade" id="conns" role="tabpanel" aria-labelledby="conns-tab">{{template "conns.html"}}</div>
+        <div class="tab-pane fade" id="adverts" role="tabpanel" aria-labelledby="adverts-tab">{{template "adverts.html"}}</div>
+        <div class="tab-pane fade" id="newadvert" role="tabpanel" aria-labelledby="newadvert-tab">{{template "newadvert.html"}}</div>
+        <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">{{template "security.html"}}</div>
       </div>
-			</main>
 
-      <footer class="footer mt-auto bg-light">
+      <footer class="footer mt-auto text-end">
         <span class="container text-muted">
           Refreshed: <span data-bind="text: refreshTS().toISOString()"></span>s
         </div>
       </footer>
-
+			</main>
 		</div>
 	</div>
 
@@ -105,22 +101,12 @@
 	<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.0/knockout-min.js'></script>
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
   <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
-	<script src="viewmodel.js"></script>
+	<script src="js/viewmodel.js"></script>
 	<script>
-    const vm = new AppViewModel();
-    ko.applyBindings(vm);
     $(document).ready(() => {
       var hash = (window.location.hash || "#null.server-tab").substr(1).split('.');
-      const someTabTriggerEl = document.querySelector('#' + hash[1]);
-      const tab = new bootstrap.Tab(someTabTriggerEl);
-      if hash[0] !== 'null' {
-        vm.selectedInstance(hash);
-      }
-      tab.show();
-      $("#myTab button").on("shown.bs.tab", function(e) {
-          var id = $(e.target).attr("id");
-          window.location.hash = vm.selectedInstance + '.' + id;
-      });
+      const vm = new AppViewModel(hash);
+      ko.applyBindings(vm);
     });
   </script>
 </body>

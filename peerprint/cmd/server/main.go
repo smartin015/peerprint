@@ -25,9 +25,9 @@ var (
   // Command server flags
   addrFlag = flag.String("addr", "localhost:0", "Address for command service")
   certsDirFlag = flag.String("certsDir", "", "Path to certificate directory")
-  serverCertFlag = flag.String("serverCert", "server_cert.pem", "Filename for server certificate in certsDir")
-  serverKeyFlag = flag.String("serverKey", "server_key.pem", "Filename for server private key in certsDir")
-  rootCertFlag = flag.String("rootCert", "ca_cert.pem", "Filename for root certificate in certsDir")
+  serverCertFlag = flag.String("serverCert", "server.crt", "Filename for server certificate in certsDir")
+  serverKeyFlag = flag.String("serverKey", "server.key", "Filename for server private key in certsDir")
+  rootCertFlag = flag.String("rootCert", "rootCA.crt", "Filename for root certificate in certsDir")
 
   logger = log.New(os.Stderr, "", 0)
 )
@@ -60,8 +60,8 @@ func main() {
 
 
   if *wwwFlag != "" {
-    wsrv := www.New(pplog.New("www", logger), d)
-    go wsrv.Serve(*wwwFlag, ctx, *wwwDirFlag)
+    wsrv := www.New(pplog.New("www", logger), d, *wwwDirFlag)
+    go wsrv.Serve(*wwwFlag, ctx)
   }
 
   if err := d.Loop(ctx); err != nil {

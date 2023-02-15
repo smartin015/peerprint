@@ -5,7 +5,7 @@ x-base: &base
     context: .
   command: python3 -m peerprint.server --debug --base_dir=/volume
   ports:
-    - "5050:5050" # status http server
+    - "8334:8334" # status http server
   volumes:
     - "/tmp:/tmp" #enable IPC comms for debugging
 
@@ -15,7 +15,7 @@ services:
       context: .
     command: /bin/bash
     ports:
-      - "5050:5050" # status http server
+      - "8334:8334" # status http server
     volumes:
       - "./:/volume"
       - "/tmp:/tmp"

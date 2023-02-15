@@ -149,8 +149,10 @@ func (s *registry) GetLobby(ctx context.Context, cur chan<- *pb.NetworkConfig) e
 }
 
 
-func (s *registry) GetNetworks(ctx context.Context, cur chan<- *pb.Network) error {
-  defer close(cur)
+func (s *registry) GetNetworks(ctx context.Context, cur chan<- *pb.Network, closeChan bool) error {
+  if closeChan {
+    defer close(cur)
+  }
   rows, err := s.db.Query(`SELECT R.*, S.* FROM "registry" R LEFT JOIN "stats" S ON S.uuid=R.uuid`)
   if err != nil {
     return fmt.Errorf("GetNetwork SELECT: %w", err)

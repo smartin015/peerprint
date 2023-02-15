@@ -51,4 +51,3 @@ func New(ctx context.Context, dbPath string, local bool, l *pplog.Sublog) (*Regi
     DB: st,
   }, nil
 }
-
