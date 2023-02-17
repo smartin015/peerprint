@@ -199,7 +199,8 @@ func (d *Driver) readConfig() error {
   d.adminSalt, _ = b64.StdEncoding.DecodeString(lines[0])
   hash, _ := b64.StdEncoding.DecodeString(lines[1])
   d.adminPassHash = *(*[32]byte)(hash)
-  for _, line := range lines[2:] {
+
+  for _, line := range lines[3:] {
     if strings.TrimSpace(line) == "" {
       continue
     }
@@ -226,7 +227,6 @@ func (d *Driver) writeConfig() error {
 
   for _, n := range d.config {
     if data, err := protojson.Marshal(n); err != nil {
-      f.Close()
       return err
     } else {
       f.Write(data)

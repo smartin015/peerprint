@@ -33,6 +33,12 @@ func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest
 }
 
 func (s *PeerPrintService) GetStatus(ctx context.Context, req *pb.GetStatusRequest, rep *pb.PeerStatus) error {
-  rep = s.base.status
+  rep = &pb.PeerStatus{
+    Name: s.base.opts.DisplayName,
+    Printers: []*pb.PrinterStatus{},
+  }
+  for _, ps := range s.base.printerStatuses {
+    rep.Printers = append(rep.Printers, ps)
+  }
   return nil
 }

@@ -30,7 +30,7 @@ type Interface interface {
   ID() string
   ShortID() string
   RegisterEventCallback(cb EventCallback)
-  SetStatus(*pb.PeerStatus)
+  SetStatus(*pb.PrinterStatus)
 
   IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
   IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
@@ -57,7 +57,7 @@ type Server struct {
   lastSyncStart time.Time
   lastSyncEnd time.Time
   lastMsg time.Time
-  status *pb.PeerStatus
+  printerStatuses map[string]*pb.PrinterStatus
 }
 
 func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) *Server {
@@ -72,6 +72,7 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     lastSyncStart: time.Unix(0,0),
     lastSyncEnd: time.Unix(0,0),
     lastMsg: time.Unix(0,0),
+    printerStatuses: make(map[string]*pb.PrinterStatus),
   }
   if err := t.Register(PeerPrintProtocol, srv.getService()); err != nil {
     panic(fmt.Errorf("Failed to register RPC server: %w", err))
@@ -448,6 +449,7 @@ func (s *Server) GetSummary() *Summary {
   }
 }
 
-func (s *Server) SetStatus(status *pb.PeerStatus) {
-  s.status = status
+func (s *Server) SetStatus(status *pb.PrinterStatus) {
+  status.Timestamp = time.Now().Unix()
+  s.printerStatuses[status.Name] = status
 }

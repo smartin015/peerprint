@@ -33,35 +33,38 @@
       			<select class="form-control w-100 rounded-0 form-select" data-bind="options: instances, value: selectedInstance"></select>
 
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="false">Server</a>
+							<a class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server">Server</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage" aria-selected="false">Storage</a>
+							<a class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage">Storage</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events" aria-selected="false">Events</a>
+							<a class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab" aria-controls="events">Events</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline" type="button" role="tab" aria-controls="timeline" aria-selected="false">Timeline</a>
+							<a class="nav-link" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline" type="button" role="tab" aria-controls="timeline">Timeline</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="geography-tab" data-bs-toggle="tab" data-bs-target="#geography" type="button" role="tab" aria-controls="geography">Geography</a>
 						</li>
 
             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
               <span>Configure Networks</span>
             </h6>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="newconn-tab" data-bs-toggle="tab" data-bs-target="#newconn" type="button" role="tab" aria-controls="newconn" aria-selected="false">Join Network</a>
+							<a class="nav-link" id="newconn-tab" data-bs-toggle="tab" data-bs-target="#newconn" type="button" role="tab" aria-controls="newconn">Join Network</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="conns-tab" data-bs-toggle="tab" data-bs-target="#conns" type="button" role="tab" aria-controls="conns" aria-selected="false">Manage Connections</a>
+							<a class="nav-link" id="conns-tab" data-bs-toggle="tab" data-bs-target="#conns" type="button" role="tab" aria-controls="conns">Manage Connections</a>
 						</li>
 						<li class="nav-item" role="presentation">
-              <a class="nav-link" id="newregistry-tab" data-bs-toggle="tab" data-bs-target="#newregistry" type="button" role="tab" aria-controls="newregistry" aria-selected="false">Publish Network</a>
+              <a class="nav-link" id="newregistry-tab" data-bs-toggle="tab" data-bs-target="#newregistry" type="button" role="tab" aria-controls="newregistry">Publish Network</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab" aria-controls="registry" aria-selected="false">Manage Published</a>
+							<a class="nav-link" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab" aria-controls="registry">Manage Published</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="lobby-tab" data-bs-toggle="tab" data-bs-target="#lobby" type="button" role="tab" aria-controls="lobby" aria-selected="false">Discover Networks</a>
+							<a class="nav-link" id="lobby-tab" data-bs-toggle="tab" data-bs-target="#lobby" type="button" role="tab" aria-controls="lobby">Discover Networks</a>
 						</li>
 
             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
@@ -69,7 +72,7 @@
             </h6>	
 
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" aria-controls="security" aria-selected="false">Security</a>
+							<a class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" aria-controls="security">Security</a>
 						</li>
 					</ul>
         </div> <!-- sidebar-sticky -->
@@ -80,6 +83,7 @@
         <div class="tab-pane fade" id="storage" role="tabpanel" aria-labelledby="storage-tab">{{template "storage.html"}}</div>
         <div class="tab-pane fade" id="events" role="tabpanel" aria-labelledby="events-tab">{{template "events.html"}}</div>
         <div class="tab-pane fade" id="timeline" role="tabpanel" aria-labelledby="timeline-tab">{{template "timeline.html"}}</div>
+        <div class="tab-pane fade" id="geography" role="tabpanel" aria-labelledby="geography-tab">{{template "geography.html"}}</div>
         <div class="tab-pane fade" id="newconn" role="tabpanel" aria-labelledby="newconn-tab">{{template "newconn.html"}}</div>
         <div class="tab-pane fade" id="lobby" role="tabpanel" aria-labelledby="lobby-tab">{{template "lobby.html"}}</div>
         <div class="tab-pane fade" id="conns" role="tabpanel" aria-labelledby="conns-tab">{{template "conns.html"}}</div>
@@ -112,6 +116,7 @@
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
   <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
 	<script src="js/viewmodel.js"></script>
+	<script src="js/plots.js"></script>
 	<script>
     $(document).ready(() => {
       var hash = (window.location.hash || "#null.server-tab").substr(1).split('.');

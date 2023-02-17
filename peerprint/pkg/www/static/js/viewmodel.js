@@ -15,6 +15,8 @@ function AppViewModel(hash) {
 	self.showToast = function(title, body) {
 		self.toastData({title, body});
 	};
+  self.timeline = new PeerTimeline('peerTimeline');
+  self.geo = new PeerGeoMap('peerGeo');
 
   setInterval(() => {
     const ls = self.lobbyStats();
@@ -75,57 +77,18 @@ function AppViewModel(hash) {
     });
   }
 
-  var trace1 = {
-    type: "scatter",
-    mode: "lines",
-    name: 'Observed peers',
-    x: [],
-    y: [],
-    line: {color: '#17BECF'}
-  }
-
-  var layout = {
-    xaxis: {
-      autorange: true,
-      rangeselector: {buttons: [
-          {
-            count: 1,
-            label: '1w',
-            step: 'week',
-            stepmode: 'backward'
-          },
-          {
-            count: 3,
-            label: '3w',
-            step: 'week',
-            stepmode: 'backward'
-          },
-          {step: 'all'}
-        ]},
-      type: 'date'
-    },
-    yaxis: {
-      autorange: true,
-      type: 'linear'
-    }
-  };
-  Plotly.newPlot('peerTimeline', [trace1], layout);
-
   self.updatePeerLogs = function() {
     self._streamingGet("/peerLogs", {instance: self.selectedInstance()}, self.peerLogs);
   };
 
   self.updateTimeline = function() {
-    self._streamingGet("/timeline", {instance: self.selectedInstance()}, (data) => {
-      trace1.x = [];
-      trace1.y = [];
-      for (const d of data) {
-        trace1.x.push(d.Timestamp*1000);
-        trace1.y.push(d.Value);
-      }
-      Plotly.react('peerTimeline',[trace1] , layout);
-    });
+    self._streamingGet("/timeline", {instance: self.selectedInstance()}, self.timeline.update);
   };
+
+  self.updateGeo = function() {
+    self._streamingGet("/printers/location", {instance: self.selectedInstance()}, self.geo.update);
+  };
+
   self.updateServerSummary = function() {
     $.getJSON("/serverSummary", {instance: self.selectedInstance()}, function(data) { 
       self.serverSummary(data);
@@ -190,6 +153,8 @@ function AppViewModel(hash) {
       case "lobby":
         self.updateLobby(true);
         break;
+      case "geography":
+        self.updateGeo();
       case "registry":
         self.updateRegistry();
     }

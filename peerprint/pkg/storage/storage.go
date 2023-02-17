@@ -46,6 +46,8 @@ type Interface interface {
   GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) error
 
 	TrackPeer(signer string) error
+  SetPeerStatus(peer string, status *pb.PeerStatus) error
+  GetPrinterLocations(context.Context, int64, chan<- *pb.Location) error
   LogPeerCrawl(peer string, ts int64) error
   GetPeerTracking(context.Context, chan<- *TimeProfile, ...any) error
   GetPeerTimeline(context.Context, chan<- *DataPoint, ...any) error

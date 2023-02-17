@@ -12,7 +12,7 @@ message HealthCheck{}
 
 message SetStatusRequest{
   string network = 1;
-  peers.PeerStatus status = 2;
+  peers.PrinterStatus status = 2;
 }
 message StreamEventsRequest{
   string network=1;

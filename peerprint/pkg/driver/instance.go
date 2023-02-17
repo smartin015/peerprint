@@ -19,6 +19,7 @@ import (
 
 
 type Instance struct {
+  name string
   S server.Interface
   St storage.Interface
   t transport.Interface
@@ -95,6 +96,7 @@ func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
   }, pplog.New(name, l))
 
   return &Instance{
+    name: v.Network,
     S: s,
     St: st,
     t: t,
@@ -125,6 +127,15 @@ func (d *Instance) crawlPeer(ctx context.Context, ai *peer.AddrInfo) ([]*peer.Ad
       return nil, fmt.Errorf("LogPeerCrawl: %v", err)
     }
     return []*peer.AddrInfo{}, nil
+  }
+
+  // Peer status is not essential in crawling, but if successfully retrieved
+  // can provide info to users about printer locations etc.
+  stat := &pb.PeerStatus{}
+  if err := d.t.Call(ctx, ai.ID, "GetStatus", &pb.GetStatusRequest{}, stat); err != nil {
+    d.l.Warning("GetStatus: %v", err)
+  } else if err := d.St.SetPeerStatus(d.name, stat); err != nil {
+    d.l.Warning("SetPeerStatus: %v", err)
   }
 
   rep := &pb.GetPeersResponse{}

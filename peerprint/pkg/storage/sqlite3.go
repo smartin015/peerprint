@@ -482,6 +482,42 @@ func (s *sqlite3) GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) 
   return nil
 }
 
+func (s *sqlite3) SetPeerStatus(peer string, status *pb.PeerStatus) error {
+  for _, p := range status.Printers {
+    _, err := s.db.Exec(`
+      INSERT OR REPLACE INTO printers (server, server_name, name, active_record, active_unit, status, profile, latitude, longitude, timestamp) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, peer, status.Name, p.Name, p.ActiveRecord, p.ActiveUnit, p.Status, p.Profile, p.Location.Latitude, p.Location.Longitude, p.Timestamp)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (s *sqlite3) GetPrinterLocations(ctx context.Context, after int64, cur chan<- *pb.Location) error {
+  defer close(cur)
+  q := `SELECT latitude, longitude FROM "printers" WHERE timestamp>?;`
+  rows, err := s.db.Query(q, &after)
+  if err != nil {
+    return fmt.Errorf("GetPrinterLocations SELECT: %w", err)
+  }
+  defer rows.Close()
+  for rows.Next() {
+    select {
+    case <-ctx.Done():
+      return fmt.Errorf("Context canceled")
+    default:
+    }
+    l := &pb.Location{}
+    if err := rows.Scan(&l.Latitude, &l.Longitude); err != nil {
+      return fmt.Errorf("GetPrinterLocations scan: %w", err)
+    }
+    cur<- l
+  }
+  return nil
+}
+
 func (s *sqlite3) LogPeerCrawl(peer string, ts int64) error {
   // Will abort if already present
   _, err := s.db.Exec(`

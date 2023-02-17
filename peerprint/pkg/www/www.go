@@ -254,6 +254,34 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
   wg.Wait()
 }
 
+func (s *webserver) handleGetPrinterLocations(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
+  cur := make(chan *pb.Location, 5)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func() {
+    defer wg.Done()
+    for v := range cur {
+      if data, err := json.Marshal(v); err != nil {
+        w.WriteHeader(500)
+        w.Write([]byte(err.Error()))
+        return
+      } else {
+        w.Write(data)
+        w.Write([]byte("\n"))
+      }
+    }
+  }()
+  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
+  if err := n.St.GetPrinterLocations(ctx, time.Now().Unix() - 60*60*24, cur); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+  wg.Wait()
+}
 
 func (s *webserver) handleGetTimeline(w http.ResponseWriter, r *http.Request) {
   n := s.getInstance(r, w)
@@ -506,6 +534,7 @@ func (s *webserver) Serve(addr string, ctx context.Context) {
   http.HandleFunc("/events", basicAuth(s.d, s.handleGetEvents))
   http.HandleFunc("/serverSummary", basicAuth(s.d, s.handleServerSummary))
   http.HandleFunc("/storageSummary", basicAuth(s.d, s.handleStorageSummary))
+  http.HandleFunc("/printers/location", basicAuth(s.d, s.handleGetPrinterLocations))
 
   // Connection management
   http.HandleFunc("/connection", basicAuth(s.d, s.handleGetConn))
