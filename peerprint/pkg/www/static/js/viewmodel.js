@@ -4,16 +4,44 @@ function AppViewModel(hash) {
   self.serverSummary = ko.observable();
   self.storageSummary = ko.observable();
   self.instances = ko.observableArray([]);
+  self.connections = ko.observableArray([]);
   self.events = ko.observableArray([]);
   self.peerLogs = ko.observableArray([]);
   self.lobby = ko.observableArray([]);
+  self.lobbyStats = ko.observable({});
+  self.runtil = ko.observable("n/a");
+  self.registry = ko.observableArray([]);
+	self.toastData = ko.observable({title: "", body: ""});
+	self.showToast = function(title, body) {
+		self.toastData({title, body});
+	};
 
-  const tabel = document.querySelector('#' + hash[1]);
-  if (tabel) {
-    const tab = new bootstrap.Tab(tabel);
-    tab.show();
-  }
-  self.shownTab = ko.observable(hash[1] || 'server-tab');
+  setInterval(() => {
+    const ls = self.lobbyStats();
+    if (ls && ls.local && ls.local.Deadline !== undefined) {
+      const ts = new Date(ls.local.Deadline);
+      const dt = ts - (new Date());
+      if (dt > 0) {
+        self.runtil(`${Math.floor(dt/1000)}s`);
+      } else {
+        self.runtil("n/a");
+      }
+    }
+  }, 500);
+
+	self.shownTab = ko.observable(null);
+	self.gotoTab = function(v, e) {
+		const tabel = document.querySelector('#' + v + '-tab');
+		if (tabel) {
+			const tab = new bootstrap.Tab(tabel);
+			tab.show();
+			self.shownTab(v);
+		}
+    if (e !== undefined) {
+      e.preventDefault();
+    }
+	}
+	self.gotoTab(hash[1] || 'server');
   self.selectedInstance = ko.observable(hash[0] !== 'null' ? hash[0] : null);
   self.setInstance = function(i) {
     self.selectedInstance(i);
@@ -24,9 +52,15 @@ function AppViewModel(hash) {
   }
 
   $("#myTab a").on("shown.bs.tab", function(e) {
-    self.shownTab($(e.target).attr("id"));
+		let tid = $(e.target).attr("id");
+    self.shownTab(tid.split('-tab')[0]);
     self.refresh();
   });
+
+	let toast = new bootstrap.Toast($("#toast"));
+	self.toastData.subscribe(function(v) {
+		toast.show();
+	});
 
   self._streamingGet = function(url, req, obs) {
     $.get(url, req, function(data) { 
@@ -105,14 +139,31 @@ function AppViewModel(hash) {
   self.updateEvents = function() {
     self._streamingGet("/events", {instance: self.selectedInstance()}, self.events);
   };
+  self.syncLobby = function() {
+    $.getJSON("/lobby/sync", {seconds: 60}, function() {
+      console.log("lobby sync'd");
+      self.updateLobby();
+    });
+  }
   self.updateLobby = function() {
-    self._streamingGet("/lobby", undefined, self.lobby);
+    self._streamingGet("/lobby", undefined, (data) => {
+      self.lobbyStats({local: data[0], world: data[1]});
+      self.lobby(data.slice(2));
+    });
+  };
+  self.updateRegistry = function() {
+    self._streamingGet("/registry", undefined, self.registry);
   };
   
   
   self.updateInstances = function() {
-    $.getJSON("/instances", (data) => {
-      self.instances(data);
+    self._streamingGet("/connection", undefined, (data) => {
+			let names = [];
+			for (let c of data) {
+				names.push(c.network);
+			}
+      self.instances(names);
+			self.connections(data);
     });
   };
 
@@ -123,22 +174,24 @@ function AppViewModel(hash) {
       return;
     }
     switch (self.shownTab()) {
-      case "timeline-tab":
+      case "timeline":
         self.updateTimeline();  
         self.updatePeerLogs();
         break;
-      case "server-tab":
+      case "server":
         self.updateServerSummary();
         break;
-      case "storage-tab":
+      case "storage":
         self.updateStorageSummary();
         break;
-      case "events-tab":
+      case "events":
         self.updateEvents();
         break;
-      case "settings-tab":
-        self.updateLobby();
+      case "lobby":
+        self.updateLobby(true);
         break;
+      case "registry":
+        self.updateRegistry();
     }
     self.refreshTS(new Date());
   };
@@ -150,24 +203,37 @@ function AppViewModel(hash) {
           obj[item.id] = item.value;
           return obj;
     }, {});
+    $("#newconn input").each(function(i,v){v.value = ""});
     $.post("/connection/new", data).done((data) => {
-      console.log("Connection created");
+			self.showToast("Success", "Connection created");
+			self.gotoTab("conns")
     }).fail(() => {
-      console.error("Failed to create connection");
+			self.showToast("Error", "Failed to create connection");
     });
   };
 
-  self.newAdvert = function(v) {
-    var data = $('#newadvert input').toArray().reduce(function(obj, item) {
+  self.newRegistry = function(v) {
+    var data = $('#newregistry input').toArray().reduce(function(obj, item) {
           obj[item.id] = item.value;
           return obj;
     }, {});
-    $.post("/advertisement/new", data).done((data) => {
-      console.log("Advert created");
+    $("#newregistry input").each(function(i,v){v.value = ""});
+    $.post("/registry/new", data).done((data) => {
+			self.showToast("Success", "Network published successfully");
+      self.gotoTab("registry");
     }).fail(() => {
-      console.error("Failed to create advert");
+			self.showToast("Error", "Failed to publish network");
     });
   };
+
+  self.deleteRegistry = function(v) {
+    $.post("/registry/delete", {uuid: v.uuid, local: v.local}).done((data) => {
+			self.showToast("Success", "Network published successfully");
+      self.gotoTab("registry");
+    }).fail(() => {
+			self.showToast("Error", "Failed to publish network");
+    });
+  }
 
   self.newPassword = function(v) {
     var data = $('#newpassword input').toArray().reduce(function(obj, item) {
@@ -175,11 +241,37 @@ function AppViewModel(hash) {
           return obj;
     }, {});
     $.post("/password/new", data).done((data) => {
-      console.log("password changed");
+			self.showToast("Success", "Password changed successfully");
     }).fail(() => {
-      console.error("Failed to change password");
+			self.showToast("Error", "Failed to change password");
     });
   };
+
+	self.gotoPublish = function(v, e) {
+		let advform = $("#newregistry");
+		advform.find("#name").val(v.network);
+		advform.find("#rendezvous").val(v.rendezvous);
+		advform.find("#creator").val(v.display_name);
+		advform.find("#local").val(v.local);
+		self.gotoTab("newregistry", e);
+	};
+  self.gotoConnect = function(v, e) {
+		let advform = $("#newconn");
+		advform.find("#name").val(v.network);
+		advform.find("#rendezvous").val(v.rendezvous);
+		advform.find("#local").val(v.local);
+		self.gotoTab("newconn", e);
+  };
+
+	self.deleteConn = function(v, e) {
+		console.log("deleting", v, e)
+    $.post("/connection/delete", {network: v.network}).done((data) => {
+			self.showToast("Success", "Deleted connection: " + v.network);
+    }).fail(() => {
+			self.showToast("Error", "Failed to delete connection");
+    });
+		e.preventDefault();
+	};
 
   self.href = ko.computed(function() {
     let inst = self.selectedInstance();

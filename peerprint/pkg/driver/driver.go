@@ -255,7 +255,8 @@ func (d *Driver) handleDisconnect(v *pb.DisconnectRequest) error {
   } else {
     delete(d.config, v.Network)
     d.writeConfig()
-    return i.Destroy()
+    i.Destroy()
+    return nil
   }
 }
 

@@ -21,13 +21,15 @@ type Method int64
 const (
   MDNS Method = iota
   DHT
+
+  PeerDiscoverChanSize = 20
 )
 
 type Discovery struct {
 	ctx          context.Context
 	h            host.Host
 	onReady      chan bool
-	newConn      chan bool
+	PeerDiscovered chan peer.AddrInfo
   connect bool
   l *log.Sublog
   method Method
@@ -47,7 +49,7 @@ func New(ctx context.Context, m Method, h host.Host, rendezvous string, connect_
 		ctx:          ctx,
 		h:            h,
 		onReady:      make(chan bool),
-		newConn:      make(chan bool),
+		PeerDiscovered:      make(chan peer.AddrInfo, PeerDiscoverChanSize),
     rendezvous: rendezvous,
     connect: connect_on_discover,
     method: m,
@@ -59,6 +61,10 @@ func New(ctx context.Context, m Method, h host.Host, rendezvous string, connect_
   }
 
 	return c
+}
+
+func (c *Discovery) Destroy() {
+  c.l.Warning("TODO Destroy()")
 }
 
 func (c *Discovery) Run() {
@@ -105,25 +111,31 @@ func (c *Discovery) HandlePeerFound(p peer.AddrInfo) {
 	if p.ID == c.h.ID() {
 		return // No self connection
 	}
+  if len(p.Addrs) == 0 {
+    return // Don't add unreachable peers
+  }
   if c.connect {
     err := c.h.Connect(c.ctx, p)
     if err != nil {
       c.l.Println("Failed connecting to ", p.ID.Pretty(), ", error:", err)
     } else {
       c.l.Println("Connected to:", p.ID.Pretty())
-      notify(c.newConn)
+      c.notify(p)
     }
   } else if len(c.h.Peerstore().Addrs(p.ID)) == 0 {
     c.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
     // c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
-    notify(c.newConn)
+    c.notify(p)
   }
 }
 
-// Try to notify on a channel - return immediately if the channel is full
-func notify(c chan bool) {
+func (c *Discovery) notify(p peer.AddrInfo) {
   select {
-    case c <- true:
+    case c.onReady <- true:
+    default:
+  }
+  select {
+    case c.PeerDiscovered <- p:
     default:
   }
 }
@@ -135,9 +147,6 @@ func (c *Discovery) discoverPeersMDNS(rendezvous string) {
 		panic(err)
 	}
   select {
-  case <-c.newConn:
-    notify(c.onReady)
-    return
   case <-c.ctx.Done():
     return
   }
@@ -151,13 +160,6 @@ func (c *Discovery) discoverPeersDHT(rendezvous string) {
 	// Look for others who have announced and attempt to connect to them
 	c.l.Println("Searching for peers...")
 	for {
-    select {
-    case <-c.newConn:
-      c.l.Println("Peer discovery complete")
-      notify(c.onReady)
-      return
-    default:
-    }
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
 			panic(err)

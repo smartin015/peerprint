@@ -1,21 +1,14 @@
 <div class="pt-3 pb-2 mb-3 border-bottom">
-  <h1 class="h2">Discover Networks</h1>
-  <p class="text-muted">Search and join networks published by other peers!</p>
-  <div>TODO search bar</div>
-
-  <button class="btn btn-primary" data-bind="click: syncLobby">Sync Now</button>
-  <div>
-    Discovery time left: <span data-bind="text:runtil"></span>
-  </div>
+  <h1 class="h2">Manage Published Networks</h1>
+  <p class="text-muted">Control the list of networks being broadcast to other peers.</p>
 </div>
 
-<div data-bind="visible: lobby().length === 0" class="container-fluid text-center h-75 pt-5 align-middle">
-  <h5 class="text-muted">No Networks Found</h5>
-  <p class="text-muted">...yet.</p>
-  <button class="btn btn-primary" data-bind="click: syncLobby">Sync Now</button>
+<div data-bind="visible: registry().length === 0" class="container-fluid text-center h-75 pt-5 align-middle">
+  <h5 class="text-muted">No Networks are Published</h5>
+  <p class="text-muted">Broadcast new networks on the <a href="#" data-bind="click: (_, e) => gotoTab('newregistry', e)">Publish Network</a> tab.</p>
 </div>
 
-<div data-bind="foreach: lobby">
+<div data-bind="foreach: registry">
 	<div class="container-md mb-6">
 		<h4>
       <span data-bind="text: config.name"></span>:
@@ -58,16 +51,8 @@
         <!-- TODO stats -->
       </div>
       <div class="d-flex pt-3 justify-content-end">
-        <button class="btn btn-secondary" data-bind="click: $root.gotoConnect">Connect</button>
+        <button class="btn btn-secondary" data-bind="click: $root.deleteRegistry">Unpublish</button>
       </div>
 		</div>
 	</div>
-</div>
-
-<h4>Stats</h4>
-<div><strong>Local:</strong>
-<div data-bind="text: JSON.stringify(lobbyStats()['local'])"></div>
-</div>
-<div><strong>World:</strong>
-<div data-bind="text: JSON.stringify(lobbyStats()['world'])"></div>
 </div>

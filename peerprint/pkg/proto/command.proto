@@ -87,6 +87,7 @@ message GetConnectionsResponse {
   repeated ConnectRequest networks = 1;
 }
 
+message SyncLobbyRequest {}
 message StreamRecordsRequest {
   string network = 1;
   string uuid = 2;
@@ -132,9 +133,10 @@ service Command {
   rpc StreamEvents(StreamEventsRequest) returns (stream Event) {}
 
   rpc Advertise(AdvertiseRequest) returns (Ok) {}
+  rpc SyncLobby(SyncLobbyRequest) returns (Ok) {}
   rpc StopAdvertising(StopAdvertisingRequest) returns (Ok) {}
   rpc StreamNetworks(StreamNetworksRequest) returns (stream peers.Network) {}
-  rpc StreamAdvertisements(StreamAdvertisementsRequest) returns (stream peers.NetworkConfig) {}
+  rpc StreamAdvertisements(StreamAdvertisementsRequest) returns (stream peers.Network) {}
 
   rpc SetStatus(SetStatusRequest) returns (Ok) {}
   rpc StreamPeers(StreamPeersRequest) returns (stream peers.PeerStatus) {}

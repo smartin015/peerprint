@@ -220,7 +220,7 @@ func (s *CommandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.
       }
     }
   }()
-  if err := s.ResolveRegistry(req.Local).DB.GetNetworks(stream.Context(), ch, true); err != nil {
+  if err := s.ResolveRegistry(req.Local).DB.GetRegistry(stream.Context(), ch, storage.RegistryTable, true); err != nil {
     return err
   }
   wg.Wait()
@@ -241,8 +241,12 @@ func (s *CommandServer) StopAdvertising(ctx context.Context, req *pb.StopAdverti
   return &pb.Ok{}, nil
 }
 
+func (s *CommandServer) SyncLobby(ctx context.Context, req *pb.SyncLobbyRequest) (*pb.Ok, error) {
+  return nil, status.Errorf(codes.Unimplemented, "TODO restart registries")
+}
+
 func (s *CommandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest, stream pb.Command_StreamAdvertisementsServer) error {
-  ch := make(chan *pb.NetworkConfig)
+  ch := make(chan *pb.Network)
   var cherr error
   var wg sync.WaitGroup
   wg.Add(1)
@@ -255,7 +259,7 @@ func (s *CommandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest
       }
     }
   }()
-  if err := s.ResolveRegistry(req.Local).DB.GetLobby(stream.Context(), ch); err != nil {
+  if err := s.ResolveRegistry(req.Local).DB.GetRegistry(stream.Context(), ch, storage.LobbyTable, true); err != nil {
     return err
   }
   wg.Wait()

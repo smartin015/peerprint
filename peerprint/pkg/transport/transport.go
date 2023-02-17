@@ -29,7 +29,8 @@ const (
 
 type Interface interface {
   Register(protocol string, srv interface{}) error
-  Run(context.Context)
+  Run(context.Context) error
+  Destroy()
   ID() string
   Sign(proto.Message) ([]byte, error)
   Verify(m proto.Message, signer string, data []byte) (bool, error)
@@ -39,6 +40,7 @@ type Interface interface {
   OnMessage() <-chan topic.TopicMsg
 
   GetPeers() peer.IDSlice
+  PeerDiscovered() <-chan peer.AddrInfo
   GetPeerAddresses() []*peer.AddrInfo
   AddTempPeer(*peer.AddrInfo)
   Call(ctx context.Context, pid peer.ID, method string, req proto.Message, rep proto.Message) error 
@@ -129,6 +131,20 @@ func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error)
   return s, nil
 }
 
+func (s *Transport) Destroy() {
+  s.host.Close()
+  s.discovery.Destroy()
+  // s.pubsub.Close()
+  for _, c := range s.pubChan {
+    close(c)
+  }
+  close(s.recvChan)
+}
+
+func (s *Transport) PeerDiscovered() (<-chan peer.AddrInfo) {
+  return s.discovery.PeerDiscovered
+}
+
 func (s *Transport) Register(pid string, srv interface{}) error {
   // RPC server for point-to-point requests
   s.protocol = protocol.ID(pid)
@@ -182,7 +198,7 @@ func (s *Transport) Publish(topic string, msg proto.Message) error {
   return nil
 }
 
-func (s *Transport) Run(ctx context.Context) {
+func (s *Transport) Run(ctx context.Context) error {
   connectCtx := ctx
   disco := "local"
   if !s.opts.Local {
@@ -199,10 +215,11 @@ func (s *Transport) Run(ctx context.Context) {
 
   go s.discovery.Run()
 	if err := s.discovery.AwaitReady(connectCtx); err != nil {
-		panic(fmt.Errorf("Error connecting to peers: %w", err))
+		return fmt.Errorf("Error connecting to peers: %w", err)
 	} else {
 		s.l.Println("Peers found; initial discovery complete")
 	}
+  return nil
 }
 
 func (s *Transport) ID() string {

@@ -27,6 +27,7 @@ type DBEvent struct {
 }
 
 type Interface interface {
+  Close()
   SetId(id string)
 
   ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer int64, maxTrackedPeers int64) error
@@ -55,8 +56,7 @@ type Registry interface {
   DeleteConfig(uuid string, tbl string) error
   SignConfig(uuid string, sig []byte) error
   UpsertStats(uuid string, stats *pb.NetworkStats) error
-  GetNetworks(context.Context, chan<- *pb.Network, bool) error
-  GetLobby(ctx context.Context, cur chan<- *pb.NetworkConfig) error
+  GetRegistry(context.Context, chan<- *pb.Network, string,bool) error
 }
 
 func SetPanicHandler(s Interface) {

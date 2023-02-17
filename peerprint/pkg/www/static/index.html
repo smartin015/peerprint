@@ -55,10 +55,10 @@
 							<a class="nav-link" id="conns-tab" data-bs-toggle="tab" data-bs-target="#conns" type="button" role="tab" aria-controls="conns" aria-selected="false">Manage Connections</a>
 						</li>
 						<li class="nav-item" role="presentation">
-              <a class="nav-link" id="newadvert-tab" data-bs-toggle="tab" data-bs-target="#newadvert" type="button" role="tab" aria-controls="newadvert" aria-selected="false">Publish Network</a>
+              <a class="nav-link" id="newregistry-tab" data-bs-toggle="tab" data-bs-target="#newregistry" type="button" role="tab" aria-controls="newregistry" aria-selected="false">Publish Network</a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="adverts-tab" data-bs-toggle="tab" data-bs-target="#adverts" type="button" role="tab" aria-controls="adverts" aria-selected="false">Manage Published</a>
+							<a class="nav-link" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab" aria-controls="registry" aria-selected="false">Manage Published</a>
 						</li>
 						<li class="nav-item" role="presentation">
 							<a class="nav-link" id="lobby-tab" data-bs-toggle="tab" data-bs-target="#lobby" type="button" role="tab" aria-controls="lobby" aria-selected="false">Discover Networks</a>
@@ -83,8 +83,8 @@
         <div class="tab-pane fade" id="newconn" role="tabpanel" aria-labelledby="newconn-tab">{{template "newconn.html"}}</div>
         <div class="tab-pane fade" id="lobby" role="tabpanel" aria-labelledby="lobby-tab">{{template "lobby.html"}}</div>
         <div class="tab-pane fade" id="conns" role="tabpanel" aria-labelledby="conns-tab">{{template "conns.html"}}</div>
-        <div class="tab-pane fade" id="adverts" role="tabpanel" aria-labelledby="adverts-tab">{{template "adverts.html"}}</div>
-        <div class="tab-pane fade" id="newadvert" role="tabpanel" aria-labelledby="newadvert-tab">{{template "newadvert.html"}}</div>
+        <div class="tab-pane fade" id="registry" role="tabpanel" aria-labelledby="registry-tab">{{template "registry.html"}}</div>
+        <div class="tab-pane fade" id="newregistry" role="tabpanel" aria-labelledby="newregistry-tab">{{template "newregistry.html"}}</div>
         <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">{{template "security.html"}}</div>
       </div>
 
@@ -94,6 +94,16 @@
         </div>
       </footer>
 			</main>
+		</div>
+	</div>
+
+	<div class="toast-container position-fixed bottom-0 end-0 p-3">
+		<div id="toast" class="toast text-bg-secondary" role="alert" aria-live="assertive" aria-atomic="true" data-bind="css: {'text-bg-secondary': toastData().title !== 'Error', 'text-danger': toastData().title === 'Error'}">
+			<div class="toast-header">
+				<strong class="me-auto" data-bind="text: toastData().title">Notice</strong>
+				<button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+			</div>
+			<div class="toast-body" data-bind="text: toastData().body"></div>
 		</div>
 	</div>
 

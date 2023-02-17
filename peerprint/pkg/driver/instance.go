@@ -24,6 +24,7 @@ type Instance struct {
   t transport.Interface
   c *crawl.Crawler
   l *pplog.Sublog
+  cancel context.CancelFunc
 }
 
 func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
@@ -103,11 +104,17 @@ func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
 }
 
 func (i *Instance) Run(ctx context.Context) {
-  i.S.Run(ctx)
+  ctx2, cancel := context.WithCancel(ctx)
+  i.cancel = cancel
+  i.S.Run(ctx2)
 }
 
-func (i *Instance) Destroy() error {
-  return fmt.Errorf("Unimplemented")
+func (i *Instance) Destroy() {
+  if i.cancel != nil {
+    i.cancel()
+  }
+  i.t.Destroy()
+  i.St.Close()
 }
 
 func (d *Instance) crawlPeer(ctx context.Context, ai *peer.AddrInfo) ([]*peer.AddrInfo, error) {

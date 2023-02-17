@@ -76,6 +76,11 @@ class CommandStub(object):
                 request_serializer=command__pb2.AdvertiseRequest.SerializeToString,
                 response_deserializer=command__pb2.Ok.FromString,
                 )
+        self.SyncLobby = channel.unary_unary(
+                '/command.Command/SyncLobby',
+                request_serializer=command__pb2.SyncLobbyRequest.SerializeToString,
+                response_deserializer=command__pb2.Ok.FromString,
+                )
         self.StopAdvertising = channel.unary_unary(
                 '/command.Command/StopAdvertising',
                 request_serializer=command__pb2.StopAdvertisingRequest.SerializeToString,
@@ -89,7 +94,7 @@ class CommandStub(object):
         self.StreamAdvertisements = channel.unary_stream(
                 '/command.Command/StreamAdvertisements',
                 request_serializer=command__pb2.StreamAdvertisementsRequest.SerializeToString,
-                response_deserializer=peers__pb2.NetworkConfig.FromString,
+                response_deserializer=peers__pb2.Network.FromString,
                 )
         self.SetStatus = channel.unary_unary(
                 '/command.Command/SetStatus',
@@ -173,6 +178,12 @@ class CommandServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def Advertise(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SyncLobby(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -271,6 +282,11 @@ def add_CommandServicer_to_server(servicer, server):
                     request_deserializer=command__pb2.AdvertiseRequest.FromString,
                     response_serializer=command__pb2.Ok.SerializeToString,
             ),
+            'SyncLobby': grpc.unary_unary_rpc_method_handler(
+                    servicer.SyncLobby,
+                    request_deserializer=command__pb2.SyncLobbyRequest.FromString,
+                    response_serializer=command__pb2.Ok.SerializeToString,
+            ),
             'StopAdvertising': grpc.unary_unary_rpc_method_handler(
                     servicer.StopAdvertising,
                     request_deserializer=command__pb2.StopAdvertisingRequest.FromString,
@@ -284,7 +300,7 @@ def add_CommandServicer_to_server(servicer, server):
             'StreamAdvertisements': grpc.unary_stream_rpc_method_handler(
                     servicer.StreamAdvertisements,
                     request_deserializer=command__pb2.StreamAdvertisementsRequest.FromString,
-                    response_serializer=peers__pb2.NetworkConfig.SerializeToString,
+                    response_serializer=peers__pb2.Network.SerializeToString,
             ),
             'SetStatus': grpc.unary_unary_rpc_method_handler(
                     servicer.SetStatus,
@@ -511,6 +527,23 @@ class Command(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
+    def SyncLobby(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/command.Command/SyncLobby',
+            command__pb2.SyncLobbyRequest.SerializeToString,
+            command__pb2.Ok.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
     def StopAdvertising(request,
             target,
             options=(),
@@ -557,7 +590,7 @@ class Command(object):
             metadata=None):
         return grpc.experimental.unary_stream(request, target, '/command.Command/StreamAdvertisements',
             command__pb2.StreamAdvertisementsRequest.SerializeToString,
-            peers__pb2.NetworkConfig.FromString,
+            peers__pb2.Network.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

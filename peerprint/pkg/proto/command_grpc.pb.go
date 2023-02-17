@@ -34,6 +34,7 @@ type CommandClient interface {
 	Crawl(ctx context.Context, in *CrawlRequest, opts ...grpc.CallOption) (*CrawlResult, error)
 	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (Command_StreamEventsClient, error)
 	Advertise(ctx context.Context, in *AdvertiseRequest, opts ...grpc.CallOption) (*Ok, error)
+	SyncLobby(ctx context.Context, in *SyncLobbyRequest, opts ...grpc.CallOption) (*Ok, error)
 	StopAdvertising(ctx context.Context, in *StopAdvertisingRequest, opts ...grpc.CallOption) (*Ok, error)
 	StreamNetworks(ctx context.Context, in *StreamNetworksRequest, opts ...grpc.CallOption) (Command_StreamNetworksClient, error)
 	StreamAdvertisements(ctx context.Context, in *StreamAdvertisementsRequest, opts ...grpc.CallOption) (Command_StreamAdvertisementsClient, error)
@@ -226,6 +227,15 @@ func (c *commandClient) Advertise(ctx context.Context, in *AdvertiseRequest, opt
 	return out, nil
 }
 
+func (c *commandClient) SyncLobby(ctx context.Context, in *SyncLobbyRequest, opts ...grpc.CallOption) (*Ok, error) {
+	out := new(Ok)
+	err := c.cc.Invoke(ctx, "/command.Command/SyncLobby", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *commandClient) StopAdvertising(ctx context.Context, in *StopAdvertisingRequest, opts ...grpc.CallOption) (*Ok, error) {
 	out := new(Ok)
 	err := c.cc.Invoke(ctx, "/command.Command/StopAdvertising", in, out, opts...)
@@ -283,7 +293,7 @@ func (c *commandClient) StreamAdvertisements(ctx context.Context, in *StreamAdve
 }
 
 type Command_StreamAdvertisementsClient interface {
-	Recv() (*NetworkConfig, error)
+	Recv() (*Network, error)
 	grpc.ClientStream
 }
 
@@ -291,8 +301,8 @@ type commandStreamAdvertisementsClient struct {
 	grpc.ClientStream
 }
 
-func (x *commandStreamAdvertisementsClient) Recv() (*NetworkConfig, error) {
-	m := new(NetworkConfig)
+func (x *commandStreamAdvertisementsClient) Recv() (*Network, error) {
+	m := new(Network)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -356,6 +366,7 @@ type CommandServer interface {
 	Crawl(context.Context, *CrawlRequest) (*CrawlResult, error)
 	StreamEvents(*StreamEventsRequest, Command_StreamEventsServer) error
 	Advertise(context.Context, *AdvertiseRequest) (*Ok, error)
+	SyncLobby(context.Context, *SyncLobbyRequest) (*Ok, error)
 	StopAdvertising(context.Context, *StopAdvertisingRequest) (*Ok, error)
 	StreamNetworks(*StreamNetworksRequest, Command_StreamNetworksServer) error
 	StreamAdvertisements(*StreamAdvertisementsRequest, Command_StreamAdvertisementsServer) error
@@ -403,6 +414,9 @@ func (UnimplementedCommandServer) StreamEvents(*StreamEventsRequest, Command_Str
 }
 func (UnimplementedCommandServer) Advertise(context.Context, *AdvertiseRequest) (*Ok, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Advertise not implemented")
+}
+func (UnimplementedCommandServer) SyncLobby(context.Context, *SyncLobbyRequest) (*Ok, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncLobby not implemented")
 }
 func (UnimplementedCommandServer) StopAdvertising(context.Context, *StopAdvertisingRequest) (*Ok, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopAdvertising not implemented")
@@ -657,6 +671,24 @@ func _Command_Advertise_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Command_SyncLobby_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncLobbyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommandServer).SyncLobby(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/command.Command/SyncLobby",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommandServer).SyncLobby(ctx, req.(*SyncLobbyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Command_StopAdvertising_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StopAdvertisingRequest)
 	if err := dec(in); err != nil {
@@ -705,7 +737,7 @@ func _Command_StreamAdvertisements_Handler(srv interface{}, stream grpc.ServerSt
 }
 
 type Command_StreamAdvertisementsServer interface {
-	Send(*NetworkConfig) error
+	Send(*Network) error
 	grpc.ServerStream
 }
 
@@ -713,7 +745,7 @@ type commandStreamAdvertisementsServer struct {
 	grpc.ServerStream
 }
 
-func (x *commandStreamAdvertisementsServer) Send(m *NetworkConfig) error {
+func (x *commandStreamAdvertisementsServer) Send(m *Network) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -798,6 +830,10 @@ var Command_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Advertise",
 			Handler:    _Command_Advertise_Handler,
+		},
+		{
+			MethodName: "SyncLobby",
+			Handler:    _Command_SyncLobby_Handler,
 		},
 		{
 			MethodName: "StopAdvertising",

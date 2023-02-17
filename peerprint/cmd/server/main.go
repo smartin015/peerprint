@@ -19,8 +19,8 @@ var (
   wwwDirFlag = flag.String("wwwDir", "", "Path to WWW serving directory - leave empty to use bundled assets")
 
   // Registry server flags
-  regDBWorldFlag = flag.String("regdbworld", ":memory:", "Path to registry database (use :memory: for ephemeral, inmemory DB")
-  regDBLocalFlag = flag.String("regdblocal", ":memory:", "Path to registry database (use :memory: for ephemeral, inmemory DB")
+  regDBWorldFlag = flag.String("regdbworld", "world_registry.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
+  regDBLocalFlag = flag.String("regdblocal", "local_registry.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
 
   // Command server flags
   addrFlag = flag.String("addr", "localhost:0", "Address for command service")
@@ -44,7 +44,7 @@ func main() {
     panic(err)
   }
 
-  rWorld, err := registry.New(ctx, *regDBWorldFlag, false, pplog.New("local_registry", logger))
+  rWorld, err := registry.New(ctx, *regDBWorldFlag, false, pplog.New("global_registry", logger))
   if err != nil {
     panic(err)
   }

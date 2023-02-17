@@ -1,9 +1,9 @@
 <div class="pt-3 pb-2 mb-3 border-bottom">
   <h1 class="h2">Publish Network</h1>
-  <p class="text-muted">Advertise a network to other peers so they can connect with a single click!</p>
+  <p class="text-muted">Broadcast a network to other peers so they can connect with a single click!</p>
 </div>
 
-<form id="newadvert">
+<form id="newregistry">
   <div class="mb-3">
     <label class="form-label" for="name">Network name</label>
     <input class="form-control" id="name" type="text"></input>
@@ -45,5 +45,5 @@
   </div>
   <div class="form-text mb-5">When checked, PeerPrint will only advertise this PeerPrint network on the local network (i.e. the LAN) using MDNS, rather than publicly over DHT.</div>
 
-  <button class="btn btn-primary" data-bind="click: newAdvert">Publish</button>
+  <button class="btn btn-primary" data-bind="click: newRegistry">Publish</button>
 </form>

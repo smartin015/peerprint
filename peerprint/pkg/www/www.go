@@ -1,6 +1,7 @@
 package www
 
 import (
+  "strconv"
   "strings"
   "sync"
   "io/fs"
@@ -11,6 +12,7 @@ import (
   "net"
   "net/http"
   "encoding/json"
+  "google.golang.org/protobuf/encoding/protojson"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/google/uuid"
   "github.com/smartin015/peerprint/p2pgit/pkg/log"
@@ -157,7 +159,73 @@ func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
   wg.Wait()
 }
 
+func (s *webserver) handleSyncLobby(w http.ResponseWriter, r *http.Request) {
+  d, err := strconv.Atoi(r.FormValue("seconds"))
+  if err != nil {
+    w.WriteHeader(400)
+    w.Write([]byte("failed to parse seconds"))
+    return
+  }
+  dt := time.Duration(d) * time.Second
+  go func() {
+    if err := s.d.RLocal.Run(dt); err != nil {
+      s.l.Error("Local sync: %s", err.Error())
+    }
+  }()
+  go func() {
+    if err := s.d.RWorld.Run(dt); err != nil {
+      s.l.Error("Global sync: %s", err.Error())
+    }
+  }()
+  w.Write([]byte("ok"))
+}
+
 func (s *webserver) handleGetLobby(w http.ResponseWriter, r *http.Request) {
+  cur := make(chan *pb.Network, 5)
+
+  if v, err := json.Marshal(s.d.RLocal.Counters); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  } else {
+    w.Write(v)
+    w.Write([]byte("\n"))
+  }
+  if v, err := json.Marshal(s.d.RWorld.Counters); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  } else {
+    w.Write(v)
+    w.Write([]byte("\n"))
+  }
+
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func() {
+    defer wg.Done()
+    for v := range cur {
+      if data, err := json.Marshal(v); err != nil {
+        w.WriteHeader(500)
+        w.Write([]byte(err.Error()))
+        return
+      } else {
+        w.Write(data)
+        w.Write([]byte("\n"))
+      }
+    }
+  }()
+  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
+  if err := s.d.RLocal.DB.GetRegistry(ctx, cur, storage.LobbyTable, false); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+  if err := s.d.RWorld.DB.GetRegistry(ctx, cur, storage.LobbyTable, true); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+  wg.Wait()
+}
+
+func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
   cur := make(chan *pb.Network, 5)
   var wg sync.WaitGroup
   wg.Add(1)
@@ -175,11 +243,11 @@ func (s *webserver) handleGetLobby(w http.ResponseWriter, r *http.Request) {
     }
   }()
   ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.d.RLocal.DB.GetNetworks(ctx, cur, false); err != nil {
+  if err := s.d.RLocal.DB.GetRegistry(ctx, cur, storage.RegistryTable, false); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
-  if err := s.d.RWorld.DB.GetNetworks(ctx, cur, true); err != nil {
+  if err := s.d.RWorld.DB.GetRegistry(ctx, cur, storage.RegistryTable, true); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -216,15 +284,19 @@ func (s *webserver) handleGetTimeline(w http.ResponseWriter, r *http.Request) {
   wg.Wait()
 }
 
-func (s *webserver) handleGetInstances(w http.ResponseWriter, r *http.Request) {
-  v := s.d.InstanceNames()
-  if data, err := json.Marshal(v); err != nil {
-    w.WriteHeader(500)
-    w.Write([]byte(err.Error()))
-    return
-  } else {
-    w.Write(data)
-  }
+func (s *webserver) handleGetConn(w http.ResponseWriter, r *http.Request) {
+  v := s.d.GetConfigs(true)
+  for _, c := range v {
+    j := &protojson.MarshalOptions{EmitUnpopulated: true}
+    if data, err := j.Marshal(c); err != nil {
+      w.WriteHeader(500)
+      w.Write([]byte(err.Error()))
+      return
+    } else {
+      w.Write(data)
+      w.Write([]byte("\n"))
+    }
+    }
 }
 
 func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
@@ -296,6 +368,21 @@ func get(r *http.Request, k, d string) string {
   }
 }
 
+func (s *webserver) handleDeleteConn(w http.ResponseWriter, r *http.Request) {
+  if v := r.PostFormValue("network"); v == "" {
+      w.WriteHeader(400)
+      w.Write([]byte("Missing network"))
+      return
+  } else {
+    req := &pb.DisconnectRequest{Network: v}
+    if _, err := s.d.Command.Disconnect(r.Context(), req); err != nil {
+      w.WriteHeader(500)
+      w.Write([]byte(err.Error()))
+    }
+    w.Write([]byte("ok"))
+  }
+}
+
 func (s *webserver) handleNewConn(w http.ResponseWriter, r *http.Request) {
   vs := make(map[string]string)
   for _, k := range []string{"network", "rendezvous", "psk", "local"} {
@@ -331,7 +418,27 @@ func (s *webserver) handleNewConn(w http.ResponseWriter, r *http.Request) {
   w.Write([]byte("ok"))
 }
 
-func (s *webserver) handleNewAdvert(w http.ResponseWriter, r *http.Request) {
+func (s *webserver) handleDeleteRegistry(w http.ResponseWriter, r *http.Request) {
+  if u := r.PostFormValue("uuid"); u == "" {
+      w.WriteHeader(400)
+      w.Write([]byte("Missing uuid"))
+      return
+    } else if l := r.PostFormValue("local"); l == "" {
+      w.WriteHeader(400)
+      w.Write([]byte("Missing local"))
+      return
+    } else {
+      req := &pb.StopAdvertisingRequest{Uuid: u, Local: l == "true"}
+      if _, err := s.d.Command.StopAdvertising(r.Context(), req); err != nil {
+        w.WriteHeader(500)
+        w.Write([]byte(err.Error()))
+      }
+      w.Write([]byte("ok"))
+  }
+}
+
+
+func (s *webserver) handleNewRegistry(w http.ResponseWriter, r *http.Request) {
   vs := make(map[string]string)
   for _, k := range []string{"name", "rendezvous", "local"} {
     if v := r.PostFormValue(k); v == "" {
@@ -390,18 +497,27 @@ func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) Serve(addr string, ctx context.Context) {
+  // Base handler
+  http.HandleFunc("/", basicAuth(s.d, s.handleRoot))
 
-  http.HandleFunc("/instances", basicAuth(s.d, s.handleGetInstances))
+  // Server stats
   http.HandleFunc("/timeline", basicAuth(s.d, s.handleGetTimeline))
   http.HandleFunc("/peerLogs", basicAuth(s.d, s.handleGetPeerLogs))
   http.HandleFunc("/events", basicAuth(s.d, s.handleGetEvents))
-  http.HandleFunc("/lobby", basicAuth(s.d, s.handleGetLobby))
   http.HandleFunc("/serverSummary", basicAuth(s.d, s.handleServerSummary))
   http.HandleFunc("/storageSummary", basicAuth(s.d, s.handleStorageSummary))
-  http.HandleFunc("/", basicAuth(s.d, s.handleRoot))
 
+  // Connection management
+  http.HandleFunc("/connection", basicAuth(s.d, s.handleGetConn))
   http.HandleFunc("/connection/new", basicAuth(s.d, s.handleNewConn))
-  http.HandleFunc("/advertisement/new", basicAuth(s.d, s.handleNewAdvert))
+  http.HandleFunc("/connection/delete", basicAuth(s.d, s.handleDeleteConn))
+  http.HandleFunc("/registry", basicAuth(s.d, s.handleGetRegistry))
+  http.HandleFunc("/registry/new", basicAuth(s.d, s.handleNewRegistry))
+  http.HandleFunc("/registry/delete", basicAuth(s.d, s.handleDeleteRegistry))
+  http.HandleFunc("/lobby", basicAuth(s.d, s.handleGetLobby))
+  http.HandleFunc("/lobby/sync", basicAuth(s.d, s.handleSyncLobby))
+
+  // Server settings
   http.HandleFunc("/password/new", basicAuth(s.d, s.handleNewPassword))
 
   l, err := net.Listen("tcp", addr)

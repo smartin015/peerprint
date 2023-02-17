@@ -110,52 +110,13 @@ func (s *registry) UpsertStats(uuid string, stats *pb.NetworkStats) error {
   return nil
 }
 
-func (s *registry) GetLobby(ctx context.Context, cur chan<- *pb.NetworkConfig) error {
-  defer close(cur)
-  rows, err := s.db.Query(`SELECT * FROM "lobby"`)
-  if err != nil {
-    return fmt.Errorf("GetLobby SELECT: %w", err)
-  }
-  defer rows.Close()
-
-  for rows.Next() {
-    select {
-    case <-ctx.Done():
-      return fmt.Errorf("Context canceled")
-    default:
-    }
-    c := &pb.NetworkConfig{}
-    tagstr := ""
-    linkstr := ""
-    sig := ""
-    if err := rows.Scan(
-      &c.Uuid,
-      &c.Name,
-      &c.Description,
-      &tagstr,
-      &linkstr,
-      &c.Location,
-      &c.Rendezvous,
-      &c.Creator,
-      &c.Created,
-      &sig); err != nil {
-      return fmt.Errorf("GetNetworks scan: %w", err)
-    }
-    c.Tags = strings.Split(tagstr, "\n")
-    c.Links = strings.Split(linkstr, "\n")
-    cur<- c
-  }
-  return nil
-}
-
-
-func (s *registry) GetNetworks(ctx context.Context, cur chan<- *pb.Network, closeChan bool) error {
+func (s *registry) GetRegistry(ctx context.Context, cur chan<- *pb.Network, tbl string, closeChan bool) error {
   if closeChan {
     defer close(cur)
   }
-  rows, err := s.db.Query(`SELECT R.*, S.* FROM "registry" R LEFT JOIN "stats" S ON S.uuid=R.uuid`)
+  rows, err := s.db.Query(`SELECT R.*, S.* FROM "` + tbl + `" R LEFT JOIN "stats" S ON S.uuid=R.uuid`)
   if err != nil {
-    return fmt.Errorf("GetNetwork SELECT: %w", err)
+    return fmt.Errorf("GetRegistry SELECT: %w", err)
   }
   defer rows.Close()
 

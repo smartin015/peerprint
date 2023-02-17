@@ -192,3 +192,7 @@ class StreamRecordsRequest(_message.Message):
     network: str
     uuid: str
     def __init__(self, network: _Optional[str] = ..., uuid: _Optional[str] = ...) -> None: ...
+
+class SyncLobbyRequest(_message.Message):
+    __slots__ = []
+    def __init__(self) -> None: ...

@@ -3,7 +3,6 @@ package server
 import (
   "sync"
   "context"
-  "time"
   "fmt"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
@@ -12,15 +11,17 @@ import (
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
+const (
+  MaxConcurrentSync = 1
+)
 
 type Registry interface {
-  Run(context.Context)
+  SyncPeer(context.Context, peer.ID) (int, error)
 }
 
 type registry struct {
   t transport.Interface
   st storage.Registry
-  syncTicker *time.Ticker
   l *pplog.Sublog
 }
 
@@ -30,14 +31,13 @@ type RegistryService struct {
 
 func (s *RegistryService) GetNetworks(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.Network) error {
   s.base.signNew(ctx)
-  return s.base.st.GetNetworks(ctx, repChan, true) // repChan closed by impl
+  return s.base.st.GetRegistry(ctx, repChan, storage.RegistryTable, true) // repChan closed by impl
 }
 
-func NewRegistry(t transport.Interface, st storage.Registry, syncPeriod time.Duration, l *pplog.Sublog) Registry {
+func NewRegistry(t transport.Interface, st storage.Registry, l *pplog.Sublog) Registry {
   srv := &registry {
     t: t,
     st: st,
-    syncTicker: time.NewTicker(syncPeriod),
     l: l,
   }
   if err := t.Register(PeerPrintProtocol, srv.getService()); err != nil {
@@ -46,26 +46,9 @@ func NewRegistry(t transport.Interface, st storage.Registry, syncPeriod time.Dur
   return srv
 }
 
-func (s *registry) getService() interface{} {
+func (s *registry) getService() *RegistryService {
   return &RegistryService{
     base: s,
-  }
-}
-
-func (s *registry) Run(ctx context.Context) {
-  s.t.Run(ctx)
-  s.l.Info("Completing initial sync")
-  time.Sleep(2*time.Second)
-  s.sync(ctx)
-  s.l.Info("Running server main loop")
-  for {
-    select {
-    case <-s.syncTicker.C:
-      go s.sync(ctx)
-    case <-ctx.Done():
-      s.l.Info("Context cancelled; exiting registry loop")
-      return
-    }
   }
 }
 
@@ -100,7 +83,7 @@ func (s *registry) signNew(ctx context.Context) {
     }
   }()
 
-  if err := s.st.GetNetworks(ctx, nChan, true); err != nil {
+  if err := s.st.GetRegistry(ctx, nChan, storage.RegistryTable, true); err != nil {
     s.l.Error(err)
     return
   }
@@ -108,38 +91,28 @@ func (s *registry) signNew(ctx context.Context) {
   s.l.Info("Signed %d new records", nsigned)
 }
 
-func (s *registry) sync(ctx context.Context) {
-  var wg sync.WaitGroup
-  for _, p := range s.t.GetPeers() {
-    if p.String() == s.ID() {
-      continue // No self connection
-    }
-    wg.Add(1)
-    s.l.Info("Syncing lobby from %s", shorten(p.String()))
-    go func(p peer.ID) {
-      defer wg.Done()
-      n := s.syncPeer(ctx, p)
-      s.l.Info("Synced %d rows from %s", n, shorten(p.String()))
-    }(p)
-  }
-  wg.Wait()
-}
-
-func (s *registry) syncPeer(ctx context.Context, p peer.ID) int {
+func (s *registry) SyncPeer(ctx context.Context, p peer.ID) (int, error) {
   req := make(chan struct{}); close(req)
   rep := make(chan *pb.Network, 5) // Closed by Stream
   n := 0
+
+  var wg sync.WaitGroup
+  var streamErr error
+  wg.Add(1)
   go func () {
-    if err := s.t.Stream(ctx, p, "GetNetworks", req, rep); err != nil {
-      s.l.Error("syncPeer(): %+v", err)
-      return
+    defer wg.Done()
+    if p.String() == s.ID() {
+      streamErr = s.getService().GetNetworks(ctx, req, rep)
+    } else {
+      streamErr = s.t.Stream(ctx, p, "GetNetworks", req, rep) 
     }
   }()
   for {
     select {
     case v, ok := <-rep:
       if !ok {
-        return n
+        wg.Wait()
+        return n, streamErr
       }
       // Ensure signature is valid
       if ok, err := s.t.Verify(v.Config, v.Config.Creator, v.Signature); err != nil {
@@ -157,8 +130,8 @@ func (s *registry) syncPeer(ctx context.Context, p peer.ID) int {
         n += 1
       }
     case <-ctx.Done():
-      s.l.Error("syncPeer() context cancelled")
-      return n
+      s.l.Error("SyncPeer() context cancelled")
+      return n, streamErr
     }
   }
 }

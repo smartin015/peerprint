@@ -285,7 +285,9 @@ func (s *Server) Sync(ctx context.Context) {
 func (s *Server) Run(ctx context.Context) {
   // Run will return when there are peers to connect to
   s.connStr = "Searching for peers"
-  s.t.Run(ctx)
+  if err := s.t.Run(ctx); err != nil {
+    s.l.Error("Transport init: %v", err)
+  }
 
   s.l.Info("Completing initial sync")
   s.Sync(ctx)
