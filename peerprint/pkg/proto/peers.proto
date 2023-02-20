@@ -5,8 +5,8 @@ option go_package = "github.com/smartin015/peerprint/pubsub/proto";
 package peers;
 
 message Location {
-  float latitude = 1;
-  float longitude = 2;
+  double latitude = 1;
+  double longitude = 2;
 }
 
 message PeerStatus {

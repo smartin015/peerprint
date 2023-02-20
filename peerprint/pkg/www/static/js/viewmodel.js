@@ -89,6 +89,20 @@ function AppViewModel(hash) {
     self._streamingGet("/printers/location", {instance: self.selectedInstance()}, self.geo.update);
   };
 
+  self.setStatus = function() {
+    var data = $('#setstatus input').toArray().reduce(function(obj, item) {
+          obj[item.id] = item.value;
+          return obj;
+    }, {});
+    $("#newconn input").each(function(i,v){v.value = ""});
+    $.post("/printers/set_status", data).done((data) => {
+			self.showToast("Success", "Connection created");
+			self.gotoTab("conns")
+    }).fail(() => {
+			self.showToast("Error", "Failed to create connection");
+    });
+  }
+
   self.updateServerSummary = function() {
     $.getJSON("/serverSummary", {instance: self.selectedInstance()}, function(data) { 
       self.serverSummary(data);

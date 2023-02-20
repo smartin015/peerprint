@@ -1,0 +1,41 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+<h1 class="h2">Printer Stats</h1>
+</div>
+
+<div class="my-4 w-100" id="peerGeo" width="900" height="380"></div>
+<table class="table">
+<thead>
+<tr>
+<th>Printer Name</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody data-bind="foreach: peerLogs">
+<tr>
+<td data-bind="text: $data.Name"></td>
+<td>TODO show location</td>
+</tr>
+</tbody>
+</table>
+
+
+Cheater form for setting printer statuses:
+<form id="printerstatus">
+Network <input type="text" id="network"></input>
+<br/>
+Name <input type="text" id="name"></input>
+<br/>
+Active Record <input type="text" id="active_record"></input>
+<br/>
+Active Unit<input type="text" id="active_unit"></input>
+<br/>
+Status <input type="text" id="status"></input>
+<br/>
+Profile <input type="text" id="profile"></input>
+<br/>
+Latitude <input type="text" id="latitude"></input>
+<br/>
+Longitude <input type="text" id="longitude"></input>
+<br/>
+<button data-bind="click: setStatus"></button>
+</form>
