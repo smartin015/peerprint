@@ -1,6 +1,7 @@
 package main
 
 import (
+  "path/filepath"
   "github.com/smartin015/peerprint/p2pgit/pkg/driver"
   "github.com/smartin015/peerprint/p2pgit/pkg/registry"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
@@ -28,6 +29,7 @@ var (
   serverCertFlag = flag.String("serverCert", "server.crt", "Filename for server certificate in certsDir")
   serverKeyFlag = flag.String("serverKey", "server.key", "Filename for server private key in certsDir")
   rootCertFlag = flag.String("rootCert", "rootCA.crt", "Filename for root certificate in certsDir")
+  cookieStoreKeyFlag = flag.String("cookieStoreKey", "nomnomcookies", "Key for encrypting cookie store")
 
   logger = log.New(os.Stderr, "", 0)
 )
@@ -60,8 +62,11 @@ func main() {
 
 
   if *wwwFlag != "" {
-    wsrv := www.New(pplog.New("www", logger), d, *wwwDirFlag)
-    go wsrv.Serve(*wwwFlag, ctx)
+    certPath := filepath.Join(*certsDirFlag, *serverCertFlag)
+    keyPath := filepath.Join(*certsDirFlag, *serverKeyFlag)
+
+    wsrv := www.New(pplog.New("www", logger), d, *wwwDirFlag, []byte(*cookieStoreKeyFlag))
+    go wsrv.Serve(ctx, *wwwFlag, certPath, keyPath)
   }
 
   if err := d.Loop(ctx); err != nil {

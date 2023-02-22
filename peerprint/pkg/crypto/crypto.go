@@ -1,8 +1,11 @@
 package crypto
 
 import (
+  "path/filepath"
   "fmt"
   "crypto/rand"
+  "crypto/x509"
+  "crypto/tls"
   "crypto/sha256"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/pnet"
@@ -84,4 +87,32 @@ func LoadOrGenerateKeys(privkeyFile string, pubkeyFile string) (crypto.PrivKey, 
 	} else {
 		return GenKeyPairFile(privkeyFile, pubkeyFile)
 	}
+}
+
+func NewTLSConfig(certsDir, rootCert, serverCert, serverKey string) (*tls.Config, error) {
+  scp := filepath.Join(certsDir, serverCert)
+  skp := filepath.Join(certsDir, serverKey)
+  cert, err := tls.LoadX509KeyPair(scp, skp)
+  if err != nil {
+    return nil, fmt.Errorf("Load server cert from %s, %s: %w", scp, skp, err)
+  }
+
+  rcp := filepath.Join(certsDir, rootCert)
+  rcp_pem, err := os.ReadFile(rcp)
+  if err != nil {
+    return nil, fmt.Errorf("read rcp file %w", err)
+  }
+
+  ccp := x509.NewCertPool()
+  if ok := ccp.AppendCertsFromPEM(rcp_pem); !ok {
+    return nil, fmt.Errorf("failed to parse any root certificates from %s", rcp_pem)
+  }
+
+  return &tls.Config{
+    Certificates: []tls.Certificate{cert},
+    InsecureSkipVerify: true,
+    RootCAs: ccp,
+    ClientCAs: ccp,
+    ClientAuth: tls.RequireAndVerifyClientCert,
+  }, nil
 }

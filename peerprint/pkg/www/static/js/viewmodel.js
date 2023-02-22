@@ -4,6 +4,7 @@ function AppViewModel(hash) {
   self.serverSummary = ko.observable();
   self.storageSummary = ko.observable();
   self.instances = ko.observableArray([]);
+  self.credentials = ko.observableArray([]);
   self.connections = ko.observableArray([]);
   self.events = ko.observableArray([]);
   self.peerLogs = ko.observableArray([]);
@@ -262,5 +263,75 @@ function AppViewModel(hash) {
     console.log("set href");
     self.refresh();
   });
+
+
+  self.getWebAuthnCredentials = function() {
+    $.getJSON("/register/credentials", 
+        {instance: self.selectedInstance()}, self.credentials);
+  };
+  self.getWebAuthnCredentials();
+
+  self.removeWebAuthnCredential = function(id) {
+    $.post('/register/remove', {id})
+      .then((result) => {
+        self.showToast("Success", "Removed credential");
+        self.getWebAuthnCredentials();
+      })
+      .catch((err) => {
+        self.showToast("Error", "Failed to remove (see console)");
+        console.error(err);
+      });
+  }
+
+	// ArrayBuffer to URLBase64
+	function bufferEncode(value) {
+		return btoa(String.fromCharCode.apply(null, new Uint8Array(value)))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=/g, "");;
+	}
+  // Base64 to ArrayBuffer
+  function bufferDecode(base64url) {
+    base64url = base64url.toString();
+    base64 =  base64url.replace(/\-/g, "+").replace(/_/g, "/");
+    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  }
+
+  self.registerUser = function() {
+    $.get(
+      '/register/begin', null, function (data) { return data }, 'json')
+      .then((ccOpts) => {
+        console.log(ccOpts);
+        ccOpts.publicKey.challenge = bufferDecode(ccOpts.publicKey.challenge);
+        ccOpts.publicKey.user.id = bufferDecode(ccOpts.publicKey.user.id);
+        return navigator.credentials.create({
+          publicKey: ccOpts.publicKey
+        })
+      })
+      .then((credential) => {
+        console.log(credential);
+        return $.post(
+          '/register/finish',
+          JSON.stringify({
+            id: credential.id,
+            rawId: bufferEncode(credential.rawId),
+            type: credential.type,
+            response: {
+              attestationObject: bufferEncode(credential.response.attestationObject),
+              clientDataJSON: bufferEncode(credential.response.clientDataJSON),
+            },
+          }),
+          function (data) { return data },
+          'json')
+      })
+      .then((success) => {
+			  self.showToast("Success", "Device enrolled successfully");
+        self.getWebAuthnCredentials();
+      })
+      .catch((error) => {
+        console.log(error);
+			  self.showToast("Error", "Failed enrollment (see console)");
+      })
+  };
 }
 

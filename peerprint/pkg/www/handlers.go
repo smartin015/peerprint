@@ -33,6 +33,18 @@ func (s *webserver) handleIndex(w http.ResponseWriter, r *http.Request) {
   }
 }
 
+func (s *webserver) handleLogin(w http.ResponseWriter, r *http.Request) {
+  tmpl, err := template.ParseFS(s.f, "*.html")
+  if err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+  if err := tmpl.ExecuteTemplate(w, "login.html", nil); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+}
+
 func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
   streamingReadInstance[storage.DBEvent](s, w, r, func(ctx context.Context, n *driver.Instance, cur chan storage.DBEvent) error {
     return n.St.GetEvents(ctx, cur, 1000)
@@ -219,16 +231,21 @@ func (s *webserver) handleSetPrinterStatus(w http.ResponseWriter, r *http.Reques
 
   lonF, _ := strconv.ParseFloat(vs["longitude"], 64)
   latF, _ := strconv.ParseFloat(vs["latitude"], 64)
-  if _, err := n.St.SetPeerStatus(vs["network"], &pb.PrinterStatus{
-    Name: vs["name"],
-    ActiveRecord: vs["active_record"],
-    ActiveUnit: vs["active_unit"],
-    Status: vs["status"],
-    Profile: vs["profile"],
-    Location: &pb.Location{
-            Latitude: latF,
-            Longitude: lonF,
-    },
+  if err := n.St.SetPeerStatus(vs["network"], &pb.PeerStatus{
+      Name: "testpeer",
+      Printers: []*pb.PrinterStatus{
+        &pb.PrinterStatus{
+          Name: vs["name"],
+          ActiveRecord: vs["active_record"],
+          ActiveUnit: vs["active_unit"],
+          Status: vs["status"],
+          Profile: vs["profile"],
+          Location: &pb.Location{
+                  Latitude: latF,
+                  Longitude: lonF,
+          },
+        },
+      },
   }); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
@@ -348,3 +365,20 @@ func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
     s.fsh.ServeHTTP(w, r)
   }
 }
+
+func (s *webserver) handleGetCredentials(w http.ResponseWriter, r *http.Request) {
+  ret := []string{}
+  for _, cred := range s.d.Config.Credentials {
+    ret = append(ret, cred.Descriptor().CredentialID.String())
+  }
+	JSONResponse(w, ret)
+}
+
+func (s *webserver) handleRemoveCredentials(w http.ResponseWriter, r *http.Request) {
+  if err := s.d.RemoveCredential(r.PostFormValue("id")); err != nil {
+    ErrorResponse(w, err)
+  } else {
+    JSONResponse(w, "ok")
+  }
+}
+

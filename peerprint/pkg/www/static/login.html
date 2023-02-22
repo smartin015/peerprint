@@ -1,0 +1,73 @@
+<html>
+<head>
+</head>
+<body>
+Password:
+<br>
+<input type="password" id="password"></input>
+<br>
+<br>
+<button onclick="loginUser()">Login</button>
+</body>
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
+<script type="text/javascript">
+// Inspired by https://www.herbie.dev/blog/webauthn-basic-web-client-server/
+function bufferDecode(base64url) {
+  base64url = base64url.toString();
+  base64 =  base64url.replace(/\-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+}
+function bufferEncode(value) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(value)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");;
+}
+
+function loginUser() {
+  $.post('/login/begin', {
+		password: $("#password").val(),
+	}, function (data) { return data }, 'json')
+  .then((reqOpts) => {
+    console.log(reqOpts);
+    if (reqOpts === "OK") {
+			return;
+    } 
+    reqOpts.publicKey.challenge = bufferDecode(reqOpts.publicKey.challenge);
+    reqOpts.publicKey.allowCredentials.forEach(function (listItem) {
+      listItem.id = bufferDecode(listItem.id)
+    });
+    return navigator.credentials.get({publicKey: reqOpts.publicKey})
+  })
+  .then((assertion) => {
+		if (!assertion) {
+			return;
+		}
+    return $.post('/login/finish',
+      JSON.stringify({
+        id: assertion.id,
+        rawId: bufferEncode(assertion.rawId),
+        type: assertion.type,
+        response: {
+          authenticatorData: bufferEncode(assertion.response.authenticatorData),
+          clientDataJSON: bufferEncode(assertion.response.clientDataJSON),
+          signature: bufferEncode(assertion.response.signature),
+          userHandle: bufferEncode(assertion.response.userHandle),
+        },
+      }), function (data) { return data }, 'json');
+  })
+  .then((success) => { 
+    window.location.href = "/"; 
+  })
+  .catch((error) => { 
+			console.log(error); 
+			if (error.readyState) {
+        alert(`${error.status}: ${error.responseText}`);
+			} else {
+				alert(error.toString()); 
+			}
+	});
+}
+</script>
+</html>
+

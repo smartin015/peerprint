@@ -3,11 +3,29 @@
   <p class="text-muted">Security settings for this PeerPrint server.</p>
 </div>
 
+<h4>Password</h4>
+
 <form id="newpassword">
   <div class="mb-3">
-    <label class="form-label" for="password">Password</label>
+    <label class="form-label" for="password">New Password</label>
     <input class="form-control" id="password" type="text"></input>
     <div class="form-text">Password for accessing this webpage.</div>
   </div>
   <button class="btn btn-primary" data-bind="click: newPassword">Submit</button>
 </form>
+
+<h4>2-Factor Authentication</h4>
+
+PeerPrint supports second factor authentication using the <a href="https://webauthn.guide/" target="_blank">WebAuthn</a> framework. You are strongly recommended to enroll at least one device for improved security.
+
+<table class="table">
+  <tbody data-bind="foreach: credentials">
+    <tr>
+      <td data-bind="text: JSON.stringify($data);"></td>
+      <td><button class="btn btn-secondary" data-bind="click: $root.removeWebAuthnCredential">Remove</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<button class="btn btn-primary" data-bind="click: registerUser">Enroll New Device</button>

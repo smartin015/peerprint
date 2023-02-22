@@ -1,23 +1,18 @@
 package driver
 
 import (
-  "crypto/tls"
-  "crypto/x509"
-  "crypto/sha256"
-  "crypto/rand"
-  b64 "encoding/base64"
-  "path/filepath"
+  "github.com/go-webauthn/webauthn/webauthn"
   //"google.golang.org/protobuf/proto"
   "google.golang.org/grpc"
   "google.golang.org/protobuf/proto"
-  "google.golang.org/protobuf/encoding/protojson"
   "google.golang.org/grpc/credentials"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/crawl"
+  "github.com/smartin015/peerprint/p2pgit/pkg/config"
+  "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   "github.com/smartin015/peerprint/p2pgit/pkg/registry"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
   //"github.com/smartin015/peerprint/p2pgit/pkg/cmd"
-  "strings"
   "net"
   "context"
   "fmt"
@@ -43,6 +38,7 @@ type Opts struct {
   ConfigPath string
 }
 
+
 type Driver struct {
   l *pplog.Sublog
   Command *CommandServer
@@ -51,9 +47,7 @@ type Driver struct {
   opts *Opts
   inst map[string]*Instance
   //cmdPush chan<- proto.Message
-  config map[string]*pb.ConnectRequest
-  adminSalt []byte
-  adminPassHash [32]byte
+  Config *config.DriverConfig
 }
 
 func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pplog.Sublog) *Driver {
@@ -63,9 +57,7 @@ func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pp
     RWorld: rWorld,
     opts: opts,
     inst: make(map[string]*Instance),
-    config: make(map[string]*pb.ConnectRequest),
-    adminSalt: []byte(""),
-    adminPassHash: sha256.Sum256([]byte("changeme")),
+    Config: config.New(),
   }
 }
 
@@ -73,21 +65,27 @@ func (d *Driver) SetAdminPassAndSalt(p string) error {
   if p == "" {
     return errors.New("No password given")
   }
-  salt := make([]byte, 128)
-  if _, err := rand.Read(salt); err != nil {
+  if err := d.Config.SetPassword(p); err != nil {
     return err
   }
-	hash := sha256.Sum256(append([]byte(p), salt...))
-  d.adminSalt = salt
-  d.adminPassHash = hash
-  if err := d.writeConfig(); err != nil {
-    return err
-  }
-  return nil
+  return d.Config.Write(d.opts.ConfigPath)
 }
 
-func (d *Driver) GetAdminPassAndSalt() ([32]byte, []byte) {
-  return d.adminPassHash, d.adminSalt
+
+func (d *Driver) RegisterCredentials(cred *webauthn.Credential) error {
+  d.Config.Credentials = append(d.Config.Credentials, *cred)
+  return d.Config.Write(d.opts.ConfigPath)
+}
+
+func (d *Driver) RemoveCredential(id string) error {
+  for i, c := range d.Config.Credentials {
+    if c.Descriptor().CredentialID.String() == id {
+      d.Config.Credentials[i] = d.Config.Credentials[len(d.Config.Credentials)-1]
+      d.Config.Credentials = d.Config.Credentials[:len(d.Config.Credentials)-1]
+      return d.Config.Write(d.opts.ConfigPath)
+    }
+  }
+  return fmt.Errorf("Credential %s not found", id)
 }
 
 func (d *Driver) InstanceNames() []string {
@@ -100,7 +98,7 @@ func (d *Driver) InstanceNames() []string {
 
 func (d *Driver) GetConfigs(sanitized bool) []*pb.ConnectRequest {
   result := []*pb.ConnectRequest{}
-  for _, conf := range d.config {
+  for _, conf := range d.Config.Connections {
     c2 := proto.Clone(conf).(*pb.ConnectRequest)
     if sanitized {
       c2.Psk = ""
@@ -122,7 +120,7 @@ func (d *Driver) Loop(ctx context.Context) error {
   if _, err := os.Stat(d.opts.ConfigPath); os.IsNotExist(err) {
     d.l.Info("No config found - initializing with basic LAN queue")
     net := "LAN"
-    d.config[net] = &pb.ConnectRequest{
+    d.Config.Connections[net] = &pb.ConnectRequest{
       Network: net,
       Addr: "/ip4/0.0.0.0/tcp/0",
       Rendezvous: net,
@@ -137,45 +135,32 @@ func (d *Driver) Loop(ctx context.Context) error {
       MaxRecordsPerPeer: 100,
       MaxTrackedPeers: 100,
     }
-    if err := d.writeConfig(); err != nil {
+    if err := d.Config.Write(d.opts.ConfigPath); err != nil {
       return err
     }
   } else {
-    if err := d.readConfig(); err != nil {
+    if err := d.Config.Read(d.opts.ConfigPath); err != nil {
       return fmt.Errorf("Read config: %w", err)
     }
   }
-  d.l.Info("Initializing %d networks", len(d.config))
-  for _, n := range d.config {
+  d.l.Info("Config loaded - %d WebAuthn credential(s)", len(d.Config.Credentials))
+
+  d.l.Info("Initializing %d network(s)", len(d.Config.Connections))
+  for _, n := range d.Config.Connections {
     if err := d.handleConnect(n); err != nil {
-      d.l.Error(fmt.Errorf("Init %s: %w", n.Network, err))
+      d.l.Error("Init %s: %v", n.Network, err)
     }
   }
-  scp := filepath.Join(d.opts.CertsDir, d.opts.ServerCert)
-  skp := filepath.Join(d.opts.CertsDir, d.opts.ServerKey)
-  d.l.Info("Loading command server credentials - cert from %s, key from %s", scp, skp)
-  cert, err := tls.LoadX509KeyPair(scp, skp)
-  if err != nil {
-    return fmt.Errorf("Load server cert: %w", err)
-  }
-
-  rcp := filepath.Join(d.opts.CertsDir, d.opts.RootCert)
-  rcp_pem, err := os.ReadFile(rcp)
-  if err != nil {
-    return fmt.Errorf("read rcp file %w", err)
-  }
-  ccp := x509.NewCertPool()
-  if ok := ccp.AppendCertsFromPEM(rcp_pem); !ok {
-    return fmt.Errorf("failed to parse any root certificates from %s", rcp_pem)
-  }
-
-  creds := credentials.NewTLS(&tls.Config{
-    Certificates: []tls.Certificate{cert},
-    InsecureSkipVerify: true,
-    RootCAs: ccp,
-    ClientCAs: ccp,
-    ClientAuth: tls.RequireAndVerifyClientCert,
-  })
+	tlsCfg, err := crypto.NewTLSConfig(
+		d.opts.CertsDir,
+		d.opts.RootCert,
+		d.opts.ServerCert,
+		d.opts.ServerKey,
+	)
+	if err != nil {
+		return fmt.Errorf("Construct TLS config: %w", err)
+	}
+  creds := credentials.NewTLS(tlsCfg)
   grpcServer := grpc.NewServer(grpc.Creds(creds))
   d.Command = newCmdServer(d)
   pb.RegisterCommandServer(grpcServer, d.Command)
@@ -187,54 +172,6 @@ func (d *Driver) Loop(ctx context.Context) error {
   return grpcServer.Serve(lis)
 }
 
-func (d *Driver) readConfig() error {
-  if len(d.config) > 0 {
-    return fmt.Errorf("readConfig after init")
-  }
-  data, err := os.ReadFile(d.opts.ConfigPath)
-  if err != nil {
-    return err
-  }
-  lines := strings.Split(string(data), "\n") 
-  d.adminSalt, _ = b64.StdEncoding.DecodeString(lines[0])
-  hash, _ := b64.StdEncoding.DecodeString(lines[1])
-  d.adminPassHash = *(*[32]byte)(hash)
-
-  for _, line := range lines[3:] {
-    if strings.TrimSpace(line) == "" {
-      continue
-    }
-    v := &pb.ConnectRequest{}
-    d.l.Info("Parsing config line: %q", line)
-    if err := protojson.Unmarshal([]byte(line), v); err != nil {
-      return err
-    }
-    d.config[v.Network] = v
-  }
-  return nil
-}
-
-func (d *Driver) writeConfig() error {
-  f, err := os.Create(d.opts.ConfigPath)
-  if err != nil {
-    return err
-  }
-  defer f.Close()
-  f.Write([]byte(b64.StdEncoding.EncodeToString(d.adminSalt)))
-  f.WriteString("\n")
-  f.Write([]byte(b64.StdEncoding.EncodeToString(d.adminPassHash[:])))
-  f.WriteString("\n")
-
-  for _, n := range d.config {
-    if data, err := protojson.Marshal(n); err != nil {
-      return err
-    } else {
-      f.Write(data)
-      f.WriteString("\n")
-    }
-  }
-  return nil
-}
 
 func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
   if i, err := NewInstance(v, pplog.New(v.Network, d.l)); err != nil {
@@ -243,8 +180,8 @@ func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
     d.inst[v.Network] = i
     // TODO use base context from driver
     go i.Run(context.Background())
-    d.config[v.Network] = v
-    d.writeConfig()
+    d.Config.Connections[v.Network] = v
+    d.Config.Write(d.opts.ConfigPath)
   }
   return nil
 }
@@ -253,8 +190,8 @@ func (d *Driver) handleDisconnect(v *pb.DisconnectRequest) error {
   if i, ok := d.inst[v.Network]; !ok {
     return fmt.Errorf("Instance with rendezvous %q not found", v.Network) 
   } else {
-    delete(d.config, v.Network)
-    d.writeConfig()
+    delete(d.Config.Connections, v.Network)
+    d.Config.Write(d.opts.ConfigPath)
     i.Destroy()
     return nil
   }
