@@ -76,6 +76,10 @@
 						</li>
 
 						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="creds-tab" data-bs-toggle="tab" data-bs-target="#creds" type="button" role="tab" aria-controls="creds">Credentials</a>
+						</li>
+
+						<li class="nav-item" role="presentation">
 							<a class="nav-link" type="button" href="/logout">Logout</a>
 						</li>
 					</ul>
@@ -94,6 +98,7 @@
         <div class="tab-pane fade" id="registry" role="tabpanel" aria-labelledby="registry-tab">{{template "registry.html"}}</div>
         <div class="tab-pane fade" id="newregistry" role="tabpanel" aria-labelledby="newregistry-tab">{{template "newregistry.html"}}</div>
         <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">{{template "security.html"}}</div>
+        <div class="tab-pane fade" id="creds" role="tabpanel" aria-labelledby="creds-tab">{{template "creds.html"}}</div>
       </div>
 
       <footer class="footer mt-auto text-end">
