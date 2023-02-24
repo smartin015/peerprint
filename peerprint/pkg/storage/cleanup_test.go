@@ -7,7 +7,7 @@ import (
 )
 
 func TestCleanupNoRows(t *testing.T) {
-  s := testingDB()
+  s := testingDB(t)
   if got, err := s.Cleanup(0); err != nil || got != 0 {
     t.Errorf("got %v, %v want 0, nil", got, err)
   }
@@ -45,7 +45,7 @@ func cplRec(s *sqlite3, num int64) {
 }
 
 func TestCleanupWithinRange(t *testing.T) {
-  s := testingDB()
+  s := testingDB(t)
   cplRec(s, 10)
 
   if got, err := s.Cleanup(10); err != nil || got != 0 {
@@ -57,7 +57,7 @@ func TestCleanupWithinRange(t *testing.T) {
 }
 
 func TestCleanupOverRange(t *testing.T) {
-  s := testingDB()
+  s := testingDB(t)
   cplRec(s, 10)
 
   if got, err := s.Cleanup(5); err != nil || got != 10 {
@@ -71,7 +71,7 @@ func TestCleanupOverRange(t *testing.T) {
 }
 
 func TestCleanupDanglingCompletions(t *testing.T) {
-  s := testingDB()
+  s := testingDB(t)
   if err := s.SetSignedCompletion(&pb.SignedCompletion{
     Completion: &pb.Completion{
       Uuid: "r0",

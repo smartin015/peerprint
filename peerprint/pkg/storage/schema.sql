@@ -50,8 +50,8 @@ CREATE TABLE peers (
  
 CREATE TABLE printers (
   server TEXT NOT NULL,
-  server_name TEXT NOT NULL,
   name TEXT NOT NULL,
+  server_name TEXT NOT NULL,
   active_record TEXT NOT NULL,
   active_unit TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE printers (
   longitude REAL NOT NULL,
 	timestamp INT NOT NULL,
 
-  PRIMARY KEY (network, server, name)
+  PRIMARY KEY (server, name)
 );
 
 CREATE TABLE census (

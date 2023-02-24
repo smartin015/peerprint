@@ -17,13 +17,8 @@ const (
   LobbyTable = "lobby"
 )
 
-//go:embed registry_schema.sql
+//go:embed schema.sql
 var registrySchema string
-
-type registry struct {
-  path string
-  db *sql.DB
-}
 
 func (s *Registry) initStorage(path string) error {
   if path != ":memory:" {
@@ -40,7 +35,7 @@ func (s *Registry) initStorage(path string) error {
   if err := s.createRegistryTables(); err != nil {
     return fmt.Errorf("failed to create tables: %w", err)
   }
-  return s
+  return nil
 }
 
 func (s *Registry) createRegistryTables() error {
@@ -163,7 +158,7 @@ func (s *Registry) GetRegistry(ctx context.Context, cur chan<- *pb.Network, tbl 
 }
 
 func (s *Registry) SignConfig(uuid string, sig []byte) error {
-  _, err := s.db.Exec(`UPDATE stats SET signature=? WHERE uuid=?`, sig, uuid)
+  _, err := s.db.Exec(`UPDATE registry SET signature=? WHERE uuid=?`, sig, uuid)
   if err != nil {
     return fmt.Errorf("SignConfig: %w", err)
   }

@@ -4,12 +4,22 @@ package storage
 import (
   "fmt"
   "time"
+  "database/sql"
   _ "github.com/mattn/go-sqlite3"
 )
 
 func (s *sqlite3) deleteOldTimeline() (int64, error) {
   // TODO decimate Census table with a predetermined retention period
   return 0,  fmt.Errorf("Not implemented")
+}
+
+func (s *sqlite3) countCompletedRecords() (int64, error) {
+  num := int64(0)
+  err := s.db.QueryRow(`SELECT COUNT(*) FROM "records" R LEFT JOIN "completions" C ON R.uuid=C.uuid AND R.signer=C.signer WHERE C.timestamp > 0 AND r.signer=R.approver;`).Scan(&num)
+  if err == sql.ErrNoRows {
+    return 0, nil
+  }
+  return num, err
 }
 
 func(s *sqlite3) deleteCompletedRecords(amt int64) (int64, error) {
@@ -85,9 +95,9 @@ func (s *sqlite3) Cleanup(until_records int64) (int64, error) {
   if err != nil {
     return n1, fmt.Errorf("delete dangling completions: %w", err)
   }
-  n3, err := s.deleteOldTimeline()
-  if err != nil {
-    return n1+n2, fmt.Errorf("delete old timeline: %w", err)
-  }
-  return n1+n2+n3, nil
+  //n3, err := s.deleteOldTimeline()
+  //if err != nil {
+  //  return n1+n2, fmt.Errorf("delete old timeline: %w", err)
+  //}
+  return n1+n2, nil
 }

@@ -229,6 +229,14 @@ func TestOnUpdate(t *testing.T) {
   }
 }
 
+func TestHandleCompletion(t *testing.T) {
+  t.Skip("TODO")
+}
+
+func TestHandleRecord(t *testing.T) {
+  t.Skip("TODO")
+}
+
 func TestGetSummary(t *testing.T) {
   s1 := NewTestServer(context.Background(), "testid")
   if s := s1.GetSummary(); s == nil {
