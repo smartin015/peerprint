@@ -29,7 +29,8 @@ type Counters struct {
 }
 
 type Registry struct {
-  DB storage.Registry
+  path string
+  db *sql.DB
   kpriv libp2p_crypto.PrivKey
   kpub libp2p_crypto.PubKey
   local bool
@@ -39,8 +40,7 @@ type Registry struct {
 }
 
 func New(ctx context.Context, dbPath string, local bool, l *pplog.Sublog) (*Registry, error) {
-  st, err := storage.NewRegistry(dbPath)
-  if err != nil {
+  if err := initStorage(dbPath); err != nil {
     return nil, fmt.Errorf("registry db init: %w", err)
   }
   kpriv, kpub, err := crypto.GenKeyPair()

@@ -1,11 +1,18 @@
 package crypto
 
 import (
+  "math/big"
+  "bytes"
+  "time"
   "path/filepath"
+  "net"
   "fmt"
+  "crypto/rsa"
   "crypto/rand"
   "crypto/x509"
   "crypto/tls"
+  "crypto/x509/pkix"
+  "encoding/pem"
   "crypto/sha256"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/pnet"
@@ -115,4 +122,80 @@ func NewTLSConfig(certsDir, rootCert, serverCert, serverKey string) (*tls.Config
     ClientCAs: ccp,
     ClientAuth: tls.RequireAndVerifyClientCert,
   }, nil
+}
+
+func WritePEM(cert []byte, certPrivKey *rsa.PrivateKey, certDest, keyDest string) error {
+  certPEM := new(bytes.Buffer)
+  if err := pem.Encode(certPEM, &pem.Block{
+    Type:  "CERTIFICATE",
+    Bytes: cert,
+  }); err != nil {
+    return fmt.Errorf("encode certificate: %w", err)
+  }
+
+  certPrivKeyPEM := new(bytes.Buffer)
+  if err := pem.Encode(certPrivKeyPEM, &pem.Block{
+    Type:  "RSA PRIVATE KEY",
+    Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey),
+  }); err != nil {
+    return fmt.Errorf("encode private key: %w", err)
+  }
+
+  if err := os.WriteFile(certDest, certPEM.Bytes(), 0644); err != nil {
+    return fmt.Errorf("write cert: %w", err)
+  }
+  if err := os.WriteFile(keyDest, certPrivKeyPEM.Bytes(), 0600); err != nil {
+    return fmt.Errorf("write cert: %w", err)
+  }
+
+  return nil
+}
+
+func SelfSignedCACert(cname string) (*x509.Certificate, []byte, *rsa.PrivateKey, error) {
+	ca := &x509.Certificate{
+		SerialNumber: big.NewInt(2019),
+    Subject: pkix.Name{
+      CommonName: cname, 
+    },
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+  caPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+  if err != nil {
+    return nil, nil, nil, err
+  }
+  caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
+  if err != nil {
+    return nil, nil, nil, err
+  }
+
+  return ca, caBytes, caPrivKey, nil
+}
+
+func CASignedCert(ca *x509.Certificate, caPrivKey *rsa.PrivateKey, cname string) (*x509.Certificate, []byte, *rsa.PrivateKey, error) {
+  cert := &x509.Certificate{
+    SerialNumber: big.NewInt(1658),
+    Subject: pkix.Name{
+      CommonName: cname, 
+    },
+    IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+    NotBefore:    time.Now(),
+    NotAfter:     time.Now().AddDate(10, 0, 0),
+    SubjectKeyId: []byte{1, 2, 3, 4, 6},
+    ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+    KeyUsage:     x509.KeyUsageDigitalSignature,
+  }
+  certPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+  if err != nil {
+    return nil, nil, nil, err
+  }
+  certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
+  if err != nil {
+    return nil, nil, nil, err
+  }
+  return cert, certBytes, certPrivKey, nil
 }

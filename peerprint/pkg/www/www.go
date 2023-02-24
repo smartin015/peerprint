@@ -19,6 +19,12 @@ import (
 //go:embed static
 var static embed.FS
 
+type Opts struct {
+  LiveDir string
+  ConfigPath string
+  CookieStoreKey []byte
+}
+
 type webserver struct {
   l *log.Sublog
   d *driver.Driver
@@ -26,20 +32,22 @@ type webserver struct {
   authSession *webauthn.SessionData
   f fs.FS
   fsh http.Handler
-  cs *sessions.CookieStore 
+  cs *sessions.CookieStore
+  cfg *WWWConfig
+  cfgPath string
 }
 
-func New(l *log.Sublog, d *driver.Driver, liveDir string, cookieStoreKey []byte) *webserver {
+func New(l *log.Sublog, d *driver.Driver, opts *Opts) *webserver {
   var f fs.FS
   var err error
-  if liveDir == "" {
+  if opts.LiveDir == "" {
     f, err = fs.Sub(static, "static")
     if err != nil {
       panic(err)
     }
   } else {
-    f = os.DirFS(liveDir)
-    l.Info("Serving www assets from %s", liveDir)
+    f = os.DirFS(opts.LiveDir)
+    l.Info("Serving www assets from %s", opts.LiveDir)
   }
 
 	w, err := webauthn.New(&webauthn.Config{
@@ -53,12 +61,19 @@ func New(l *log.Sublog, d *driver.Driver, liveDir string, cookieStoreKey []byte)
 		panic(err)
 	}
 
+  cfg := NewConfig()
+  if err := config.Read(cfg, opts.ConfigPath); err != nil {
+    panic(err)
+  }
+
   return &webserver {
     l: l,
     d: d,
     f: f,
     fsh: http.FileServer(http.FS(f)),
-		cs: sessions.NewCookieStore(cookieStoreKey),
+		cs: sessions.NewCookieStore(CookieStoreKey),
+    cfg: cfg,
+    cfgPath: opts.ConfigPath,
 		w: w,
   }
 }
@@ -192,10 +207,35 @@ func streamingReadInstance[M any](s *webserver, w http.ResponseWriter, r *http.R
       }
     }
   }()
-  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := fn(ctx, n, cur); err != nil {
+  if err := fn(n, cur); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
   wg.Wait()
+}
+
+func (s *webserver) SetAdminPassAndSalt(p string) error {
+  if p == "" {
+    return errors.New("No password given")
+  }
+  if err := s.cfg.SetPassword(p); err != nil {
+    return err
+  }
+  return config.Write(s.cfg, s.cfgPath)
+}
+
+func (s *webserver) RegisterCredentials(cred *webauthn.Credential) error {
+  s.cfg.Credentials = append(s.cfg.Credentials, *cred)
+  return config.Write(s.cfg, s.cfgPath)
+}
+
+func (s *webserver) RemoveCredential(id string) error {
+  for i, c := range s.cfg.Credentials {
+    if c.Descriptor().CredentialID.String() == id {
+      s.cfg.Credentials[i] = s.cfg.Credentials[len(s.cfg.Credentials)-1]
+      s.cfg.Credentials = s.cfg.Credentials[:len(s.cfg.Credentials)-1]
+      return config.Write(s.cfg, s.cfgPath)
+    }
+  }
+  return fmt.Errorf("Credential %s not found", id)
 }

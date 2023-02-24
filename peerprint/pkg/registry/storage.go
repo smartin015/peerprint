@@ -1,5 +1,5 @@
 // Functions for managing a network registry
-package storage
+package registry
 
 import (
   "fmt"
@@ -25,28 +25,25 @@ type registry struct {
   db *sql.DB
 }
 
-func NewRegistry(path string) (*registry, error) {
+func (s *Registry) initStorage(path string) error {
   if path != ":memory:" {
     path = "file:" + path + "?_journal_mode=WAL"
   }
   log.Println("NewRegistry: " + path)
   db, err := sql.Open("sqlite3", path)
   if err != nil {
-    return nil, fmt.Errorf("failed to open db at %s: %w", path, err)
+    return fmt.Errorf("failed to open db at %s: %w", path, err)
   }
   db.SetMaxOpenConns(1) // TODO verify needed for non-inmemory
-  s := &registry{
-    path: path,
-    db: db,
-  }
+  s.path = path
+  s.db = db
   if err := s.createRegistryTables(); err != nil {
-    return nil, fmt.Errorf("failed to create tables: %w", err)
+    return fmt.Errorf("failed to create tables: %w", err)
   }
-  return s, nil
+  return s
 }
 
-
-func (s *registry) createRegistryTables() error {
+func (s *Registry) createRegistryTables() error {
   ver := ""
   if err := s.db.QueryRow("SELECT * FROM schemaversion LIMIT 1;").Scan(&ver); err != nil && err != sql.ErrNoRows && err.Error() != "no such table: schemaversion" {
     return fmt.Errorf("check version: %w", err)
@@ -65,12 +62,11 @@ func (s *registry) createRegistryTables() error {
   return nil
 }
 
-func (s *registry) Close() {
+func (s *Registry) Close() {
   s.db.Close()
 }
 
-
-func (s *registry) DeleteConfig(uuid string, tbl string) error {
+func (s *Registry) DeleteConfig(uuid string, tbl string) error {
   _, err := s.db.Exec(`DELETE FROM ` + tbl + ` WHERE uuid=?`, uuid)
   if err != nil {
     return fmt.Errorf("DeleteConfig: %w", err)
@@ -78,7 +74,7 @@ func (s *registry) DeleteConfig(uuid string, tbl string) error {
   return nil
 }
 
-func (s *registry) UpsertConfig(n *pb.NetworkConfig, sig []byte, tbl string) error {
+func (s *Registry) UpsertConfig(n *pb.NetworkConfig, sig []byte, tbl string) error {
   _, err := s.db.Exec(`
     INSERT OR REPLACE INTO ` + tbl + ` (uuid, name, description, tags, links, location, rendezvous, creator, created, signature) VALUES (?,?,?,?,?,?,?,?,?,?)`,
     n.Uuid, n.Name, n.Description,
@@ -94,7 +90,7 @@ func (s *registry) UpsertConfig(n *pb.NetworkConfig, sig []byte, tbl string) err
   return nil
 }
 
-func (s *registry) UpsertStats(uuid string, stats *pb.NetworkStats) error {
+func (s *Registry) UpsertStats(uuid string, stats *pb.NetworkStats) error {
   _, err := s.db.Exec(`
     INSERT OR REPLACE INTO stats (uuid, population, completions_last7days, records, idle_records, avg_completion_time) VALUES (?,?,?,?,?,?)`,
     uuid,
@@ -110,7 +106,7 @@ func (s *registry) UpsertStats(uuid string, stats *pb.NetworkStats) error {
   return nil
 }
 
-func (s *registry) GetRegistry(ctx context.Context, cur chan<- *pb.Network, tbl string, closeChan bool) error {
+func (s *Registry) GetRegistry(ctx context.Context, cur chan<- *pb.Network, tbl string, closeChan bool) error {
   if closeChan {
     defer close(cur)
   }
@@ -166,7 +162,7 @@ func (s *registry) GetRegistry(ctx context.Context, cur chan<- *pb.Network, tbl 
   return nil
 }
 
-func (s *registry) SignConfig(uuid string, sig []byte) error {
+func (s *Registry) SignConfig(uuid string, sig []byte) error {
   _, err := s.db.Exec(`UPDATE stats SET signature=? WHERE uuid=?`, sig, uuid)
   if err != nil {
     return fmt.Errorf("SignConfig: %w", err)

@@ -9,6 +9,7 @@ import (
   "github.com/libp2p/go-libp2p"
   "github.com/libp2p/go-libp2p/core/host"
   "github.com/libp2p/go-libp2p/core/peer"
+  pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
 const rendezvous = "test_rendezvous"
@@ -28,7 +29,7 @@ func testHost(t *testing.T) (host.Host) {
 
 func newDiscovery(t *testing.T, h host.Host, m Method) (*Discovery) {
   t.Helper()
-  return New(context.Background(), m, h, rendezvous, log.Default())
+  return New(context.Background(), m, h, rendezvous, true, pplog.New("discovery", log.Default()))
 }
 
 func assertHasPeers(t *testing.T, h host.Host, peers []host.Host) {
@@ -63,6 +64,21 @@ func getAddrInfo(p host.Host) peer.AddrInfo {
   }
 }
 
+func assertDiscoveryCount(t *testing.T, ch chan peer.AddrInfo, want int) {
+  np := 0
+  for {
+    select {
+    case <- ch:
+      np++
+    default:
+      if np != want {
+        t.Errorf("Want %d entries on PeerDiscovered; got %d", want, np)
+      }
+      return
+    }
+  }
+}
+
 func TestNewLocal(t *testing.T) {
   SetBootstrapPeers([]peer.AddrInfo{}) // No need to dial out
   peers := []host.Host{testHost(t), testHost(t), testHost(t)}
@@ -72,14 +88,15 @@ func TestNewLocal(t *testing.T) {
   d.HandlePeerFound(getAddrInfo(peers[1]))
   d.HandlePeerFound(getAddrInfo(peers[2]))
 
-
   // Don't actually need to wait long, as HandlePeerFound already triggered
   ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Millisecond)
   t.Cleanup(cancel)
+
   if err := d.AwaitReady(ctx); err == nil {
     t.Errorf("Expected context cancel on awaitready")
   }
   assertHasPeers(t, h, peers)
+  assertDiscoveryCount(t, d.PeerDiscovered, len(peers))
 }
 func TestNewDHT(t *testing.T) {
   SetBootstrapPeers([]peer.AddrInfo{}) // No need to dial out
@@ -97,4 +114,5 @@ func TestNewDHT(t *testing.T) {
     t.Errorf("Expected context cancel on awaitready")
   }
   assertHasPeers(t, h, peers)
+  assertDiscoveryCount(t, d.PeerDiscovered, len(peers))
 }

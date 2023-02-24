@@ -2,7 +2,6 @@ package driver
 
 import (
   "github.com/go-webauthn/webauthn/webauthn"
-  //"google.golang.org/protobuf/proto"
   "google.golang.org/grpc"
   "google.golang.org/protobuf/proto"
   "google.golang.org/grpc/credentials"
@@ -12,7 +11,6 @@ import (
   "github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   "github.com/smartin015/peerprint/p2pgit/pkg/registry"
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
-  //"github.com/smartin015/peerprint/p2pgit/pkg/cmd"
   "net"
   "context"
   "fmt"
@@ -38,7 +36,6 @@ type Opts struct {
   ConfigPath string
 }
 
-
 type Driver struct {
   l *pplog.Sublog
   Command *CommandServer
@@ -46,8 +43,8 @@ type Driver struct {
   RWorld *registry.Registry
   opts *Opts
   inst map[string]*Instance
-  //cmdPush chan<- proto.Message
   Config *config.DriverConfig
+  srv *grpc.Server
 }
 
 func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pplog.Sublog) *Driver {
@@ -59,61 +56,6 @@ func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pp
     inst: make(map[string]*Instance),
     Config: config.New(),
   }
-}
-
-func (d *Driver) SetAdminPassAndSalt(p string) error {
-  if p == "" {
-    return errors.New("No password given")
-  }
-  if err := d.Config.SetPassword(p); err != nil {
-    return err
-  }
-  return d.Config.Write(d.opts.ConfigPath)
-}
-
-
-func (d *Driver) RegisterCredentials(cred *webauthn.Credential) error {
-  d.Config.Credentials = append(d.Config.Credentials, *cred)
-  return d.Config.Write(d.opts.ConfigPath)
-}
-
-func (d *Driver) RemoveCredential(id string) error {
-  for i, c := range d.Config.Credentials {
-    if c.Descriptor().CredentialID.String() == id {
-      d.Config.Credentials[i] = d.Config.Credentials[len(d.Config.Credentials)-1]
-      d.Config.Credentials = d.Config.Credentials[:len(d.Config.Credentials)-1]
-      return d.Config.Write(d.opts.ConfigPath)
-    }
-  }
-  return fmt.Errorf("Credential %s not found", id)
-}
-
-func (d *Driver) InstanceNames() []string {
-  nn := []string{}
-  for k, _ := range d.inst {
-    nn = append(nn, k)
-  }
-  return nn
-}
-
-func (d *Driver) GetConfigs(sanitized bool) []*pb.ConnectRequest {
-  result := []*pb.ConnectRequest{}
-  for _, conf := range d.Config.Connections {
-    c2 := proto.Clone(conf).(*pb.ConnectRequest)
-    if sanitized {
-      c2.Psk = ""
-    }
-    result = append(result, c2)
-  }
-  return result
-}
-
-func (d *Driver) GetInstance(name string) *Instance {
-  inst, ok := d.inst[name]
-  if !ok {
-    return nil
-  }
-  return inst
 }
 
 func (d *Driver) Loop(ctx context.Context) error {
@@ -135,11 +77,11 @@ func (d *Driver) Loop(ctx context.Context) error {
       MaxRecordsPerPeer: 100,
       MaxTrackedPeers: 100,
     }
-    if err := d.Config.Write(d.opts.ConfigPath); err != nil {
+    if err := config.Write(d.Config, d.opts.ConfigPath); err != nil {
       return err
     }
   } else {
-    if err := d.Config.Read(d.opts.ConfigPath); err != nil {
+    if err := config.Read(d.Config, d.opts.ConfigPath); err != nil {
       return fmt.Errorf("Read config: %w", err)
     }
   }
@@ -161,7 +103,7 @@ func (d *Driver) Loop(ctx context.Context) error {
 		return fmt.Errorf("Construct TLS config: %w", err)
 	}
   creds := credentials.NewTLS(tlsCfg)
-  grpcServer := grpc.NewServer(grpc.Creds(creds))
+  d.srv := grpc.NewServer(grpc.Creds(creds))
   d.Command = newCmdServer(d)
   pb.RegisterCommandServer(grpcServer, d.Command)
   lis, err := net.Listen("tcp", d.opts.Addr)
@@ -169,9 +111,34 @@ func (d *Driver) Loop(ctx context.Context) error {
     return fmt.Errorf("Listen: %w", err)
   }
   d.l.Info("Command server listening on %s", d.opts.Addr)
-  return grpcServer.Serve(lis)
+  return d.srv.Serve(lis)
 }
 
+func (d *Driver) Destroy() {
+  if d.srv != nil {
+    d.srv.Stop()
+  }
+}
+
+func (d *Driver) GetConnections(sanitized bool) []*pb.ConnectRequest {
+  result := []*pb.ConnectRequest{}
+  for _, conf := range d.Config.Connections {
+    c2 := proto.Clone(conf).(*pb.ConnectRequest)
+    if sanitized {
+      c2.Psk = ""
+    }
+    result = append(result, c2)
+  }
+  return result
+}
+
+func (d *Driver) GetInstance(name string) *Instance {
+  inst, ok := d.inst[name]
+  if !ok {
+    return nil
+  }
+  return inst
+}
 
 func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
   if i, err := NewInstance(v, pplog.New(v.Network, d.l)); err != nil {
@@ -181,7 +148,7 @@ func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
     // TODO use base context from driver
     go i.Run(context.Background())
     d.Config.Connections[v.Network] = v
-    d.Config.Write(d.opts.ConfigPath)
+    conig.Write(d.Config, d.opts.ConfigPath)
   }
   return nil
 }
@@ -191,7 +158,7 @@ func (d *Driver) handleDisconnect(v *pb.DisconnectRequest) error {
     return fmt.Errorf("Instance with rendezvous %q not found", v.Network) 
   } else {
     delete(d.Config.Connections, v.Network)
-    d.Config.Write(d.opts.ConfigPath)
+    config.Write(d.Config, d.opts.ConfigPath)
     i.Destroy()
     return nil
   }

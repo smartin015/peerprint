@@ -17,10 +17,6 @@ import (
   "github.com/smartin015/peerprint/p2pgit/pkg/driver"
 )
 
-const (
-  DBReadTimeout = 5*time.Second
-)
-
 func (s *webserver) handleIndex(w http.ResponseWriter, r *http.Request) {
   tmpl, err := template.ParseFS(s.f, "*.html")
   if err != nil {
@@ -46,8 +42,8 @@ func (s *webserver) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[storage.DBEvent](s, w, r, func(ctx context.Context, n *driver.Instance, cur chan storage.DBEvent) error {
-    return n.St.GetEvents(ctx, cur, 1000)
+  streamingReadInstance[storage.DBEvent](s, w, r, func(n *driver.Instance, cur chan storage.DBEvent) error {
+    return n.St.GetEvents(r.Context(), cur, 1000)
   })
 }
 
@@ -105,12 +101,11 @@ func (s *webserver) handleGetLobby(w http.ResponseWriter, r *http.Request) {
       }
     }
   }()
-  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.d.RLocal.DB.GetRegistry(ctx, cur, storage.LobbyTable, false); err != nil {
+  if err := s.d.RLocal.GetRegistry(r.Context(), cur, storage.LobbyTable, false); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
-  if err := s.d.RWorld.DB.GetRegistry(ctx, cur, storage.LobbyTable, true); err != nil {
+  if err := s.d.RWorld.GetRegistry(r.Context(), cur, storage.LobbyTable, true); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -134,12 +129,11 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
       }
     }
   }()
-  ctx, _ := context.WithTimeout(context.Background(), DBReadTimeout)
-  if err := s.d.RLocal.DB.GetRegistry(ctx, cur, storage.RegistryTable, false); err != nil {
+  if err := s.d.RLocal.GetRegistry(r.Context(), cur, storage.RegistryTable, false); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
-  if err := s.d.RWorld.DB.GetRegistry(ctx, cur, storage.RegistryTable, true); err != nil {
+  if err := s.d.RWorld.GetRegistry(r.Context(), cur, storage.RegistryTable, true); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -147,19 +141,19 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetPrinterLocations(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[*pb.Location](s, w, r, func(ctx context.Context, n *driver.Instance, cur chan *pb.Location) error {
-    return n.St.GetPrinterLocations(ctx, time.Now().Unix() - 60*60*24, cur)
+  streamingReadInstance[*pb.Location](s, w, r, func(n *driver.Instance, cur chan *pb.Location) error {
+    return n.St.GetPrinterLocations(r.Context(), time.Now().Unix() - 60*60*24, cur)
   })
 }
 
 func (s *webserver) handleGetTimeline(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[*storage.DataPoint](s, w, r, func(ctx context.Context, n *driver.Instance, cur chan *storage.DataPoint) error {
-    return n.St.GetPeerTimeline(ctx, cur)
+  streamingReadInstance[*storage.DataPoint](s, w, r, func(n *driver.Instance, cur chan *storage.DataPoint) error {
+    return n.St.GetPeerTimeline(r.Context(), cur)
   })
 }
 
 func (s *webserver) handleGetConn(w http.ResponseWriter, r *http.Request) {
-  v := s.d.GetConfigs(true)
+  v := s.d.GetConnections(true)
   for _, c := range v {
     j := &protojson.MarshalOptions{EmitUnpopulated: true}
     if data, err := j.Marshal(c); err != nil {
@@ -174,8 +168,8 @@ func (s *webserver) handleGetConn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[*storage.TimeProfile](s, w, r, func(ctx context.Context, n *driver.Instance, cur chan *storage.TimeProfile) error {
-    return n.St.GetPeerTracking(ctx, cur)
+  streamingReadInstance[*storage.TimeProfile](s, w, r, func(context.Context, n *driver.Instance, cur chan *storage.TimeProfile) error {
+    return n.St.GetPeerTracking(r.Context(), cur)
   })
 }
 
@@ -338,7 +332,7 @@ func (s *webserver) handleNewRegistry(w http.ResponseWriter, r *http.Request) {
     Creator: get(r, "creator", "anonymous"),
     Created: time.Now().Unix(),
   }
-  if err := s.d.Command.ResolveRegistry(vs["local"] == "true").DB.UpsertConfig(cfg, []byte(""), storage.RegistryTable); err != nil {
+  if err := s.d.Command.ResolveRegistry(vs["local"] == "true").UpsertConfig(cfg, []byte(""), storage.RegistryTable); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -347,7 +341,7 @@ func (s *webserver) handleNewRegistry(w http.ResponseWriter, r *http.Request) {
 
 func (s *webserver) handleNewPassword(w http.ResponseWriter, r *http.Request) {
   p := r.PostFormValue("password")
-  if err := s.d.SetAdminPassAndSalt(p); err != nil {
+  if err := s.SetAdminPassAndSalt(p); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -368,14 +362,14 @@ func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (s *webserver) handleGetCredentials(w http.ResponseWriter, r *http.Request) {
   ret := []string{}
-  for _, cred := range s.d.Config.Credentials {
+  for _, cred := range s.cfg.Credentials {
     ret = append(ret, cred.Descriptor().CredentialID.String())
   }
 	JSONResponse(w, ret)
 }
 
 func (s *webserver) handleRemoveCredentials(w http.ResponseWriter, r *http.Request) {
-  if err := s.d.RemoveCredential(r.PostFormValue("id")); err != nil {
+  if err := s.RemoveCredential(r.PostFormValue("id")); err != nil {
     ErrorResponse(w, err)
   } else {
     JSONResponse(w, "ok")

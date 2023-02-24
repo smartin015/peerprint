@@ -220,7 +220,7 @@ func (s *CommandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.
       }
     }
   }()
-  if err := s.ResolveRegistry(req.Local).DB.GetRegistry(stream.Context(), ch, storage.RegistryTable, true); err != nil {
+  if err := s.ResolveRegistry(req.Local).GetRegistry(stream.Context(), ch, storage.RegistryTable, true); err != nil {
     return err
   }
   wg.Wait()
@@ -228,14 +228,14 @@ func (s *CommandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.
 }
 
 func (s *CommandServer) Advertise(ctx context.Context, req *pb.AdvertiseRequest) (*pb.Ok, error) {
-  if err := s.ResolveRegistry(req.Local).DB.UpsertConfig(req.Config, []byte(""), storage.RegistryTable); err != nil {
+  if err := s.ResolveRegistry(req.Local).UpsertConfig(req.Config, []byte(""), storage.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
 }
 
 func (s *CommandServer) StopAdvertising(ctx context.Context, req *pb.StopAdvertisingRequest) (*pb.Ok, error) {
-  if err := s.ResolveRegistry(req.Local).DB.DeleteConfig(req.Uuid, storage.RegistryTable); err != nil {
+  if err := s.ResolveRegistry(req.Local).DeleteConfig(req.Uuid, storage.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
@@ -259,13 +259,12 @@ func (s *CommandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest
       }
     }
   }()
-  if err := s.ResolveRegistry(req.Local).DB.GetRegistry(stream.Context(), ch, storage.LobbyTable, true); err != nil {
+  if err := s.ResolveRegistry(req.Local).GetRegistry(stream.Context(), ch, storage.LobbyTable, true); err != nil {
     return err
   }
   wg.Wait()
   return cherr
 }
-
 
 func (s *CommandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {
   s.d.l.Info("TODO handle StreamPeers")

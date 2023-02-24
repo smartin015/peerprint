@@ -11,7 +11,7 @@ const (
 )
 
 func (s *webserver) BeginRegistration(w http.ResponseWriter, r *http.Request) {
-  options, session, err := s.w.BeginRegistration(s.d.Config)
+  options, session, err := s.w.BeginRegistration(s.cfg)
   if err != nil {
     ErrorResponse(w, err)
   } else {
@@ -26,12 +26,12 @@ func (s *webserver) FinishRegistration(w http.ResponseWriter, r *http.Request) {
     ErrorResponse(w, err)
     return
   }
-  credential, err := s.w.CreateCredential(s.d.Config, *s.authSession, response)
+  credential, err := s.w.CreateCredential(s.cfg, *s.authSession, response)
   if err != nil {
     ErrorResponse(w, err)
     return
   }
-  if err := s.d.RegisterCredentials(credential); err != nil {
+  if err := s.RegisterCredentials(credential); err != nil {
     ErrorResponse(w, err)
     return
   }
@@ -66,19 +66,19 @@ func (s *webserver) BeginLogin(w http.ResponseWriter, r *http.Request) {
 	// TODO prevent if not TLS
 
 	pass := r.PostFormValue("password")
-	if !s.d.Config.PasswordMatches(pass) {
+	if !s.cfg.PasswordMatches(pass) {
 		http.Error(w, "Invalid Password", http.StatusUnauthorized)
 		return
 	}
 
-  if len(s.d.Config.Credentials) == 0 {
+  if len(s.cfg.Credentials) == 0 {
     if err := s.setLoginCookie(w, r); err != nil {
       ErrorResponse(w, err)
     } else {
       JSONResponse(w, "OK")
     }
   } else {
-    options, session, err := s.w.BeginLogin(s.d.Config)
+    options, session, err := s.w.BeginLogin(s.cfg)
     if err != nil {
       ErrorResponse(w, err)
       return
@@ -90,7 +90,7 @@ func (s *webserver) BeginLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) FinishLogin(w http.ResponseWriter, r *http.Request) {
-  _, err := s.w.FinishLogin(s.d.Config, *s.authSession, r)
+  _, err := s.w.FinishLogin(s.cfg, *s.authSession, r)
   if err != nil {
     ErrorResponse(w, err)
     return

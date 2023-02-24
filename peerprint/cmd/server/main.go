@@ -13,7 +13,8 @@ import (
 )
 
 var (
-  configFlag = flag.String("cfg", "config.json", "Config path")
+  driverConfigFlag = flag.String("cfg", "driver_config.json", "Config path")
+  wwwConfigFlag = flag.String("cfg", "www_config.json", "Config path")
 
   // Status server flags
   wwwFlag      = flag.String("www", "localhost:0", "Address for hosting status page - set empty to disable")
