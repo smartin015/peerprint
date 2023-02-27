@@ -144,7 +144,8 @@ func (c *Discovery) discoverPeersMDNS(rendezvous string) {
 	// srv calls HandlePeerFound()
 	srv := mdns.NewMdnsService(c.h, rendezvous, c)
 	if err := srv.Start(); err != nil {
-		panic(err)
+    c.l.Error("MDNS: %v", err)
+    return
 	}
   select {
   case <-c.ctx.Done():
@@ -162,7 +163,8 @@ func (c *Discovery) discoverPeersDHT(rendezvous string) {
 	for {
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
-			panic(err)
+      c.l.Error("DHT: %v", err)
+      return
 		}
 		for peer := range peerChan {
 			c.HandlePeerFound(peer)

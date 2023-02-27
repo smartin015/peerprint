@@ -3,13 +3,13 @@ package driver
 import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/registry"
+  "github.com/smartin015/peerprint/p2pgit/pkg/transport"
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
   "google.golang.org/grpc/peer"
   "google.golang.org/grpc/status"
   "google.golang.org/grpc/codes"
   "google.golang.org/grpc/credentials"
   "context"
-  "sync"
 )
 
 type CommandServer struct {
@@ -22,6 +22,10 @@ func newCmdServer(d *Driver) *CommandServer {
 }
 
 func verifyPeer(ctx context.Context) error {
+  if v := ctx.Value("webauthn"); v != nil {
+    return nil // No need to verify requests already gated by www auth (see ../www/webauthn.go)
+  }
+
   p, ok := peer.FromContext(ctx)
   if !ok {
     return status.Error(codes.Unauthenticated, "no peer found")
@@ -58,7 +62,7 @@ func (s *CommandServer) GetId(ctx context.Context, req *pb.GetIDRequest) (*pb.Ge
 
 func (s *CommandServer) GetConnections(ctx context.Context, req *pb.GetConnectionsRequest) (*pb.GetConnectionsResponse, error) {
   return &pb.GetConnectionsResponse{
-    Networks: s.d.GetConfigs(true),
+    Networks: s.d.GetConnections(true),
   }, nil
 }
 
@@ -73,7 +77,7 @@ func (s *CommandServer) SetStatus(ctx context.Context, req *pb.SetStatusRequest)
 
 func (s *CommandServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.Ok, error) {
   if err := s.d.handleConnect(req); err != nil {
-    return nil, status.Errorf(codes.Internal, "Connect: %w", err)
+    return nil, status.Errorf(codes.Internal, "Connect: %v", err)
   } else {
     return &pb.Ok{}, nil
   }
@@ -81,7 +85,7 @@ func (s *CommandServer) Connect(ctx context.Context, req *pb.ConnectRequest) (*p
 
 func (s *CommandServer) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (*pb.Ok, error) {
   if err := s.d.handleDisconnect(req); err != nil {
-    return nil, status.Errorf(codes.Internal, "Disconnect: %w", err)
+    return nil, status.Errorf(codes.Internal, "Disconnect: %v", err)
   } else {
     return &pb.Ok{}, nil
   }
@@ -141,61 +145,39 @@ func (s *CommandServer) StreamEvents(req *pb.StreamEventsRequest, stream pb.Comm
 }
 
 func (s *CommandServer) StreamRecords(req *pb.StreamRecordsRequest, stream pb.Command_StreamRecordsServer) error {
-  inst, ok := s.d.inst[req.Network]
-  if !ok {
-    return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
-  }
+  return s.streamRecordsImpl(req, stream.Send, stream.Context())
+}
+func (s *CommandServer) streamRecordsImpl(req *pb.StreamRecordsRequest, send func(*pb.SignedRecord) error, ctx context.Context) error {
   ch := make(chan *pb.SignedRecord)
-  var cherr error
-  var wg sync.WaitGroup
-  wg.Add(1)
-  go func () {
-    defer wg.Done()
-    for v := range ch {
-      if err := stream.Send(v); err != nil {
-        cherr = err
-        return
-      }
+  return transport.SendEach[*pb.SignedRecord](func() error {
+    opts := []any{}
+    if req.Uuid != "" {
+      opts = append(opts, storage.WithUUID(req.Uuid))
     }
-  }()
-  opts := []any{}
-  if req.Uuid != "" {
-    opts = append(opts, storage.WithUUID(req.Uuid))
-  }
-  if err := inst.St.GetSignedRecords(stream.Context(), ch, opts...); err != nil {
-    return err
-  }
-  wg.Wait()
-  return cherr
+    if inst, ok := s.d.inst[req.Network]; !ok {
+      return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
+    } else {
+      return inst.St.GetSignedRecords(ctx, ch, opts...)
+    }
+  }, ch, send, ctx)
 }
 
 func (s *CommandServer) StreamCompletions(req *pb.StreamCompletionsRequest, stream pb.Command_StreamCompletionsServer) error {
-  inst, ok := s.d.inst[req.Network]
-  if !ok {
-    return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
-  }
+  return s.streamCompletionsImpl(req, stream.Send, stream.Context())
+}
+func (s *CommandServer) streamCompletionsImpl(req *pb.StreamCompletionsRequest, send func(*pb.SignedCompletion) error, ctx context.Context) error {
   ch := make(chan *pb.SignedCompletion)
-  var cherr error
-  var wg sync.WaitGroup
-  wg.Add(1)
-  go func () {
-    defer wg.Done()
-    for v := range ch {
-      if err := stream.Send(v); err != nil {
-        cherr = err
-        return
-      }
+  return transport.SendEach[*pb.SignedCompletion](func() error {
+    opts := []any{}
+    if req.Uuid != "" {
+      opts = append(opts, storage.WithUUID(req.Uuid))
     }
-  }()
-  opts := []any{}
-  if req.Uuid != "" {
-    opts = append(opts, storage.WithUUID(req.Uuid))
-  }
-  if err := inst.St.GetSignedCompletions(stream.Context(), ch, opts...); err != nil {
-    return err
-  }
-  wg.Wait()
-  return cherr
+    if inst, ok := s.d.inst[req.Network]; !ok {
+      return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
+    } else {
+      return inst.St.GetSignedCompletions(ctx, ch, opts...)
+    }
+  }, ch, send, ctx)
 }
 
 func (s *CommandServer) ResolveRegistry(local bool) *registry.Registry {
@@ -207,35 +189,24 @@ func (s *CommandServer) ResolveRegistry(local bool) *registry.Registry {
 }
 
 func (s *CommandServer) StreamNetworks(req *pb.StreamNetworksRequest, stream pb.Command_StreamNetworksServer) error {
+  return s.streamNetworksImpl(req, stream.Send, stream.Context())
+}
+func (s *CommandServer) streamNetworksImpl(req *pb.StreamNetworksRequest, send func(*pb.Network) error, ctx context.Context) error {
   ch := make(chan *pb.Network)
-  var cherr error
-  var wg sync.WaitGroup
-  wg.Add(1)
-  go func () {
-    defer wg.Done()
-    for v := range ch {
-      if err := stream.Send(v); err != nil {
-        cherr = err
-        return
-      }
-    }
-  }()
-  if err := s.ResolveRegistry(req.Local).GetRegistry(stream.Context(), ch, storage.RegistryTable, true); err != nil {
-    return err
-  }
-  wg.Wait()
-  return cherr
+  return transport.SendEach[*pb.Network](func() error {
+    return s.ResolveRegistry(req.Local).GetRegistry(ctx, ch, registry.RegistryTable, true)
+  }, ch, send, ctx)
 }
 
 func (s *CommandServer) Advertise(ctx context.Context, req *pb.AdvertiseRequest) (*pb.Ok, error) {
-  if err := s.ResolveRegistry(req.Local).UpsertConfig(req.Config, []byte(""), storage.RegistryTable); err != nil {
+  if err := s.ResolveRegistry(req.Local).UpsertConfig(req.Config, []byte(""), registry.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
 }
 
 func (s *CommandServer) StopAdvertising(ctx context.Context, req *pb.StopAdvertisingRequest) (*pb.Ok, error) {
-  if err := s.ResolveRegistry(req.Local).DeleteConfig(req.Uuid, storage.RegistryTable); err != nil {
+  if err := s.ResolveRegistry(req.Local).DeleteConfig(req.Uuid, registry.RegistryTable); err != nil {
     return nil, status.Errorf(codes.Internal, err.Error())
   }
   return &pb.Ok{}, nil
@@ -246,24 +217,13 @@ func (s *CommandServer) SyncLobby(ctx context.Context, req *pb.SyncLobbyRequest)
 }
 
 func (s *CommandServer) StreamAdvertisements(req *pb.StreamAdvertisementsRequest, stream pb.Command_StreamAdvertisementsServer) error {
+  return s.streamAdvertisementsImpl(req, stream.Send, stream.Context())
+}
+func (s *CommandServer) streamAdvertisementsImpl(req *pb.StreamAdvertisementsRequest, send func(*pb.Network) error, ctx context.Context) error {
   ch := make(chan *pb.Network)
-  var cherr error
-  var wg sync.WaitGroup
-  wg.Add(1)
-  go func () {
-    defer wg.Done()
-    for v := range ch {
-      if err := stream.Send(v); err != nil {
-        cherr = err
-        return
-      }
-    }
-  }()
-  if err := s.ResolveRegistry(req.Local).GetRegistry(stream.Context(), ch, storage.LobbyTable, true); err != nil {
-    return err
-  }
-  wg.Wait()
-  return cherr
+  return transport.SendEach[*pb.Network](func() error {
+    return s.ResolveRegistry(req.Local).GetRegistry(ctx, ch, registry.LobbyTable, true)
+  }, ch, send, ctx)
 }
 
 func (s *CommandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {

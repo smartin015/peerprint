@@ -11,7 +11,7 @@ type PeerPrintService struct {
   base *Server
 }
 
-func (s *Server) getService() interface{} {
+func (s *Server) getService() *PeerPrintService {
   return &PeerPrintService{
     base: s,
   }
@@ -33,10 +33,8 @@ func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest
 }
 
 func (s *PeerPrintService) GetStatus(ctx context.Context, req *pb.GetStatusRequest, rep *pb.PeerStatus) error {
-  rep = &pb.PeerStatus{
-    Name: s.base.opts.DisplayName,
-    Printers: []*pb.PrinterStatus{},
-  }
+  rep.Name = s.base.opts.DisplayName
+  rep.Printers = []*pb.PrinterStatus{}
   for _, ps := range s.base.printerStatuses {
     rep.Printers = append(rep.Printers, ps)
   }

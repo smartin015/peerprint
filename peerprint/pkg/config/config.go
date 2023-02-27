@@ -4,7 +4,6 @@ import (
   "gopkg.in/yaml.v3"
   "fmt"
   "os"
-  "log"
 )
 
 func Write(cfg interface{}, dest string) error {
@@ -12,8 +11,6 @@ func Write(cfg interface{}, dest string) error {
   if err != nil {
     return fmt.Errorf("marshal YAML: %w", err)
   }
-  log.Default().Printf("%s", data)
-
   f, err := os.Create(dest)
   if err != nil {
     return err
@@ -28,7 +25,6 @@ func Read[T any](cfg T, src string) error {
   if err != nil {
     return err
   }
-  log.Default().Printf("%s", data)
   if err := yaml.Unmarshal(data, cfg); err != nil {
     return fmt.Errorf("parse YAML: %w", err)
   }

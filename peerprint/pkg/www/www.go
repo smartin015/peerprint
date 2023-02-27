@@ -65,6 +65,7 @@ func New(l *log.Sublog, d *driver.Driver, opts *Opts) *webserver {
   if err := config.Read(cfg, opts.ConfigPath); err != nil {
     panic(err)
   }
+  d.l.Info("Config loaded - %d WebAuthn credential(s)", len(cfg.Credentials))
 
   return &webserver {
     l: l,

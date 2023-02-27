@@ -1,7 +1,6 @@
 package driver
 
 import (
-  "github.com/go-webauthn/webauthn/webauthn"
   "google.golang.org/grpc"
   "google.golang.org/protobuf/proto"
   "google.golang.org/grpc/credentials"
@@ -43,7 +42,7 @@ type Driver struct {
   RWorld *registry.Registry
   opts *Opts
   inst map[string]*Instance
-  Config *config.DriverConfig
+  Config *DriverConfig
   srv *grpc.Server
 }
 
@@ -54,28 +53,30 @@ func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pp
     RWorld: rWorld,
     opts: opts,
     inst: make(map[string]*Instance),
-    Config: config.New(),
+    Config: NewConfig(),
   }
 }
 
-func (d *Driver) Loop(ctx context.Context) error {
+func (d *Driver) Loop(ctx context.Context, defaultLAN bool) error {
   if _, err := os.Stat(d.opts.ConfigPath); os.IsNotExist(err) {
-    d.l.Info("No config found - initializing with basic LAN queue")
-    net := "LAN"
-    d.Config.Connections[net] = &pb.ConnectRequest{
-      Network: net,
-      Addr: "/ip4/0.0.0.0/tcp/0",
-      Rendezvous: net,
-      Psk: net,
-      Local: true,
-      DbPath: net + ".sqlite3",
-      PrivkeyPath: net + ".priv",
-      PubkeyPath: net + ".pub",
-      DisplayName: net,
-      ConnectTimeout: 0,
-      SyncPeriod: 60*5,
-      MaxRecordsPerPeer: 100,
-      MaxTrackedPeers: 100,
+    if defaultLAN {
+      d.l.Info("No config found - initializing with basic LAN queue")
+      net := "LAN"
+      d.Config.Connections[net] = &pb.ConnectRequest{
+        Network: net,
+        Addr: "/ip4/0.0.0.0/tcp/0",
+        Rendezvous: net,
+        Psk: net,
+        Local: true,
+        DbPath: net + ".sqlite3",
+        PrivkeyPath: net + ".priv",
+        PubkeyPath: net + ".pub",
+        DisplayName: net,
+        ConnectTimeout: 0,
+        SyncPeriod: 60*5,
+        MaxRecordsPerPeer: 100,
+        MaxTrackedPeers: 100,
+      }
     }
     if err := config.Write(d.Config, d.opts.ConfigPath); err != nil {
       return err
@@ -85,7 +86,6 @@ func (d *Driver) Loop(ctx context.Context) error {
       return fmt.Errorf("Read config: %w", err)
     }
   }
-  d.l.Info("Config loaded - %d WebAuthn credential(s)", len(d.Config.Credentials))
 
   d.l.Info("Initializing %d network(s)", len(d.Config.Connections))
   for _, n := range d.Config.Connections {
@@ -103,9 +103,9 @@ func (d *Driver) Loop(ctx context.Context) error {
 		return fmt.Errorf("Construct TLS config: %w", err)
 	}
   creds := credentials.NewTLS(tlsCfg)
-  d.srv := grpc.NewServer(grpc.Creds(creds))
+  d.srv = grpc.NewServer(grpc.Creds(creds))
   d.Command = newCmdServer(d)
-  pb.RegisterCommandServer(grpcServer, d.Command)
+  pb.RegisterCommandServer(d.srv, d.Command)
   lis, err := net.Listen("tcp", d.opts.Addr)
   if err != nil {
     return fmt.Errorf("Listen: %w", err)
@@ -148,7 +148,7 @@ func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
     // TODO use base context from driver
     go i.Run(context.Background())
     d.Config.Connections[v.Network] = v
-    conig.Write(d.Config, d.opts.ConfigPath)
+    config.Write(d.Config, d.opts.ConfigPath)
   }
   return nil
 }
@@ -160,6 +160,7 @@ func (d *Driver) handleDisconnect(v *pb.DisconnectRequest) error {
     delete(d.Config.Connections, v.Network)
     config.Write(d.Config, d.opts.ConfigPath)
     i.Destroy()
+    delete(d.inst, v.Network)
     return nil
   }
 }

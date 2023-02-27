@@ -63,7 +63,7 @@ func (t *TopicChannel) destroy() error {
   t.closed = true
   t.s.Cancel()
   // Note: do not close any owner-provided channels
-  close(t.sendChan)
+  // close(t.sendChan)
   return t.topic.Close()
 }
 

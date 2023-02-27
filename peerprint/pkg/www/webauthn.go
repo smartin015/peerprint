@@ -113,6 +113,6 @@ func (s *webserver) WithAuth(next http.HandlerFunc) http.HandlerFunc {
       http.Redirect(w, r, "/login", 303) // 303 "see other"
       return
     }
-    next.ServeHTTP(w, r)
+    next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), "webauthn", true)))
   })
 }

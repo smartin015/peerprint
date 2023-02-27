@@ -3,6 +3,7 @@ package transport
 
 import (
   "time"
+  "sync"
   "context"
   "fmt"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
@@ -290,4 +291,40 @@ func PeerToProtoAddrInfo(ai *peer.AddrInfo) *pb.AddrInfo {
     a.Addrs = append(a.Addrs, ma.String())
   }
   return a
+}
+
+func Collect[T any](fn func() error, cur <-chan T) ([]T, error) {
+  acc := []T{}
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func() {
+    defer wg.Done()
+    for c := range cur {
+      acc = append(acc, c)
+    }
+  }()
+  err := fn()
+  wg.Wait()
+  return acc, err
+}
+
+func SendEach[T any](fn func() error, cur <-chan T, send func(T) error, ctx context.Context) error {
+  var wg sync.WaitGroup
+  wg.Add(1)
+  var sendErr error
+  go func() {
+    defer wg.Done()
+    for c := range cur {
+      if sendErr = send(c); sendErr != nil {
+        return
+      }
+    }
+  }()
+  err := fn()
+  wg.Wait()
+  if err != nil {
+    return err
+  } else {
+    return sendErr
+  }
 }

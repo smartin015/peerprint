@@ -389,9 +389,6 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
       s.l.Info("Peer %s sponsors completer %s", shorten(peer), shorten(c.Completer))
     }
 
-    if err := s.s.SetSignedCompletion(sc); err != nil {
-      return fmt.Errorf("SetSignedCompletion: %w", err)
-    }
     // We can dump all other "speculative" completions as we assume the signer
     // is truthful about the state of their own record's completion
     // (they have no incentive to lie)
@@ -408,7 +405,7 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
     })
     return nil
   } else {
-    s.l.Info("Overheard peer (%s) completing approver (%s)'s record (%s) (ts %d)", shorten(peer), shorten(sr.Record.Approver), c.Uuid, c.Timestamp)
+    s.l.Info("Overheard peer (%s) working on approver (%s)'s record (%s) (ts %d)", shorten(peer), shorten(sr.Record.Approver), c.Uuid, c.Timestamp)
     return nil
   }
 }

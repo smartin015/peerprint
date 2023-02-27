@@ -62,9 +62,11 @@ func (s *Registry) Close() {
 }
 
 func (s *Registry) DeleteConfig(uuid string, tbl string) error {
-  _, err := s.db.Exec(`DELETE FROM ` + tbl + ` WHERE uuid=?`, uuid)
+  ret, err := s.db.Exec(`DELETE FROM ` + tbl + ` WHERE uuid=?`, uuid)
   if err != nil {
     return fmt.Errorf("DeleteConfig: %w", err)
+  } else if ra, err := ret.RowsAffected(); ra != 1 || err != nil {
+    return fmt.Errorf("%d rows affected when deleting config %q from table %q (%v)", ra, uuid, tbl, err)
   }
   return nil
 }

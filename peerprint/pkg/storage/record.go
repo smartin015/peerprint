@@ -85,7 +85,7 @@ func (s *sqlite3) ValidateRecord(r *pb.Record, peer string, maxRecordsPerPeer in
 
 func (s *sqlite3) SetSignedRecord(r *pb.SignedRecord) error {
   if r.Record == nil || r.Signature == nil || r.Record.Rank == nil {
-    return fmt.Errorf("One or more message fields are nil")
+    return fmt.Errorf("One or more message fields (Record, Signature, or Rank) are nil")
   }
 
   if _, err := s.db.Exec(`

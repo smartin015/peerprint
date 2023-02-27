@@ -11,19 +11,22 @@ import (
   "sync"
   "testing"
   "fmt"
+  "strings"
   "time"
   "context"
   "log"
   "os"
 )
 
-func NewTestServer(ctx context.Context, rendezvous string) *Server {
+func NewTestServer(t *testing.T, rendezvous string) *Server {
   // Creates a server with a random set of keys, inmemory storage,
   // and a local transport with MDNS
   logger := log.New(os.Stderr, "", 0)
   kpriv, kpub, err := crypto.GenKeyPair()
-  t, err := transport.New(&transport.Opts{
-    PubsubAddr: "/ip4/127.0.0.1/tcp/0",
+  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+  t.Cleanup(cancel)
+  tp, err := transport.New(&transport.Opts{
+    Addr: "/ip4/127.0.0.1/tcp/0",
     Rendezvous: rendezvous,
     Local: true,
     PrivKey: kpriv,
@@ -31,7 +34,7 @@ func NewTestServer(ctx context.Context, rendezvous string) *Server {
     PSK: crypto.LoadPSK("1234"),
     ConnectTimeout: 5*time.Second,
     Topics: []string{DefaultTopic},
-  }, ctx, logger)
+  }, ctx, pplog.New("srv", logger))
   if err != nil {
     panic(err)
   }
@@ -42,29 +45,28 @@ func NewTestServer(ctx context.Context, rendezvous string) *Server {
   id, err := peer.IDFromPublicKey(kpub)
   name := id.Pretty()
   name = name[len(name)-4:]
-  s := New(t, st, &Opts{
+  s := New(tp, st, &Opts{
     SyncPeriod: 1*time.Hour,
     DisplayName: name,
     MaxRecordsPerPeer: 10,
-    MaxCompletionsPerPeer: 10,
-    MaxTrackedPeers: 3,
+    MaxTrackedPeers: 10,
   }, pplog.New(name, logger))
   return s
 }
 
-type tsFunc func(context.Context, *Server, *Server) error
+type tsFunc func(*Server, *Server) error
 
-func twoServerTest(rendezvous string, setup tsFunc, test tsFunc) error {
-  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-  defer cancel()
-  s1 := NewTestServer(ctx, rendezvous)
-  s2 := NewTestServer(ctx, rendezvous)
+func twoServerTest(t *testing.T, rendezvous string, setup tsFunc, test tsFunc) error {
+  s1 := NewTestServer(t, rendezvous)
+  s2 := NewTestServer(t, rendezvous)
 
-  if err := setup(ctx, s1, s2); err != nil {
+  if err := setup(s1, s2); err != nil {
     return err
   }
 
   var wg sync.WaitGroup
+  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+  t.Cleanup(cancel)
   wg.Add(2)
   go func() {
     defer wg.Done()
@@ -79,7 +81,7 @@ func twoServerTest(rendezvous string, setup tsFunc, test tsFunc) error {
   case <-ctx.Done():
     return fmt.Errorf("Timeout before peers connected")
   default:
-    return test(ctx, s1, s2)
+    return test(s1, s2)
   }
 }
 
@@ -128,7 +130,7 @@ func getSRs(s storage.Interface) ([]*pb.SignedRecord, error) {
 }
 
 func TestIDAndShortID(t *testing.T) {
-  s1 := NewTestServer(context.Background(), "testid")
+  s1 := NewTestServer(t, "testid")
   sid := s1.ID()
   if err := peer.ID(sid).Validate(); err != nil {
     t.Errorf("Expected valid ID when extracting public key, got %v: %v", sid, err)
@@ -140,17 +142,17 @@ func TestIDAndShortID(t *testing.T) {
 }
 
 func TestGetService(t *testing.T) {
-  s1 := NewTestServer(context.Background(), "testid")
-  if srv := s1.GetService(); srv == nil {
+  s1 := NewTestServer(t, "testid")
+  if srv := s1.getService(); srv == nil {
     t.Errorf("service is nil")
   }
 }
 
 func TestConnectBasic(t *testing.T) {
   con := false
-  if err := twoServerTest("t1",
-    func(ctx context.Context, s1, s2 *Server) error {return nil},
-    func(ctx context.Context, s1, s2 *Server) error {
+  if err := twoServerTest(t, "t1",
+    func(s1, s2 *Server) error {return nil},
+    func(s1, s2 *Server) error {
       con = true
       return nil
     },
@@ -165,9 +167,9 @@ func TestConnectBasic(t *testing.T) {
 func TestIssueRecord(t *testing.T) {
   var sr *pb.SignedRecord
   var err error
-  if err := twoServerTest("TestIssueRecord",
-    func(ctx context.Context, s1, s2 *Server) error { return nil },
-    func(ctx context.Context, s1, s2 *Server) error {
+  if err := twoServerTest(t, "TestIssueRecord",
+    func(s1, s2 *Server) error { return nil },
+    func(s1, s2 *Server) error {
       sr, err = s1.IssueRecord(&pb.Record{
         Uuid: "record1",
         Approver: "otherpeer",
@@ -191,9 +193,9 @@ func TestIssueRecord(t *testing.T) {
 func TestIssueCompletion(t *testing.T) {
   var sc *pb.SignedCompletion
   var err error
-  if err := twoServerTest("TestIssueCompletion",
-    func(ctx context.Context, s1, s2 *Server) error { return nil },
-    func(ctx context.Context, s1, s2 *Server) error {
+  if err := twoServerTest(t, "TestIssueCompletion",
+    func(s1, s2 *Server) error { return nil },
+    func(s1, s2 *Server) error {
       sc, err = s1.IssueCompletion(&pb.Completion{
           Uuid: "completion1",
           Completer: "otherpeer",
@@ -213,32 +215,164 @@ func TestIssueCompletion(t *testing.T) {
   }
 }
 
-func TestOnUpdate(t *testing.T) {
-  var m proto.Message
-  var wg sync.WaitGroup
-  s1 := NewTestServer(context.Background(), "testid")
-  wg.Add(1)
-  go func() {
-    defer wg.Done()
-    m = <- s1.OnUpdate()
-  }()
-  s1.notify(&pb.Ok{})
-  wg.Wait()
-  if !proto.Equal(m, &pb.Ok{}) {
-    t.Errorf("Unexpected message: %v", m)
+func TestHandleCompletionInvalidSignature(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  if err := s1.handleCompletion("peer", &pb.Completion{}, &pb.Signature{Signer: s1.t.ID()}); err == nil || !strings.Contains(err.Error(), "invalid signature") {
+    t.Errorf("Want invalid sig error, got %v", err)
   }
 }
 
-func TestHandleCompletion(t *testing.T) {
-  t.Skip("TODO")
+func TestHandleCompletionValidateFail(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  s2 := NewTestServer(t, "rendy")
+
+  cmp := &pb.Completion{
+    Uuid: "foo",
+  }
+  sig, err := s2.t.Sign(cmp)
+  if err != nil {
+    panic(err)
+  }
+
+  if err := s1.handleCompletion("invalidpeer", cmp, &pb.Signature{Signer: s2.t.ID(), Data: sig}); err == nil || !strings.Contains(err.Error(), "validation") {
+    t.Errorf("Want validation error, got %v", err)
+  }
 }
 
-func TestHandleRecord(t *testing.T) {
-  t.Skip("TODO")
+func TestHandleCompletionInProgress(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  s2 := NewTestServer(t, "rendy")
+  if err := doHandleRecord(s1, s2); err != nil {
+    t.Fatalf("handleRecord error: %v", err)
+  }
+
+  cmp := &pb.Completion{
+    Uuid: "foo",
+    CompleterState: []byte("testing"),
+  }
+  sig, err := s2.t.Sign(cmp)
+  if err != nil {
+    panic(err)
+  }
+
+  if err := s1.handleCompletion("peer", cmp, &pb.Signature{Signer: s2.t.ID(), Data: sig}); err != nil {
+    t.Errorf("handleCompletion error: %v", err)
+  }
+}
+
+func numCmp(s *Server) int {
+  num := 0
+  ch := make(chan *pb.SignedCompletion)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func(){
+    defer wg.Done()
+    for range ch {
+      num++
+    }
+  }()
+  err := s.s.GetSignedCompletions(context.Background(), ch)
+  if err != nil {
+    panic(err)
+  }
+  wg.Wait()
+  return num
+}
+
+func TestHandleCompletionCollapses(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  s2 := NewTestServer(t, "rendy")
+  if err := doHandleRecord(s1, s2); err != nil {
+    t.Fatalf("handleRecord error: %v", err)
+  }
+
+  for i := 0; i < 5; i++ {
+    if err := s1.s.SetSignedCompletion(&pb.SignedCompletion{
+      Completion: &pb.Completion{
+        Uuid: "foo",
+        Completer: "bar",
+        CompleterState: []byte("asdf"),
+      },
+      Signature: &pb.Signature{
+        Signer: fmt.Sprintf("peer%d", i),
+        Data: []byte("123"),
+      },
+    }); err != nil {
+      panic(err)
+    }
+  }
+  if n := numCmp(s1); n != 5 {
+    t.Fatalf("Setup failure: want 5 completions got %d", n)
+  }
+
+  cmp := &pb.Completion{
+    Uuid: "foo",
+    CompleterState: []byte("testing"),
+  }
+  sig, err := s2.t.Sign(cmp)
+  if err != nil {
+    panic(err)
+  }
+
+  // Peer is signer is record approver,
+  // collapses completions
+  if err := s1.handleCompletion(s2.t.ID(), cmp, &pb.Signature{Signer: s2.t.ID(), Data: sig}); err != nil {
+    t.Errorf("handleCompletion error: %v", err)
+  }
+
+  if n := numCmp(s1); n != 1 {
+    t.Errorf("handleCompletion: want 1 stored completion, got %d", n)
+  }
+}
+
+func TestHandleRecordInvalidSignature(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  if err := s1.handleRecord("peer", &pb.Record{}, &pb.Signature{Signer: s1.t.ID()}); err == nil || !strings.Contains(err.Error(), "invalid signature") {
+    t.Errorf("Want invalid sig error, got %v", err)
+  }
+}
+
+func TestHandleRecordValidateFail(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  s2 := NewTestServer(t, "rendy")
+
+  rec := &pb.Record{
+    Uuid: "foo",
+    Approver: s2.t.ID(),
+  }
+  sig, err := s2.t.Sign(rec)
+  if err != nil {
+    panic(err)
+  }
+
+  if err := s1.handleRecord("invalidpeer", rec, &pb.Signature{Signer: s2.t.ID(), Data: sig}); err == nil || !strings.Contains(err.Error(), "validation") {
+    t.Errorf("Want validation error, got %v", err)
+  }
+}
+
+func doHandleRecord(s1, s2 *Server) error {
+  rec := &pb.Record{
+    Uuid: "foo",
+    Approver: s2.t.ID(),
+    Rank: &pb.Rank{},
+  }
+  sig, err := s2.t.Sign(rec)
+  if err != nil {
+    panic(err)
+  }
+  return s1.handleRecord(s2.t.ID(), rec, &pb.Signature{Signer: s2.t.ID(), Data: sig})
+}
+
+func TestHandleRecordOK(t *testing.T) {
+  s1 := NewTestServer(t, "rendy")
+  s2 := NewTestServer(t, "rendy")
+  if err := doHandleRecord(s1, s2); err != nil {
+    t.Errorf("handleRecord error: %v", err)
+  }
 }
 
 func TestGetSummary(t *testing.T) {
-  s1 := NewTestServer(context.Background(), "testid")
+  s1 := NewTestServer(t, "testid")
   if s := s1.GetSummary(); s == nil {
     t.Errorf("Expected summary, got nil")
   }
@@ -249,8 +383,8 @@ func TestSync(t *testing.T) {
   var sc *pb.SignedCompletion
   var err error
 
-  if err := twoServerTest("t1",
-    func(ctx context.Context, s1, s2 *Server) error {
+  if err := twoServerTest(t, "t1",
+    func(s1, s2 *Server) error {
       if sr, err = s2.IssueRecord(&pb.Record{
         Uuid: "record1",
         Approver: s2.ID(),
@@ -271,7 +405,7 @@ func TestSync(t *testing.T) {
       }
       return nil
     },
-    func(ctx context.Context, s1, s2 *Server) error {
+    func(s1, s2 *Server) error {
       // TODO some kind of synchronization needed here
       if srs, err := getSRs(s1.s); err != nil {
         t.Errorf("get srs: %v", err)
