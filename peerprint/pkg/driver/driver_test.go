@@ -11,34 +11,6 @@ import (
   pplog "github.com/smartin015/peerprint/p2pgit/pkg/log"
 )
 
-var logger = log.New(os.Stderr, "", 0)
-
-func NewTestDriver(t *testing.T) (*Driver) {
-  dir := t.TempDir()
-  ctx, done := context.WithCancel(context.Background())
-  t.Cleanup(done)
-  rlocal, err := registry.New(ctx, ":memory:", true, pplog.New("rLocal", logger))
-  if err != nil {
-    panic(err)
-  }
-  rworld, err := registry.New(ctx, ":memory:", true, pplog.New("rWorld", logger))
-  if err != nil {
-    panic(err)
-  }
-
-  d := New(&Opts{
-    Addr: "/ip4/127.0.0.1/tcp/0",
-    CertsDir: filepath.Join(dir, "certs"),
-    ServerCert: "srv.crt",
-    ServerKey: "srv.key",
-    RootCert: "root.crt",
-    ConfigPath: filepath.Join(dir, "config.yaml"),
-  }, rlocal, rworld, pplog.New("cmd", logger))
-  t.Cleanup(d.Destroy)
-  go d.Loop(ctx, false)
-  return d
-}
-
 func TestHandleConnectDisconnectAndGetters(t *testing.T) {
   d := newTestDriver(t)
 

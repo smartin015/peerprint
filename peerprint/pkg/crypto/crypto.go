@@ -182,6 +182,7 @@ func CASignedCert(ca *x509.Certificate, caPrivKey *rsa.PrivateKey, cname string)
     Subject: pkix.Name{
       CommonName: cname, 
     },
+    DNSNames: []string{"peerprint-server", "peerprint", "server"},
     IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
     NotBefore:    time.Now(),
     NotAfter:     time.Now().AddDate(10, 0, 0),
