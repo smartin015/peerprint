@@ -27,7 +27,7 @@ var (
 )
 
 type Opts struct {
-  Addr string
+  RPCAddr string
   CertsDir string
   ServerCert string
   ServerKey string
@@ -57,7 +57,7 @@ func New(opts *Opts, rLocal *registry.Registry, rWorld *registry.Registry, l *pp
   }
 }
 
-func (d *Driver) Loop(ctx context.Context, defaultLAN bool) error {
+func (d *Driver) Start(ctx context.Context, defaultLAN bool) error {
   if _, err := os.Stat(d.opts.ConfigPath); os.IsNotExist(err) {
     if defaultLAN {
       d.l.Info("No config found - initializing with basic LAN queue")
@@ -106,12 +106,13 @@ func (d *Driver) Loop(ctx context.Context, defaultLAN bool) error {
   d.srv = grpc.NewServer(grpc.Creds(creds))
   d.Command = newCmdServer(d)
   pb.RegisterCommandServer(d.srv, d.Command)
-  lis, err := net.Listen("tcp", d.opts.Addr)
+  lis, err := net.Listen("tcp", d.opts.RPCAddr)
   if err != nil {
     return fmt.Errorf("Listen: %w", err)
   }
-  d.l.Info("Command server listening on %s", d.opts.Addr)
-  return d.srv.Serve(lis)
+  d.l.Info("Command server listening on %s", d.opts.RPCAddr)
+  go d.srv.Serve(lis)
+  return nil
 }
 
 func (d *Driver) Destroy() {

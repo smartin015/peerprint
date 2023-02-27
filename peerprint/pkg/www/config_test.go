@@ -2,17 +2,18 @@ package www
 
 import (
   "testing"
+  "github.com/go-webauthn/webauthn/webauthn"
 )
 
 func TestDefaultPassword(t *testing.T) {
-  c := New()
+  c := NewConfig()
   if !c.PasswordMatches(DefaultPassword) {
     t.Errorf("want PasswordMatches(DefaultPassword) = true; got false")
   }
 }
 
 func TestSetPassword(t *testing.T) {
-  c := New()
+  c := NewConfig()
   c.SetPassword("testpass")
   if c.PasswordMatches(DefaultPassword) {
     t.Errorf("still matches default password after change")
@@ -32,7 +33,7 @@ func isZeroByteSlice(bb []byte) bool {
 }
 
 func TestWebAuthnInterface(t *testing.T) {
-  c := New()
+  c := NewConfig()
   if got := c.WebAuthnID(); isZeroByteSlice(got) {
     t.Errorf("got zero byte slice for ID")
   }

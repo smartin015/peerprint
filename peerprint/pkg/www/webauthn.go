@@ -2,6 +2,7 @@ package www
 
 import (
   "github.com/go-webauthn/webauthn/protocol"
+  "context"
   "fmt"
   "net/http"
 )

@@ -2,9 +2,9 @@ package www
 
 import (
   "strconv"
+  "context"
   "strings"
   "sync"
-  "context"
   "html/template"
   "time"
   "net/http"
@@ -13,6 +13,7 @@ import (
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/google/uuid"
   "github.com/smartin015/peerprint/p2pgit/pkg/storage"
+  "github.com/smartin015/peerprint/p2pgit/pkg/registry"
   "github.com/smartin015/peerprint/p2pgit/pkg/server"
   "github.com/smartin015/peerprint/p2pgit/pkg/driver"
 )
@@ -54,14 +55,14 @@ func (s *webserver) handleSyncLobby(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("failed to parse seconds"))
     return
   }
-  dt := time.Duration(d) * time.Second
+  ctx, _ := context.WithTimeout(context.Background(), time.Duration(d) * time.Second)
   go func() {
-    if err := s.d.RLocal.Run(dt); err != nil {
+    if err := s.d.RLocal.Run(ctx); err != nil {
       s.l.Error("Local sync: %s", err.Error())
     }
   }()
   go func() {
-    if err := s.d.RWorld.Run(dt); err != nil {
+    if err := s.d.RWorld.Run(ctx); err != nil {
       s.l.Error("Global sync: %s", err.Error())
     }
   }()
@@ -101,11 +102,11 @@ func (s *webserver) handleGetLobby(w http.ResponseWriter, r *http.Request) {
       }
     }
   }()
-  if err := s.d.RLocal.GetRegistry(r.Context(), cur, storage.LobbyTable, false); err != nil {
+  if err := s.d.RLocal.GetRegistry(r.Context(), cur, registry.LobbyTable, false); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
-  if err := s.d.RWorld.GetRegistry(r.Context(), cur, storage.LobbyTable, true); err != nil {
+  if err := s.d.RWorld.GetRegistry(r.Context(), cur, registry.LobbyTable, true); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -129,11 +130,11 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
       }
     }
   }()
-  if err := s.d.RLocal.GetRegistry(r.Context(), cur, storage.RegistryTable, false); err != nil {
+  if err := s.d.RLocal.GetRegistry(r.Context(), cur, registry.RegistryTable, false); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
-  if err := s.d.RWorld.GetRegistry(r.Context(), cur, storage.RegistryTable, true); err != nil {
+  if err := s.d.RWorld.GetRegistry(r.Context(), cur, registry.RegistryTable, true); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }
@@ -168,7 +169,7 @@ func (s *webserver) handleGetConn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[*storage.TimeProfile](s, w, r, func(context.Context, n *driver.Instance, cur chan *storage.TimeProfile) error {
+  streamingReadInstance[*storage.TimeProfile](s, w, r, func(n *driver.Instance, cur chan *storage.TimeProfile) error {
     return n.St.GetPeerTracking(r.Context(), cur)
   })
 }
@@ -332,7 +333,7 @@ func (s *webserver) handleNewRegistry(w http.ResponseWriter, r *http.Request) {
     Creator: get(r, "creator", "anonymous"),
     Created: time.Now().Unix(),
   }
-  if err := s.d.Command.ResolveRegistry(vs["local"] == "true").UpsertConfig(cfg, []byte(""), storage.RegistryTable); err != nil {
+  if err := s.d.Command.ResolveRegistry(vs["local"] == "true").UpsertConfig(cfg, []byte(""), registry.RegistryTable); err != nil {
     w.WriteHeader(500)
     w.Write([]byte(err.Error()))
   }

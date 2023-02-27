@@ -13,7 +13,7 @@ import (
 
 var logger = log.New(os.Stderr, "", 0)
 
-func newTestDriver(t *testing.T) (*Driver) {
+func NewTestDriver(t *testing.T) (*Driver) {
   dir := t.TempDir()
   ctx, done := context.WithCancel(context.Background())
   t.Cleanup(done)

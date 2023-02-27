@@ -3,6 +3,7 @@ package www
 import (
   "io/fs"
   "os"
+  "fmt"
   "context"
   "net"
   "net/http"
@@ -11,6 +12,7 @@ import (
   "encoding/json"
   "github.com/smartin015/peerprint/p2pgit/pkg/log"
   "github.com/smartin015/peerprint/p2pgit/pkg/driver"
+  "github.com/smartin015/peerprint/p2pgit/pkg/config"
   //"github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   "github.com/go-webauthn/webauthn/webauthn"
   "embed"
@@ -62,17 +64,19 @@ func New(l *log.Sublog, d *driver.Driver, opts *Opts) *webserver {
 	}
 
   cfg := NewConfig()
-  if err := config.Read(cfg, opts.ConfigPath); err != nil {
-    panic(err)
+  if _, err := os.Stat(opts.ConfigPath); !os.IsNotExist(err) {
+    if err := config.Read(cfg, opts.ConfigPath); err != nil {
+      panic(err)
+    }
+    l.Info("Config loaded - %d WebAuthn credential(s)", len(cfg.Credentials))
   }
-  d.l.Info("Config loaded - %d WebAuthn credential(s)", len(cfg.Credentials))
 
   return &webserver {
     l: l,
     d: d,
     f: f,
     fsh: http.FileServer(http.FS(f)),
-		cs: sessions.NewCookieStore(CookieStoreKey),
+		cs: sessions.NewCookieStore(opts.CookieStoreKey),
     cfg: cfg,
     cfgPath: opts.ConfigPath,
 		w: w,
@@ -186,7 +190,7 @@ func readInstance[M any](s *webserver, w http.ResponseWriter, r *http.Request, f
   }
 }
 
-func streamingReadInstance[M any](s *webserver, w http.ResponseWriter, r *http.Request, fn func(context.Context, *driver.Instance, chan M) error) {
+func streamingReadInstance[M any](s *webserver, w http.ResponseWriter, r *http.Request, fn func(*driver.Instance, chan M) error) {
   n := s.getInstance(r, w)
   if n == nil {
     return
@@ -217,7 +221,7 @@ func streamingReadInstance[M any](s *webserver, w http.ResponseWriter, r *http.R
 
 func (s *webserver) SetAdminPassAndSalt(p string) error {
   if p == "" {
-    return errors.New("No password given")
+    return fmt.Errorf("No password given")
   }
   if err := s.cfg.SetPassword(p); err != nil {
     return err

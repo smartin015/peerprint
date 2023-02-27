@@ -23,6 +23,7 @@ type Counters struct {
   OutboundExceeded int64
   Ok int64
   Other int64
+  Deadline int64
 }
 
 type Registry struct {
@@ -70,6 +71,13 @@ func (r *Registry) Run(ctx context.Context) error {
     return fmt.Errorf("Already running")
   }
   defer r.mut.Unlock()
+
+  if dl, ok := ctx.Deadline(); ok {
+    r.Counters.Deadline = dl.Unix()
+  } else {
+    r.Counters.Deadline = 0
+  }
+
   defer r.t.Destroy()
   s := NewServer(r.t, r, pplog.New("regsrv", r.l))
 
