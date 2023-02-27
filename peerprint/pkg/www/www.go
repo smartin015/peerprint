@@ -105,7 +105,7 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
   http.HandleFunc("/events", s.WithAuth(s.handleGetEvents))
   http.HandleFunc("/serverSummary", s.WithAuth(s.handleServerSummary))
   http.HandleFunc("/storageSummary", s.WithAuth(s.handleStorageSummary))
-  http.HandleFunc("/printers/location", s.WithAuth(s.handleGetPrinterLocations))
+  http.HandleFunc("/printers", s.WithAuth(s.handleGetPeerStatuses))
   http.HandleFunc("/printers/set_status", s.WithAuth(s.handleSetPrinterStatus))
 
   // Connection management

@@ -2,6 +2,7 @@ package server
 
 import (
   "context"
+  "sync"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/smartin015/peerprint/p2pgit/pkg/transport"
 	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
@@ -33,10 +34,15 @@ func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest
 }
 
 func (s *PeerPrintService) GetStatus(ctx context.Context, req *pb.GetStatusRequest, rep *pb.PeerStatus) error {
-  rep.Name = s.base.opts.DisplayName
-  rep.Printers = []*pb.PrinterStatus{}
-  for _, ps := range s.base.printerStatuses {
-    rep.Printers = append(rep.Printers, ps)
-  }
-  return nil
+  cur := make(chan *pb.PeerStatus)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func () {
+    defer wg.Done()
+    ps := <-cur
+    *rep = *ps
+  }()
+  err := s.base.s.GetPeerStatuses(ctx, cur, storage.WithSigner(s.base.ID()), storage.WithLimit(1)) // cur closed by impl
+  wg.Wait()
+  return err
 }

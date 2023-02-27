@@ -5,7 +5,12 @@
   </head>
   <body>
     <button data-bind="click: mkRecord">Create a record</button>
+    <button data-bind="click: setStatus">Update printer status</button>
 
+    <div data-bind="foreach: peers">
+      <div data-bind="text: JSON.stringify($data)"></div>
+    </div>
+    <hr/>
     <div data-bind="foreach: records">
       <div class="pt-3">
         <div data-bind="text: JSON.stringify($data)"></div>
@@ -21,9 +26,13 @@
       function AppViewModel() {
         var self = this;
         self.records = ko.observableArray([]);
+        self.peers = ko.observableArray([]);
         self.refresh = function() {
           $.get("/records", (data) => {
             self.records(data);
+          });
+          $.get("/peers", (data) => {
+            self.peers(data);
           });
         };
         self.refresh();
@@ -35,6 +44,12 @@
         };
         self.mkRecord = function() {
           $.get("/genRecord", (data) => {
+            console.log(data);
+            self.refresh();
+          });
+        }
+        self.setStatus = function() {
+          $.get("/setStatus", (data) => {
             console.log(data);
             self.refresh();
           });

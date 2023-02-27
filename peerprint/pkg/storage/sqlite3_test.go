@@ -38,6 +38,24 @@ func mustAddSR(db *sqlite3, uuid, signer string) *pb.SignedRecord {
   return sr
 }
 
+
+func pstatGet(db Interface, opts ...any) ([]*pb.PeerStatus, error) {
+  got := []*pb.PeerStatus{}
+  ch := make(chan *pb.PeerStatus)
+  var wg sync.WaitGroup
+  wg.Add(1)
+  go func(){
+    defer wg.Done()
+    for sr := range ch {
+      got = append(got, sr)
+    }
+  }()
+  err := db.GetPeerStatuses(context.Background(), ch, opts...)
+  wg.Wait()
+  return got, err
+}
+
+
 func recGet(db Interface, opts ...any) ([]*pb.SignedRecord, error) {
   got := []*pb.SignedRecord{}
   ch := make(chan *pb.SignedRecord)

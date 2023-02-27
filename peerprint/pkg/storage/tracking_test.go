@@ -2,18 +2,38 @@ package storage
 
 import (
   "testing"
+  pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 )
 
 func TestEventAppendGet(t *testing.T) {
   t.Skip("TODO");
 }
 
-func TestSetPeerStatus(t *testing.T) {
-  t.Skip("TODO");
-}
+func TestPeerStatusSetGet(t *testing.T) {
+  db := testingDB(t)
+  if got, err := pstatGet(db); err != nil || len(got) > 0 {
+    t.Errorf("GetPeerStatuses -> %v, %v want len()==0, nil", got, err)
+    return
+  }
 
-func TestGetPrinterLocations(t *testing.T) {
-  t.Skip("TODO");
+  want := &pb.PeerStatus{
+    Name: "testpeer",
+    Printers: []*pb.PrinterStatus{
+      &pb.PrinterStatus{Name:"p1"},
+      &pb.PrinterStatus{Name:"p2"},
+      &pb.PrinterStatus{Name:"p3"},
+    },
+  }
+  if err := db.SetPeerStatus("sid1", want); err != nil {
+    t.Errorf("SetPeerStatus(sid1): %v", err)
+  }
+  if err := db.SetPeerStatus("sid2", want); err != nil {
+    t.Errorf("SetPeerStatus(sid2): %v", err)
+  }
+
+  if got, err := pstatGet(db); err != nil || len(got) != 2 {
+    t.Errorf("Get: %v, %v, want len=2, nil", got, err)
+  }
 }
 
 func TestLogPeerCrawl(t *testing.T) {

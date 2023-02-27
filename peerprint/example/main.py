@@ -45,6 +45,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     continue
                 records.append(MessageToDict(r))
             self.wfile.write(self.handle_http(200, 'text/json', records))
+        elif self.path == "/peers":
+            peers = [MessageToDict(p) for p in server.cli.get_peers("LAN")]
+            self.wfile.write(self.handle_http(200, 'text/json', peers))
+        elif self.path == "/setStatus":
+            server.cli.set_status("LAN", name="virtual_printer", status="printing virtually and such", timestamp=int(time.time()))
+            self.wfile.write(self.handle_http(200, 'text/json', "ok"))
         elif self.path == "/genRecord":
             server.cli.set_record("LAN", uuid=str(uuid.uuid4()), approver="asdf", tags=["1","2","3"], manifest="man", created=123, rank=dict(num=0, den=0, gen=0))
             self.wfile.write(self.handle_http(200, 'text/json', "ok"))

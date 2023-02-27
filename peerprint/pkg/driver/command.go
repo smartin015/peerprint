@@ -10,6 +10,7 @@ import (
   "google.golang.org/grpc/codes"
   "google.golang.org/grpc/credentials"
   "context"
+  "time"
 )
 
 type CommandServer struct {
@@ -71,7 +72,9 @@ func (s *CommandServer) SetStatus(ctx context.Context, req *pb.SetStatusRequest)
   if !ok {
     return nil, status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
   }
-  inst.S.SetStatus(req.Status)
+  if err := inst.S.SetStatus(req.Status, true); err != nil {
+    return nil, status.Errorf(codes.Internal, "SetStatus: %v", err)
+  }
   return &pb.Ok{}, nil
 }
 
@@ -227,11 +230,15 @@ func (s *CommandServer) streamAdvertisementsImpl(req *pb.StreamAdvertisementsReq
 }
 
 func (s *CommandServer) StreamPeers(req *pb.StreamPeersRequest, stream pb.Command_StreamPeersServer) error {
-  s.d.l.Info("TODO handle StreamPeers")
-  return nil
-  /*
-  inst, ok := s.d.inst[req.Network]
-  if !ok {
-    return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
-  }*/
+  return s.streamPeersImpl(req, stream.Send, stream.Context())
+}
+func (s *CommandServer) streamPeersImpl(req *pb.StreamPeersRequest, send func(*pb.PeerStatus) error, ctx context.Context) error {
+  ch := make(chan *pb.PeerStatus)
+  return transport.SendEach[*pb.PeerStatus](func() error {
+    if inst, ok := s.d.inst[req.Network]; !ok {
+      return status.Errorf(codes.InvalidArgument, "Network not found: %s", req.Network)
+    } else {
+      return inst.St.GetPeerStatuses(ctx, ch, storage.AfterTimestamp(time.Now().Unix()-60*5))
+    }
+  }, ch, send, ctx)
 }

@@ -14,6 +14,7 @@ var (
 type WithSigner string
 type WithUUID string
 type WithLimit int
+type AfterTimestamp int64
 
 type DataPoint struct {
 	Timestamp int64
@@ -47,7 +48,7 @@ type Interface interface {
 
 	TrackPeer(signer string) error
   SetPeerStatus(peer string, status *pb.PeerStatus) error
-  GetPrinterLocations(context.Context, int64, chan<- *pb.Location) error
+  GetPeerStatuses(context.Context, chan<- *pb.PeerStatus, ...any) error
   LogPeerCrawl(peer string, ts int64) error
   GetPeerTracking(context.Context, chan<- *TimeProfile, ...any) error
   GetPeerTimeline(context.Context, chan<- *DataPoint, ...any) error

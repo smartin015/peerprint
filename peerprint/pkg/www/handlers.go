@@ -141,9 +141,9 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
   wg.Wait()
 }
 
-func (s *webserver) handleGetPrinterLocations(w http.ResponseWriter, r *http.Request) {
-  streamingReadInstance[*pb.Location](s, w, r, func(n *driver.Instance, cur chan *pb.Location) error {
-    return n.St.GetPrinterLocations(r.Context(), time.Now().Unix() - 60*60*24, cur)
+func (s *webserver) handleGetPeerStatuses(w http.ResponseWriter, r *http.Request) {
+  streamingReadInstance[*pb.PeerStatus](s, w, r, func(n *driver.Instance, cur chan *pb.PeerStatus) error {
+    return n.St.GetPeerStatuses(r.Context(), cur, storage.AfterTimestamp(time.Now().Unix() - 60*60*24))
   })
 }
 

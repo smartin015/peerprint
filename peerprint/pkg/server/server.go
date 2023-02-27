@@ -30,7 +30,7 @@ type Interface interface {
   ID() string
   ShortID() string
   RegisterEventCallback(cb EventCallback)
-  SetStatus(*pb.PrinterStatus)
+  SetStatus(ps *pb.PrinterStatus, publish bool) error
 
   IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
   IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
@@ -57,7 +57,6 @@ type Server struct {
   lastSyncStart time.Time
   lastSyncEnd time.Time
   lastMsg time.Time
-  printerStatuses map[string]*pb.PrinterStatus
 }
 
 func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) *Server {
@@ -72,7 +71,6 @@ func New(t transport.Interface, s storage.Interface, opts *Opts, l *log.Sublog) 
     lastSyncStart: time.Unix(0,0),
     lastSyncEnd: time.Unix(0,0),
     lastMsg: time.Unix(0,0),
-    printerStatuses: make(map[string]*pb.PrinterStatus),
   }
   if err := t.Register(PeerPrintProtocol, srv.getService()); err != nil {
     panic(fmt.Errorf("Failed to register RPC server: %w", err))
@@ -323,6 +321,10 @@ func (s *Server) Run(ctx context.Context) {
             if err := s.handleRecord(tm.Peer, v.Record, v.Signature); err != nil {
               s.l.Error("handleRecord(%s, _, _): %v", shorten(tm.Peer), err)
             }
+          case *pb.PeerStatus:
+            if err := s.handlePeerStatus(tm.Peer, v); err != nil {
+              s.l.Error("handlePeerStatus(%s, _): %v", shorten(tm.Peer), err)
+            }
         }
         s.notify(&pb.Event{Name:"message"})
       case <-s.syncTicker.C:
@@ -410,6 +412,11 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
   }
 }
 
+func (s *Server) handlePeerStatus(peer string, ps *pb.PeerStatus) error {
+  s.l.Info("Received peer status for %s", shorten(peer))
+  return s.s.SetPeerStatus(peer, ps)
+}
+
 func (s *Server) handleRecord(peer string, r *pb.Record, sig *pb.Signature) error {
   if ok, err := s.t.Verify(r, sig.Signer, sig.Data); err != nil {
     return err
@@ -446,7 +453,19 @@ func (s *Server) GetSummary() *Summary {
   }
 }
 
-func (s *Server) SetStatus(status *pb.PrinterStatus) {
+func (s *Server) SetStatus(status *pb.PrinterStatus, publish bool) error {
   status.Timestamp = time.Now().Unix()
-  s.printerStatuses[status.Name] = status
+  ps := &pb.PeerStatus{
+    Name: s.opts.DisplayName,
+    Printers: []*pb.PrinterStatus{status}, // merges into DB
+  }
+  if err := s.s.SetPeerStatus(s.ID(), ps); err != nil {
+    return fmt.Errorf("save status: %w", err)
+  }
+  if publish {
+    if err := s.t.Publish(DefaultTopic, ps); err != nil {
+      return fmt.Errorf("publish status: %w", err)
+    }
+  }
+  return nil
 }

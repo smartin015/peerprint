@@ -83,7 +83,7 @@ class P2PClient():
     
     def set_status(self, network, **kwargs):
         # See pkg/proto/peers.proto: message PeerStatus
-        self._call("SetStatus", cpb.SetStatusRequest(network=network, status=ppb.PeerStatus(**kwargs)))
+        self._call("SetStatus", cpb.SetStatusRequest(network=network, status=ppb.PrinterStatus(**kwargs)))
 
     def crawl(self, network, batch_size=50, timeout_millis=20*1000, restart_crawl=False):
         # See pkg/proto/state.proto: message Completion
