@@ -142,8 +142,8 @@ class SetStatusRequest(_message.Message):
     NETWORK_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
     network: str
-    status: _peers_pb2.PrinterStatus
-    def __init__(self, network: _Optional[str] = ..., status: _Optional[_Union[_peers_pb2.PrinterStatus, _Mapping]] = ...) -> None: ...
+    status: _peers_pb2.ClientStatus
+    def __init__(self, network: _Optional[str] = ..., status: _Optional[_Union[_peers_pb2.ClientStatus, _Mapping]] = ...) -> None: ...
 
 class StopAdvertisingRequest(_message.Message):
     __slots__ = ["local", "uuid"]

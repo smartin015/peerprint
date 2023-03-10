@@ -10,18 +10,21 @@ message Location {
 }
 
 message PeerStatus {
-  string name = 1; // Human-readable name of this server
-  repeated PrinterStatus printers = 4; 
+  string name = 1; // Human-readable name of this server/peer
+  repeated ClientStatus clients = 2; 
 }
 
-message PrinterStatus {
-  string name = 1; // Human-readable name of this peer
-  string active_record = 2;
-  string active_unit = 3; // What part of the record are they working on
-  string status = 4; // State of the machine or machines backing this peer
-  string profile = 5; // Description of the peer's cababilities (profile enum)
+// Clients connect to the Network via Peers (Servers). 
+// This allows us to see the detailed state of all workers conneted to
+// a specific server.
+message ClientStatus {
+  string name = 1; // Human-readable
+  string active_record = 2; // What record they they are working on
+  string active_unit = 3; // What part of the record they are working on
+  string status = 4; // Short display string of current status
+  string profile = 5; // Description of the client's cababilities
 
-  // Approximate location of this printer
+  // Approximate location
   Location location = 6;
 
   int64 timestamp = 7; // When was this status given

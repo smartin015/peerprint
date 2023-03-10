@@ -18,10 +18,10 @@ func TestPeerStatusSetGet(t *testing.T) {
 
   want := &pb.PeerStatus{
     Name: "testpeer",
-    Printers: []*pb.PrinterStatus{
-      &pb.PrinterStatus{Name:"p1"},
-      &pb.PrinterStatus{Name:"p2"},
-      &pb.PrinterStatus{Name:"p3"},
+    Clients: []*pb.ClientStatus{
+      &pb.ClientStatus{Name:"p1"},
+      &pb.ClientStatus{Name:"p2"},
+      &pb.ClientStatus{Name:"p3"},
     },
   }
   if err := db.SetPeerStatus("sid1", want); err != nil {

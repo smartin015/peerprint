@@ -105,8 +105,8 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
   http.HandleFunc("/events", s.WithAuth(s.handleGetEvents))
   http.HandleFunc("/serverSummary", s.WithAuth(s.handleServerSummary))
   http.HandleFunc("/storageSummary", s.WithAuth(s.handleStorageSummary))
-  http.HandleFunc("/printers", s.WithAuth(s.handleGetPeerStatuses))
-  http.HandleFunc("/printers/set_status", s.WithAuth(s.handleSetPrinterStatus))
+  http.HandleFunc("/clients", s.WithAuth(s.handleGetPeerStatuses))
+  http.HandleFunc("/clients/set_status", s.WithAuth(s.handleSetClientStatus))
 
   // Connection management
   http.HandleFunc("/connection", s.WithAuth(s.handleGetConn))
@@ -117,6 +117,7 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
   http.HandleFunc("/registry/delete", s.WithAuth(s.handleDeleteRegistry))
   http.HandleFunc("/lobby", s.WithAuth(s.handleGetLobby))
   http.HandleFunc("/lobby/sync", s.WithAuth(s.handleSyncLobby))
+  http.HandleFunc("/server/sync", s.WithAuth(s.handleManualSync))
 
   // Server settings
   http.HandleFunc("/password/new", s.WithAuth(s.handleNewPassword))

@@ -77,6 +77,14 @@ class Fileshare():
         os.makedirs(basedir, exist_ok=True)
         self.proc = IPFS.start_daemon()
 
+    def is_ready(self):
+        try:
+            IPFS.check()
+            return True
+        except Exception as e:
+            pass
+        return False
+
     def post(self, manifest: dict, filepaths: dict) -> str:
         with tempfile.NamedTemporaryFile(suffix='.gjob', dir=self.basedir, delete=False) as tf:
             pack_job(manifest, filepaths, tf.name)

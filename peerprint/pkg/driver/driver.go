@@ -33,6 +33,7 @@ type Opts struct {
   ServerKey string
   RootCert string
   ConfigPath string
+  ConnectionDir string
 }
 
 type Driver struct {
@@ -73,7 +74,8 @@ func (d *Driver) Start(ctx context.Context, defaultLAN bool) error {
         PubkeyPath: net + ".pub",
         DisplayName: net,
         ConnectTimeout: 0,
-        SyncPeriod: 60*5,
+        // TODO SyncPeriod: 60*5,
+        SyncPeriod: 30,
         MaxRecordsPerPeer: 100,
         MaxTrackedPeers: 100,
       }
@@ -142,7 +144,7 @@ func (d *Driver) GetInstance(name string) *Instance {
 }
 
 func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
-  if i, err := NewInstance(v, pplog.New(v.Network, d.l)); err != nil {
+  if i, err := NewInstance(v, d.opts.ConnectionDir, pplog.New(v.Network, d.l)); err != nil {
     return fmt.Errorf("Connect: %w", err)
   } else {
     d.inst[v.Network] = i

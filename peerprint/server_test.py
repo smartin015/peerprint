@@ -29,6 +29,9 @@ class MockServer:
     def is_ready(self):
         return True
 
+    def get_id(self, network):
+        return "MOCKID"
+
     def set_status(self, network, **kwargs):
         self.status = kwargs
 

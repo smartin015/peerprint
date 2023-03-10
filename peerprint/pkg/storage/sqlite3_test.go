@@ -88,6 +88,8 @@ func mustAddSCT(db *sqlite3, uuid, signer, completer string, with_timestamp bool
       Completion: &pb.Completion{
         Uuid: uuid,
         Completer: completer,
+        Client: "testclient",
+        Type: pb.CompletionType_ACQUIRE,
         CompleterState: []byte("testing"),
         Timestamp: ts,
       },

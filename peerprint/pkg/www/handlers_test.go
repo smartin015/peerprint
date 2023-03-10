@@ -162,7 +162,7 @@ func TestHandleConnNewDelete(t *testing.T) {
   // DeleteConn
 }
 
-func TestHandleSetPrinterStatus(t *testing.T) {
+func TestHandleSetClientStatus(t *testing.T) {
   t.Skip("TODO");
 }
 

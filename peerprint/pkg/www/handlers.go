@@ -48,6 +48,12 @@ func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
   })
 }
 
+func (s *webserver) handleManualSync(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  n.S.Sync(context.Background())
+  w.Write([]byte("ok"))
+}
+
 func (s *webserver) handleSyncLobby(w http.ResponseWriter, r *http.Request) {
   d, err := strconv.Atoi(r.FormValue("seconds"))
   if err != nil {
@@ -206,7 +212,7 @@ func (s *webserver) handleDeleteConn(w http.ResponseWriter, r *http.Request) {
   }
 }
 
-func (s *webserver) handleSetPrinterStatus(w http.ResponseWriter, r *http.Request) {
+func (s *webserver) handleSetClientStatus(w http.ResponseWriter, r *http.Request) {
   vs := make(map[string]string)
   for _, k := range []string{"network", "name", "active_record", "active_unit", "status", "profile", "latitude", "longitude"} {
     if v := r.PostFormValue(k); v == "" {
@@ -228,8 +234,8 @@ func (s *webserver) handleSetPrinterStatus(w http.ResponseWriter, r *http.Reques
   latF, _ := strconv.ParseFloat(vs["latitude"], 64)
   if err := n.St.SetPeerStatus(vs["network"], &pb.PeerStatus{
       Name: "testpeer",
-      Printers: []*pb.PrinterStatus{
-        &pb.PrinterStatus{
+      Clients: []*pb.ClientStatus{
+        &pb.ClientStatus{
           Name: vs["name"],
           ActiveRecord: vs["active_record"],
           ActiveUnit: vs["active_unit"],

@@ -243,8 +243,15 @@ func(t *Transport) Stream(ctx context.Context, pid peer.ID, method string, req i
   return nil
 }
 
+// GetPeers returns peers with populated address information
 func (t *Transport) GetPeers() peer.IDSlice {
-  return t.host.Peerstore().Peers()
+  pp := []peer.ID{}
+  for _, p := range t.host.Peerstore().Peers() {
+    if a := t.host.Peerstore().PeerInfo(p); len(a.Addrs) != 0 {
+      pp = append(pp, p)
+    }
+  }
+  return pp
 }
 func (t *Transport) GetPeerAddresses() []*peer.AddrInfo {
   aa := []*peer.AddrInfo{}

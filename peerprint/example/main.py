@@ -5,6 +5,7 @@ from pathlib import Path
 from google.protobuf.json_format import MessageToDict
 import time
 import http.server
+import tempfile 
 import os
 import uuid
 import socketserver
@@ -12,17 +13,20 @@ import urllib.parse
 import logging
 import json
 import re
-import fastapi
 
 TOMBSTONE = json.dumps("TOMBSTONE").encode("utf8")
 
-WWW_PORT = 8000
-SERVER_ADDR = "0.0.0.0:5000"
+WWW_PORT = 5000
+SERVER_ADDR = "0.0.0.0:8000"
 STATUS_PAGE_ADDR ="0.0.0.0:8334"
 
 server=None
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        root = str(Path(__file__).parent / "static")
+        print("Serving root dir:", root)
+        super().__init__(*args, directory=root, **kwargs)
 
     def handle_http(self, status, content_type, data):
         self.send_response(status)
@@ -52,7 +56,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             server.cli.set_status("LAN", name="virtual_printer", status="printing virtually and such", timestamp=int(time.time()))
             self.wfile.write(self.handle_http(200, 'text/json', "ok"))
         elif self.path == "/genRecord":
-            server.cli.set_record("LAN", uuid=str(uuid.uuid4()), approver="asdf", tags=["1","2","3"], manifest="man", created=123, rank=dict(num=0, den=0, gen=0))
+            srv_id = server.cli.get_id("LAN")
+            server.cli.set_record("LAN", uuid=str(uuid.uuid4()), approver=srv_id, tags=["1","2","3"], manifest="man", created=123, rank=dict(num=0, den=0, gen=0))
             self.wfile.write(self.handle_http(200, 'text/json', "ok"))
         elif self.path.startswith("/delRecord"):
             rid = self.path.split("=")[1]
@@ -70,19 +75,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return super().do_GET()
 
 class ExampleServer():
-    def __init__(self):
+    def __init__(self, cfgDir, certsDir):
         self._logger = logging.getLogger()
-        certsDir = Path(__file__).parent / "certs"
-        if not certsDir.exists():
-            certsDir.mkdir()
-
         self.srv = P2PServer(
             P2PServerOpts(
                   addr=SERVER_ADDR,
                   www=STATUS_PAGE_ADDR,
-                  driverCfg=str(Path(__file__).parent / "driver.yaml"),
-                  wwwCfg=str(Path(__file__).parent / "www.yaml"),
-                  certsDir=str(certsDir),
+                  driverCfg=str(Path(cfgDir).parent / "driver.yaml"),
+                  wwwCfg=str(Path(cfgDir).parent / "www.yaml"),
+                  certsDir=certsDir,
                   serverCert="server.crt",
                   serverKey="server.key",
                   rootCert="rootCA.crt",
@@ -99,6 +100,7 @@ class ExampleServer():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    server = ExampleServer()
-    server.run()
+    with tempfile.TemporaryDirectory() as tmpDir:
+        server = ExampleServer(tmpDir, tmpDir)
+        server.run()
     

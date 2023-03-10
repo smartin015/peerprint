@@ -22,6 +22,8 @@ CREATE TABLE records (
 CREATE TABLE completions (
   uuid TEXT NOT NULL,
   completer TEXT NOT NULL,
+  client TEXT NOT NULL,
+  type INT NOT NULL,
   completer_state BLOB NOT NULL,
   timestamp INT NOT NULL,
 
@@ -48,10 +50,10 @@ CREATE TABLE peers (
 	last_seen INT NOT NULL
 );
  
-CREATE TABLE printers (
+CREATE TABLE clients (
   server TEXT NOT NULL,
-  name TEXT NOT NULL,
   server_name TEXT NOT NULL,
+  name TEXT NOT NULL,
   active_record TEXT NOT NULL,
   active_unit TEXT NOT NULL,
   status TEXT NOT NULL,

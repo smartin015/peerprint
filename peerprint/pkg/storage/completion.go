@@ -15,6 +15,8 @@ func scanSignedCompletion(r scannable, result *pb.SignedCompletion) error {
   return r.Scan(
     &result.Completion.Uuid,
     &result.Completion.Completer,
+    &result.Completion.Client,
+    &result.Completion.Type,
     &result.Completion.CompleterState,
     &result.Completion.Timestamp,
     &result.Signature.Signer,
@@ -55,9 +57,17 @@ func (s *sqlite3) SetSignedCompletion(g *pb.SignedCompletion) error {
     return fmt.Errorf("One or more message fields are nil")
   }
   _, err := s.db.Exec(`
-    INSERT OR REPLACE INTO "completions" (uuid, completer, completer_state, timestamp, signer, signature)
-    VALUES (?, ?, ?, ?, ?, ?);
-  `, g.Completion.Uuid, g.Completion.Completer, g.Completion.CompleterState, g.Completion.Timestamp, g.Signature.Signer, g.Signature.Data)
+    INSERT OR REPLACE INTO "completions" (uuid, completer, client, type, completer_state, timestamp, signer, signature)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+  `,
+    g.Completion.Uuid,
+    g.Completion.Completer,
+    g.Completion.Client,
+    g.Completion.Type,
+    g.Completion.CompleterState,
+    g.Completion.Timestamp,
+    g.Signature.Signer,
+    g.Signature.Data)
 	if err != nil {
 		return fmt.Errorf("insert completion: %w", err)
 	}
@@ -78,9 +88,13 @@ func (s *sqlite3) GetSignedCompletions(ctx context.Context, cur chan<- *pb.Signe
   limit := -1
   for _, opt := range opts {
     switch v := opt.(type) {
-    case WithSigner:
-      where = append(where,  "signer=?")
-      args = append(args, string(v))
+    case WithSigners:
+      qq := []string{}
+      for _, signer := range v {
+        args = append(args, signer)
+        qq = append(qq, "?")
+      }
+      where = append(where,  fmt.Sprintf("signer IN (%s)", strings.Join(qq, ",")))
     case WithUUID:
       where = append(where,  "uuid=?")
       args = append(args, string(v))

@@ -3,6 +3,7 @@ package server
 import (
   "context"
   "sync"
+  "fmt"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
 	"github.com/smartin015/peerprint/p2pgit/pkg/transport"
 	"github.com/smartin015/peerprint/p2pgit/pkg/storage"
@@ -18,12 +19,22 @@ func (s *Server) getService() *PeerPrintService {
   }
 }
 
-func (s *PeerPrintService) GetSignedRecords(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedRecord) error {
-  return s.base.s.GetSignedRecords(ctx, repChan, storage.WithLimit(1000), storage.WithSigner(s.base.ID())) // repChan closed by impl
+func (s *PeerPrintService) GetSignedRecords(ctx context.Context, reqChan <-chan string, repChan chan<- *pb.SignedRecord) error {
+  select {
+  case peer := <- reqChan:
+    return s.base.s.GetSignedRecords(ctx, repChan, storage.WithLimit(1000), storage.WithSigners([]string{s.base.ID(), peer})) // repChan closed by impl
+  case <- ctx.Done():
+    return fmt.Errorf("Context timeout")
+  }
 }
 
-func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-chan struct{}, repChan chan<- *pb.SignedCompletion) error {
-  return s.base.s.GetSignedCompletions(ctx, repChan, storage.WithSigner(s.base.ID()), storage.WithLimit(1000)) // repChan closed by impl
+func (s *PeerPrintService) GetSignedCompletions(ctx context.Context, reqChan <-chan string, repChan chan<- *pb.SignedCompletion) error {
+  select {
+  case peer := <- reqChan:
+    return s.base.s.GetSignedCompletions(ctx, repChan, storage.WithSigners([]string{s.base.ID(), peer}), storage.WithLimit(1000)) // repChan closed by impl
+  case <- ctx.Done():
+    return fmt.Errorf("Context timeout")
+  }
 }
 
 func (s *PeerPrintService) GetPeers(ctx context.Context, req *pb.GetPeersRequest, rep *pb.GetPeersResponse) error {
@@ -39,10 +50,12 @@ func (s *PeerPrintService) GetStatus(ctx context.Context, req *pb.GetStatusReque
   wg.Add(1)
   go func () {
     defer wg.Done()
-    ps := <-cur
-    *rep = *ps
+    ps, ok := <-cur
+    if ok && ps != nil {
+      *rep = *ps
+    }
   }()
-  err := s.base.s.GetPeerStatuses(ctx, cur, storage.WithSigner(s.base.ID()), storage.WithLimit(1)) // cur closed by impl
+  err := s.base.s.GetPeerStatuses(ctx, cur, storage.WithSigners([]string{s.base.ID()}), storage.WithLimit(1)) // cur closed by impl
   wg.Wait()
   return err
 }

@@ -21,11 +21,12 @@ var (
   wwwConfigFlag = flag.String("wwwCfg", "www.yaml", "Config path")
 
   // Registry server flags
-  regDBWorldFlag = flag.String("regdbworld", "world_registry.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
-  regDBLocalFlag = flag.String("regdblocal", "local_registry.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
+  regDBWorldFlag = flag.String("regDBWorld", "registry_world.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
+  regDBLocalFlag = flag.String("regDBLocal", "registry_local.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
 
   // Command server flags
   driverConfigFlag = flag.String("driverCfg", "driver.www", "Config path")
+  connDirFlag = flag.String("connDir", ".", "Base directory for server connection files (configs, DBs etc)")
   addrFlag = flag.String("addr", "localhost:0", "Address for command service")
   certsDirFlag = flag.String("certsDir", "", "Path to certificate directory; used to identify peers in gRPC communications between clients and server, and for HTTPS serving")
   serverCertFlag = flag.String("serverCert", "server.crt", "Filename for server certificate in certsDir; if one does not exist, a self-signed cert is created")
@@ -98,6 +99,7 @@ func main() {
     ServerKey: *serverKeyFlag,
     RootCert: *rootCertFlag,
     ConfigPath: *driverConfigFlag,
+    ConnectionDir: *connDirFlag,
   }, rLocal, rWorld, pplog.New("driver", logger))
 
 

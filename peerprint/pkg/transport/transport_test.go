@@ -36,3 +36,7 @@ func TestSignVerify(t *testing.T) {
     t.Errorf("Verify = %v, %v; want true, nil", valid, err)
   }
 }
+
+func TestGetPeersMixedAddrs(t *testing.T) {
+  t.Skip("TODO verify peers without addrs are excluded from peer list")
+}

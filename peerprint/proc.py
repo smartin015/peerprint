@@ -15,16 +15,18 @@ class ProcessOptsBase():
 @dataclass
 class ServerProcessOpts(ProcessOptsBase):
     # See cmd/server/main.go for flag defs and defaults
+    addr: str = None
+    certsDir: str = None
+    connDir: str = None
+    driverCfg: str = None
+    rootCert: str = None
+    regDBLocal: str = None
+    regDBWorld: str = None
+    serverCert: str = None
+    serverKey: str = None
     www: str = None
     wwwCfg: str = None
     wwwDir: str = None
-
-    driverCfg: str = None
-    addr: str = None
-    certsDir: str = None
-    serverCert: str = None
-    serverKey: str = None
-    rootCert: str = None
 
 
 class IPFSDaemonProcess():

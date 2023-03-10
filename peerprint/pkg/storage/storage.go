@@ -11,7 +11,7 @@ var (
   handler Interface
 )
 
-type WithSigner string
+type WithSigners []string
 type WithUUID string
 type WithLimit int
 type AfterTimestamp int64

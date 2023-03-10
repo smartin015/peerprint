@@ -5,13 +5,13 @@ import (
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
   "testing"
   "context"
-  "sync"
   "fmt"
 )
 
 func TestGetSignedRecordsNone(t *testing.T) {
   s1 := NewTestServer(t, "rendy")
-  req := make(chan struct{})
+  req := make(chan string, 1)
+  req <- "asdf"
   defer close(req)
   rep := make(chan *pb.SignedRecord) // Closed by receiver
   srs, err := transport.Collect[*pb.SignedRecord](func() error {
@@ -32,7 +32,8 @@ func TestGetSignedRecordsSome(t *testing.T) {
     Rank: &pb.Rank{},
   }, false)
 
-  req := make(chan struct{})
+  req := make(chan string, 1)
+  req <- "asdf"
   defer close(req)
   rep := make(chan *pb.SignedRecord) // Closed by receiver
   srs, err := transport.Collect[*pb.SignedRecord](func() error {
@@ -48,7 +49,8 @@ func TestGetSignedRecordsSome(t *testing.T) {
 
 func TestGetSignedCompletionsNone(t *testing.T) {
   s1 := NewTestServer(t, "rendy")
-  req := make(chan struct{})
+  req := make(chan string, 1)
+  req <- "asdf"
   defer close(req)
   rep := make(chan *pb.SignedCompletion) // Closed by receiver
   srs, err := transport.Collect[*pb.SignedCompletion](func() error {
@@ -69,7 +71,8 @@ func TestGetSignedCompletionsSome(t *testing.T) {
     CompleterState: []byte("test"),
   }, false)
 
-  req := make(chan struct{})
+  req := make(chan string, 1)
+  req <- "asdf"
   defer close(req)
   rep := make(chan *pb.SignedCompletion) // Closed by receiver
   srs, err := transport.Collect[*pb.SignedCompletion](func() error {
@@ -103,14 +106,14 @@ func TestGetPeers(t *testing.T) {
 
 func TestGetStatus(t *testing.T) {
   s1 := NewTestServer(t, "rendy")
-  s1.SetStatus(&pb.PrinterStatus{
+  s1.SetStatus(&pb.ClientStatus{
     Name: "testprinter",
-  })
+  }, false)
   rep := &pb.PeerStatus{}
   if err := s1.getService().GetStatus(context.Background(), &pb.GetStatusRequest{}, rep); err != nil {
     t.Errorf("GetStatus error: %v", err)
   }
-  if len(rep.Printers) != 1 || rep.Printers[0].Name != "testprinter" {
+  if len(rep.Clients) != 1 || rep.Clients[0].Name != "testprinter" {
     t.Errorf("Want PeerStatus with testprinter, got %v", rep)
   }
 }

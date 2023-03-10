@@ -81,7 +81,7 @@ func (c *Discovery) Run() {
 func (c *Discovery) bootstrapPeer(peer peer.AddrInfo, wg *sync.WaitGroup) {
   defer wg.Done()
   if err := c.h.Connect(c.ctx, peer); err != nil {
-    c.l.Warning("Bootstrap: %s\n", err)
+    c.l.Warning("Bootstrap (%s): %s\n", peer.ID, err)
   }
 }
 
@@ -98,6 +98,7 @@ func (c *Discovery) initDHT() *dht.IpfsDHT {
 		panic(err)
 	}
 	var wg sync.WaitGroup
+  c.l.Info("Bootstrapping %d peers", len(bootstrapPeers))
 	for _, peer := range bootstrapPeers {
 		wg.Add(1)
 		go c.bootstrapPeer(peer, &wg)

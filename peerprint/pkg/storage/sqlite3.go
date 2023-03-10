@@ -106,7 +106,7 @@ func (s *sqlite3) medianInt64(tbl, col string) int64 {
 func (s *sqlite3) GetSummary() (*Summary, []error) {
 	ts := []TableStat{}
   errs := []error{}
-  for _, tbl := range []string{"records", "completions", "events", "peers", "census"} {
+  for _, tbl := range []string{"records", "completions", "events", "peers", "census", "clients"} {
 		n:= int64(-1)
     if err := s.db.QueryRow("SELECT COUNT(*) FROM " + tbl + ";").Scan(&n); err != nil {
       errs = append(errs, fmt.Errorf("get count for %s: %w", tbl, err))

@@ -30,7 +30,7 @@ type Interface interface {
   ID() string
   ShortID() string
   RegisterEventCallback(cb EventCallback)
-  SetStatus(ps *pb.PrinterStatus, publish bool) error
+  SetStatus(ps *pb.ClientStatus, publish bool) error
 
   IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, error)
   IssueCompletion(g *pb.Completion, publish bool) (*pb.SignedCompletion, error)
@@ -151,12 +151,14 @@ func (s *Server) IssueRecord(r *pb.Record, publish bool) (*pb.SignedRecord, erro
 }
 
 func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
-  req := make(chan struct{}); close(req)
+  req := make(chan string, 1)
+  req <- s.ID()
+  close(req)
   rep := make(chan *pb.SignedRecord, 5) // Closed by Stream
   n := 0
   go func () {
     if err := s.t.Stream(ctx, p, "GetSignedRecords", req, rep); err != nil {
-      s.l.Error("syncRecords(): %+v", err)
+      s.l.Error("syncRecords(): GetSignedRecords(): %+v", err)
       return
     }
   }()
@@ -177,9 +179,12 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
       // Only accept records that are signed by this peer and where
       // the approver and signer are both the peer. This prevents
       // us from blindly trusting our peer to tell us about other peers.
-      if v.Signature.Signer != p.String() || v.Record.Approver != v.Signature.Signer {
+      // Also accept our own signed records for data backfill purposes
+      if (v.Signature.Signer != p.String() && v.Signature.Signer != s.ID()) || v.Record.Approver != v.Signature.Signer {
         s.l.Warning("syncRecords(): mismatch peer/signer/approver: %s/%s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Record.Approver))
       }
+
+      // TODO should we prevent setting signed records if the created timestamp is earlier than the current version?
 
       if err := s.s.SetSignedRecord(v); err != nil {
         s.l.Error("syncRecords() SetSignedRecord(%v): %v", v, err)
@@ -194,12 +199,14 @@ func (s *Server) syncRecords(ctx context.Context, p peer.ID) int {
 }
 
 func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
-  req := make(chan struct{}); close(req)
+  req := make(chan string, 1)
+  req <- s.ID()
+  close(req)
   rep := make(chan *pb.SignedCompletion, 5) // Closed by Stream
   n := 0
   go func () {
     if err := s.t.Stream(ctx, p, "GetSignedCompletions", req, rep); err != nil {
-      s.l.Error("syncCompletions(): %+v", err)
+      s.l.Error("syncCompletions() GetSignedCompletions(): %+v", err)
       return
     }
   }()
@@ -217,10 +224,12 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
         s.l.Warning("syncCompletions(): ingnoring completion %s with invalid signature", pretty(v))
         continue
       }
-      // Only accept completions that are signed by this peer and where
-      // the completer and signer are both the peer. This prevents
+      // Only accept completions that are signed by the peer and where
+      // the completer and signer match. This prevents
       // us from blindly trusting our peer to tell us about other peers.
-      if v.Signature.Signer != p.String() || v.Completion.Completer != v.Signature.Signer {
+      // Self-issued completions signed by us are also accepted to
+      // allow for data recovery.
+      if (v.Signature.Signer != p.String() && v.Signature.Signer != s.ID()) || v.Completion.Completer != v.Signature.Signer {
         s.l.Warning("syncCompletions(): peer %s passed record with non-matching signer/completer %s/%s", shorten(p.String()), shorten(v.Signature.Signer), shorten(v.Completion.Completer))
         continue
       }
@@ -413,7 +422,8 @@ func (s *Server) handleCompletion(peer string, c *pb.Completion, sig *pb.Signatu
 }
 
 func (s *Server) handlePeerStatus(peer string, ps *pb.PeerStatus) error {
-  s.l.Info("Received peer status for %s", shorten(peer))
+  // This is noisy
+  // s.l.Info("Received peer status for %s", shorten(peer))
   return s.s.SetPeerStatus(peer, ps)
 }
 
@@ -453,11 +463,11 @@ func (s *Server) GetSummary() *Summary {
   }
 }
 
-func (s *Server) SetStatus(status *pb.PrinterStatus, publish bool) error {
+func (s *Server) SetStatus(status *pb.ClientStatus, publish bool) error {
   status.Timestamp = time.Now().Unix()
   ps := &pb.PeerStatus{
     Name: s.opts.DisplayName,
-    Printers: []*pb.PrinterStatus{status}, // merges into DB
+    Clients: []*pb.ClientStatus{status}, // merges into DB
   }
   if err := s.s.SetPeerStatus(s.ID(), ps); err != nil {
     return fmt.Errorf("save status: %w", err)

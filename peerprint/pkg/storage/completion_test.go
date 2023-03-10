@@ -45,7 +45,7 @@ func TestSignedCompletionsSetGet(t *testing.T) {
     want = mustAddSC(db, fmt.Sprintf("signer%d", i), fmt.Sprintf("completer%d", i))
   }
   // Restrict signer lookup
-  if got, err := cmpGet(db, WithSigner("signer1")); err != nil || len(got) != 1 || !proto.Equal(got[0], want) {
+  if got, err := cmpGet(db, WithSigners([]{"signer1"})); err != nil || len(got) != 1 || !proto.Equal(got[0], want) {
     t.Errorf("Get: %v, %v, want %v, nil", got, err, want)
   }
 }

@@ -1,5 +1,8 @@
 import grpc
 from pathlib import Path
+import time
+from enum import IntEnum
+from google.protobuf.json_format import MessageToDict
 import peerprint.pkg.proto.command_pb2_grpc as command_grpc
 import peerprint.pkg.proto.state_pb2 as spb
 import peerprint.pkg.proto.peers_pb2 as ppb
@@ -10,18 +13,31 @@ RpcError = grpc.RpcError
 # See scripts/cert_gen.py - must match common name of server cert
 GRPC_OPT = (('grpc.ssl_target_name_override', 'peerprint-server'),)
 
+class CompletionType(IntEnum):
+    UNKNOWN = spb.UNKNOWN_COMPLETION_TYPE
+    ACQUIRE = spb.ACQUIRE
+    RELEASE = spb.RELEASE
+    TOMBSTONE = spb.TOMBSTONE
+
 class P2PClient():
     def __init__(self, addr, certsDir, logger):
         self._addr = addr
         self._logger = logger
 
-        with open(Path(certsDir)/ 'rootCA.crt', 'rb') as f:
+        rootPath = Path(certsDir)/ 'rootCA.crt'
+        keyPath = Path(certsDir)/ 'client1.key'
+        certPath = Path(certsDir)/ 'client1.crt'
+        while not rootPath.exists() or not keyPath.exists() or not certPath.exists():
+            self._logger.debug("Waiting for certificate files to exist...")
+            time.sleep(5.0)
+
+        with open(rootPath, 'rb') as f:
             rootcert = f.read()
             assert(len(rootcert) > 0)
-        with open(Path(certsDir)/ 'client1.key', 'rb') as f:
+        with open(keyPath, 'rb') as f:
             privkey = f.read()
             assert(len(privkey) > 0)
-        with open(Path(certsDir)/ 'client1.crt', 'rb') as f:
+        with open(certPath, 'rb') as f:
             certchain = f.read()
             assert(len(certchain) > 0)
 
@@ -43,7 +59,7 @@ class P2PClient():
                 yield msg 
 
     def is_ready(self):
-        return self._proc is not None and self._proc.is_running()
+        return self.ping()
 
     # ==== command service methods ====
     
@@ -83,15 +99,23 @@ class P2PClient():
     
     def set_status(self, network, **kwargs):
         # See pkg/proto/peers.proto: message PeerStatus
-        self._call("SetStatus", cpb.SetStatusRequest(network=network, status=ppb.PrinterStatus(**kwargs)))
+        self._call("SetStatus", cpb.SetStatusRequest(network=network, status=ppb.ClientStatus(**kwargs)))
 
     def crawl(self, network, batch_size=50, timeout_millis=20*1000, restart_crawl=False):
         # See pkg/proto/state.proto: message Completion
         rep = self._call("Crawl", cpb.CrawlRequest(network=network, batch_size=batch_size, restart_rawl=restart_crawl, timeout_millis=timeout_millis))
 
     def stream_events(self, network):
-        for v in self._stream("StreamEvents", cpb.StreamEventsRequest(network=network)):
-            yield v
+        try:
+            for v in self._stream("StreamEvents", cpb.StreamEventsRequest(network=network)):
+                yield v
+        except grpc._channel._MultiThreadedRendezvous as e:
+            # Socket closed error occurs on Ctrl+C; shorten the exception
+            # into a simple debug log so it doesn't clog up the console
+            if e.code() == grpc.StatusCode.UNAVAILABLE and 'Socket closed' in e.details():
+                self._logger.debug("Event stream socket closed")
+            else:
+                raise
 
     def get_networks(self):
         for v in self._stream("StreamNetworks", cpb.StreamNetworksRequest()):
@@ -99,7 +123,7 @@ class P2PClient():
 
     def get_peers(self, network):
         for v in self._stream("StreamPeers", cpb.StreamPeersRequest(network=network)):
-            yield v
+            yield MessageToDict(v) # Convert to dict here as it's almost always json serialized
 
     def get_records(self, network, uuid=None):
         for v in self._stream("StreamRecords", cpb.StreamRecordsRequest(network=network, uuid=uuid)):

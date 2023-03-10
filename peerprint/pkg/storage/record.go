@@ -123,9 +123,13 @@ func (s *sqlite3) GetSignedRecords(ctx context.Context, cur chan<- *pb.SignedRec
   limit := -1
   for _, opt := range opts {
     switch v := opt.(type) {
-    case WithSigner:
-      where = append(where,  "signer=?")
-      args = append(args, string(v))
+    case WithSigners:
+      qq := []string{}
+      for _, signer := range v {
+        args = append(args, signer)
+        qq = append(qq, "?")
+      }
+      where = append(where,  fmt.Sprintf("signer IN (%s)", strings.Join(qq, ",")))
     case WithUUID:
       where = append(where,  "uuid=?")
       args = append(args, string(v))

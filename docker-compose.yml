@@ -5,8 +5,8 @@ x-base: &base
     context: .
   command: python3 -m peerprint.server --debug --base_dir=/volume
   ports:
-    - "8334:8334" # status http server
-    - "8000:8000" # example webserver
+    - "8336:8334" # status http server
+    - "8002:8000" # example webserver
   volumes:
     - "/tmp:/tmp" #enable IPC comms for debugging
 
@@ -16,20 +16,26 @@ services:
       context: .
     command: /bin/bash
     ports:
-      - "8334:8334" # status http server
-      - "8000:8000" # example webserver
+      - "8336:8334" # status http server
+      - "8002:8000" # example webserver
     volumes:
       - "./:/volume"
       - "/tmp:/tmp"
     working_dir: "/volume"
   server1:
     <<: *base
+    ports:
+      - "8334:8334" # status http server
+      - "8000:8000" # example webserver
     volumes: 
-      - "./peerprint/networking/testdata/server1/:/volume"
+      - "./:/peerprint"
   server2:
     <<: *base
+    ports:
+      - "8335:8334" # status http server
+      - "8001:8000" # example webserver
     volumes: 
-      - "./peerprint/networking/testdata/server2/:/volume"
+      - "./:/peerprint"
   cli:
     <<: *base
     command: python3 -m peerprint.cli --base_dir=/volume

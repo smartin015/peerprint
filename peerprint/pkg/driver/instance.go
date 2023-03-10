@@ -1,6 +1,8 @@
 package driver
 
 import (
+  "path"
+  "path/filepath"
 	"github.com/libp2p/go-libp2p/core/peer"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "github.com/smartin015/peerprint/p2pgit/pkg/transport"
@@ -28,10 +30,14 @@ type Instance struct {
   cancel context.CancelFunc
 }
 
-func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
+func safeJoin(base string, tail string) string {
+  return filepath.Join(base, filepath.FromSlash(path.Clean("/"+strings.Trim(tail, "/"))))
+}
+
+func NewInstance(v *pb.ConnectRequest, baseDir string, l *pplog.Sublog) (*Instance, error) {
   var st storage.Interface
   var err error
-  st, err = storage.NewSqlite3(v.DbPath)
+  st, err = storage.NewSqlite3(safeJoin(baseDir, v.DbPath))
   if err != nil {
     return nil, fmt.Errorf("Error initializing DB: %w", err)
   }
@@ -50,7 +56,9 @@ func NewInstance(v *pb.ConnectRequest, l *pplog.Sublog) (*Instance, error) {
       panic(fmt.Errorf("Error generating ephemeral keys: %w", err))
     }
   } else {
-    kpriv, kpub, err = crypto.LoadOrGenerateKeys(v.PrivkeyPath, v.PubkeyPath)
+    kpriv, kpub, err = crypto.LoadOrGenerateKeys(
+      safeJoin(baseDir, v.PrivkeyPath),
+      safeJoin(baseDir, v.PubkeyPath))
     if err != nil {
       panic(fmt.Errorf("Error loading keys: %w", err))
     }

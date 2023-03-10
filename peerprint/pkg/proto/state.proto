@@ -45,9 +45,18 @@ message SignedCompletion {
   Signature signature = 2;
 }
 
+enum CompletionType {
+  UNKNOWN_COMPLETION_TYPE = 0;
+  TOMBSTONE = 1;
+  ACQUIRE = 2;
+  RELEASE = 3;
+}
+
 message Completion {
-  string uuid = 1;  
-  string completer = 3;
-  int64 timestamp = 4;
-  bytes completer_state = 5;
+  string uuid = 1; // Matches Record ID
+  string completer = 2; // Peer ID
+  string client = 3; // Display name of client that issued the completion
+  CompletionType type = 4;
+  bytes completer_state = 5; // Opaque to PeerPrint; use for implementation specific metadata
+  int64 timestamp = 6;
 }

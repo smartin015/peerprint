@@ -87,7 +87,7 @@ function AppViewModel(hash) {
   };
 
   self.updateGeo = function() {
-    self._streamingGet("/printers/location", {instance: self.selectedInstance()}, self.geo.update);
+    self._streamingGet("/clients/location", {instance: self.selectedInstance()}, self.geo.update);
   };
 
   self.setStatus = function() {
@@ -96,7 +96,7 @@ function AppViewModel(hash) {
           return obj;
     }, {});
     $("#newconn input").each(function(i,v){v.value = ""});
-    $.post("/printers/set_status", data).done((data) => {
+    $.post("/clients/set_status", data).done((data) => {
 			self.showToast("Success", "Connection created");
 			self.gotoTab("conns")
     }).fail(() => {
@@ -117,6 +117,12 @@ function AppViewModel(hash) {
   self.updateEvents = function() {
     self._streamingGet("/events", {instance: self.selectedInstance()}, self.events);
   };
+  self.syncManual = function() {
+    $.getJSON("/server/sync", {}, function() {
+			self.showToast("Success", "Synced with other peers");
+      self.updateStorageSummary();
+    });
+  }
   self.syncLobby = function() {
     $.getJSON("/lobby/sync", {seconds: 60}, function() {
       console.log("lobby sync'd");

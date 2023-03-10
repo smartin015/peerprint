@@ -44,12 +44,12 @@ func (s *sqlite3) GetEvents(ctx context.Context, cur chan<- DBEvent, limit int) 
 }
 
 func (s *sqlite3) SetPeerStatus(peer string, status *pb.PeerStatus) error {
-  for _, p := range status.Printers {
+  for _, p := range status.Clients {
     if p.Location == nil {
       p.Location = &pb.Location{} // Prevent nil access
     }
     _, err := s.db.Exec(`
-      INSERT OR REPLACE INTO printers (server, server_name, name, active_record, active_unit, status, profile, latitude, longitude, timestamp) VALUES (
+      INSERT OR REPLACE INTO clients (server, server_name, name, active_record, active_unit, status, profile, latitude, longitude, timestamp) VALUES (
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, peer, status.Name, p.Name, p.ActiveRecord, p.ActiveUnit, p.Status, p.Profile, p.Location.Latitude, p.Location.Longitude, p.Timestamp)
     if err != nil {
@@ -59,7 +59,7 @@ func (s *sqlite3) SetPeerStatus(peer string, status *pb.PeerStatus) error {
   return nil
 }
 
-func scanPrinter(r scannable, serverId *string, serverName *string, result *pb.PrinterStatus) error {
+func scanPrinter(r scannable, serverId *string, serverName *string, result *pb.ClientStatus) error {
   result.Location = &pb.Location{}
   return r.Scan(
     serverId,
@@ -85,16 +85,20 @@ func (s *sqlite3) GetPeerStatuses(ctx context.Context, cur chan<- *pb.PeerStatus
     case AfterTimestamp:
       where = append(where,  "timestamp>?")
       args = append(args, int64(v))
-    case WithSigner:
-      where = append(where, "server=?")
-      args = append(args, string(v))
+    case WithSigners:
+      qq := []string{}
+      for _, signer := range v {
+        args = append(args, signer)
+        qq = append(qq, "?")
+      }
+      where = append(where,  fmt.Sprintf("server IN (%s)", strings.Join(qq, ",")))
     case WithLimit:
       limit = int(v)
     default:
       return fmt.Errorf("GetPeerStatuses received invalid option: %v", opt)
     }
   }
-  q := `SELECT * FROM "printers" `
+  q := `SELECT * FROM "clients" `
   if len(where) > 0 {
     q += "WHERE " + strings.Join(where, " AND ")
   }
@@ -107,7 +111,7 @@ func (s *sqlite3) GetPeerStatuses(ctx context.Context, cur chan<- *pb.PeerStatus
     return fmt.Errorf("GetPeerStatuses SELECT: %w", err)
   }
   defer rows.Close()
-  acc := &pb.PeerStatus{Printers: []*pb.PrinterStatus{}}
+  acc := &pb.PeerStatus{Clients: []*pb.ClientStatus{}}
   curSid := ""
   for rows.Next() {
     select {
@@ -116,20 +120,20 @@ func (s *sqlite3) GetPeerStatuses(ctx context.Context, cur chan<- *pb.PeerStatus
     default:
     }
     sid := ""
-    ps := &pb.PrinterStatus{}
+    ps := &pb.ClientStatus{}
     if err := scanPrinter(rows, &sid, &acc.Name, ps); err != nil {
       return fmt.Errorf("GetPrinterLocations scan: %w", err)
     } else if sid == curSid {
-      acc.Printers = append(acc.Printers, ps)
+      acc.Clients = append(acc.Clients, ps)
     } else {
       if curSid != "" {
         cur<- acc
       }
-      acc = &pb.PeerStatus{Printers: []*pb.PrinterStatus{ps}}
+      acc = &pb.PeerStatus{Clients: []*pb.ClientStatus{ps}}
       curSid = sid
     }
   }
-  if len(acc.Printers) != 0 {
+  if len(acc.Clients) != 0 {
     cur<- acc
   }
   return nil
