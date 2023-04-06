@@ -30,6 +30,7 @@ type Discovery struct {
 	h            host.Host
 	onReady      chan bool
 	PeerDiscovered chan peer.AddrInfo
+  discoveredPeers map[string]struct{}
   connect bool
   l *log.Sublog
   method Method
@@ -50,6 +51,7 @@ func New(ctx context.Context, m Method, h host.Host, rendezvous string, connect_
 		h:            h,
 		onReady:      make(chan bool),
 		PeerDiscovered:      make(chan peer.AddrInfo, PeerDiscoverChanSize),
+    discoveredPeers: make(map[string]struct{}),
     rendezvous: rendezvous,
     connect: connect_on_discover,
     method: m,
@@ -57,6 +59,7 @@ func New(ctx context.Context, m Method, h host.Host, rendezvous string, connect_
 	}
 
   if bootstrapPeers == nil {
+    // TODO check if this is any different than DefaultBootstrapPeers
     bootstrapPeers = dht.GetDefaultBootstrapPeerAddrInfos()
   }
 
@@ -82,6 +85,8 @@ func (c *Discovery) bootstrapPeer(peer peer.AddrInfo, wg *sync.WaitGroup) {
   defer wg.Done()
   if err := c.h.Connect(c.ctx, peer); err != nil {
     c.l.Warning("Bootstrap (%s): %s\n", peer.ID, err)
+  } else {
+    c.l.Info("Connected to bootstrap peer %s", peer.ID)
   }
 }
 
@@ -94,6 +99,7 @@ func (c *Discovery) initDHT() *dht.IpfsDHT {
 	if err != nil {
 		panic(err)
 	}
+  c.l.Info("Bootstrapping DHT background thread")
 	if err = kademliaDHT.Bootstrap(c.ctx); err != nil {
 		panic(err)
 	}
@@ -112,20 +118,22 @@ func (c *Discovery) HandlePeerFound(p peer.AddrInfo) {
 	if p.ID == c.h.ID() {
 		return // No self connection
 	}
-  if len(p.Addrs) == 0 {
-    return // Don't add unreachable peers
+  if _, ok := c.discoveredPeers[p.ID.String()]; ok {
+    return
   }
+
+  c.discoveredPeers[p.ID.String()] = struct{}{}
   if c.connect {
     err := c.h.Connect(c.ctx, p)
     if err != nil {
-      c.l.Println("Failed connecting to ", p.ID.Pretty(), ", error:", err)
+      c.l.Println("Couldn't connect to: ", p.ID.Pretty(), ", error:", err)
     } else {
       c.l.Println("Connected to:", p.ID.Pretty())
       c.notify(p)
     }
-  } else if len(c.h.Peerstore().Addrs(p.ID)) == 0 {
+  } else {
     c.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-    //c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
+    c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
     c.notify(p)
   }
 }
@@ -156,16 +164,17 @@ func (c *Discovery) discoverPeersMDNS(rendezvous string) {
 
 func (c *Discovery) discoverPeersDHT(rendezvous string) {
 	kademliaDHT := c.initDHT()
+
+  c.l.Info("DHT initialized; beginning advertisement with rendezvous %s", rendezvous)
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(c.ctx, routingDiscovery, rendezvous)
 
 	// Look for others who have announced and attempt to connect to them
-	c.l.Println("Searching for peers...")
 	for {
 		peerChan, err := routingDiscovery.FindPeers(c.ctx, rendezvous)
 		if err != nil {
       c.l.Error("DHT: %v", err)
-      return
+      continue
 		}
 		for peer := range peerChan {
 			c.HandlePeerFound(peer)

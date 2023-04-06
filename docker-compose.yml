@@ -22,6 +22,15 @@ services:
       - "./:/volume"
       - "/tmp:/tmp"
     working_dir: "/volume"
+  devhost:
+    build: 
+      context: .
+    command: /bin/bash
+    network_mode: host
+    volumes:
+      - "./:/volume"
+      - "/tmp:/tmp"
+    working_dir: "/volume"
   server1:
     <<: *base
     ports:
