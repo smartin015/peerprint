@@ -125,7 +125,7 @@ func (c *Discovery) HandlePeerFound(p peer.AddrInfo) {
     }
   } else if len(c.h.Peerstore().Addrs(p.ID)) == 0 {
     c.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-    // c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
+    //c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
     c.notify(p)
   }
 }
