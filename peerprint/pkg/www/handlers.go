@@ -174,7 +174,7 @@ func (s *webserver) handleGetConn(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func (s *webserver) handleGetPeerLogs(w http.ResponseWriter, r *http.Request) {
+func (s *webserver) handleGetPeerTracking(w http.ResponseWriter, r *http.Request) {
   streamingReadInstance[*storage.TimeProfile](s, w, r, func(n *driver.Instance, cur chan *storage.TimeProfile) error {
     return n.St.GetPeerTracking(r.Context(), cur)
   })
@@ -281,6 +281,8 @@ func (s *webserver) handleNewConn(w http.ResponseWriter, r *http.Request) {
     SyncPeriod: 60*5,
     MaxRecordsPerPeer: 100,
     MaxTrackedPeers: 100,
+    ExtraBootstrapPeers: strings.Split(get(r, "extra_bootstrap_peers", ""), ","),
+    ExtraRelayPeers: strings.Split(get(r, "extra_relay_peers", ""), ","),
   }
   if _, err := s.d.Command.Connect(r.Context(), req); err != nil {
     w.WriteHeader(500)
@@ -338,6 +340,8 @@ func (s *webserver) handleNewRegistry(w http.ResponseWriter, r *http.Request) {
     Rendezvous: vs["rendezvous"],
     Creator: get(r, "creator", "anonymous"),
     Created: time.Now().Unix(),
+    ExtraBootstrapPeers: strings.Split(get(r, "extra_bootstrap_peers", ""), ","),
+    ExtraRelayPeers: strings.Split(get(r, "extra_relay_peers", ""), ","),
   }
   if err := s.d.Command.ResolveRegistry(vs["local"] == "true").UpsertConfig(cfg, []byte(""), registry.RegistryTable); err != nil {
     w.WriteHeader(500)

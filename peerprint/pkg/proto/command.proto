@@ -66,6 +66,8 @@ message ConnectRequest {
   int64 sync_period = 11;
   int64 max_records_per_peer = 12;
   int64 max_tracked_peers = 13;
+  repeated string extra_bootstrap_peers = 14;
+  repeated string extra_relay_peers = 15;
 }
 
 message DisconnectRequest {

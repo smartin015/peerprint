@@ -62,6 +62,8 @@ message NetworkConfig {
   string rendezvous = 7;
   string creator = 9; // Public key of the creator of this network
   int64 created = 10;
+  repeated string extra_bootstrap_peers = 11;
+  repeated string extra_relay_peers = 12;
 }
 
 // NetworkStats describes live and historical information about

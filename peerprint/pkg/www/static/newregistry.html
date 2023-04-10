@@ -39,6 +39,16 @@
     <input class="form-control" type="text" id="creator"></input>
     <div class="form-text">Who made this network?</div>
   </div>
+  <div class="mb-3">
+    <label class="form-label" for="extra_bootstrap_peers">Extra Bootstrap Peers</label>
+    <input class="form-control" type="text" id="extra_bootstrap_peers"></input>
+    <div class="form-text">CSV of multiaddr addresses of bootstrap peers to connect to for peer discovery</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="extra_relay_peers">Extra Relay Peers</label>
+    <input class="form-control" type="text" id="extra_relay_peers"></input>
+    <div class="form-text">CSV of multiaddr addresses of relay peers to use for NAT traversal of private peers</div>
+  </div>
   <div class="form-check">
     <input class="form-check-input" id="local" type="checkbox"></input>
     <label class="form-check-label" for="local">Local Network Only</label>

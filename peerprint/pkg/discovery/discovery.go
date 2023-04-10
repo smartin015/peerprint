@@ -34,30 +34,32 @@ type Discovery struct {
   l *log.Sublog
   method Method
   rendezvous string
-}
-
-var (
   bootstrapPeers []peer.AddrInfo
-)
-
-func SetBootstrapPeers(bp []peer.AddrInfo) {
-  bootstrapPeers = bp
 }
 
-func New(ctx context.Context, m Method, h host.Host, rendezvous string, connect_on_discover bool, logger *log.Sublog) *Discovery {
+func (c *Discovery) SetBootstrapPeers(bp []peer.AddrInfo) {
+  c.bootstrapPeers = bp
+}
+
+func New(ctx context.Context, m Method, h host.Host, rendezvous string, connectOnDiscover bool, extraBootstrapPeers []string, logger *log.Sublog) *Discovery {
 	c := &Discovery{
 		ctx:          ctx,
 		h:            h,
 		onReady:      make(chan bool),
 		PeerDiscovered:      make(chan peer.AddrInfo, PeerDiscoverChanSize),
     rendezvous: rendezvous,
-    connect: connect_on_discover,
+    connect: connectOnDiscover,
     method: m,
     l: logger,
+    bootstrapPeers: dht.GetDefaultBootstrapPeerAddrInfos(),
 	}
-
-  if bootstrapPeers == nil {
-    bootstrapPeers = dht.GetDefaultBootstrapPeerAddrInfos()
+  for _, ebp := range extraBootstrapPeers {
+    ai, err := peer.AddrInfoFromString(ebp)
+    if err != nil {
+      c.l.Warning("failed to parse extra bootstrap peer %s: %v", ebp, err)
+      continue
+    }
+    c.bootstrapPeers = append(c.bootstrapPeers, *ai)
   }
 
 	return c
@@ -98,8 +100,8 @@ func (c *Discovery) initDHT() *dht.IpfsDHT {
 		panic(err)
 	}
 	var wg sync.WaitGroup
-  c.l.Info("Bootstrapping %d peers", len(bootstrapPeers))
-	for _, peer := range bootstrapPeers {
+  c.l.Info("Bootstrapping %d peers", len(c.bootstrapPeers))
+	for _, peer := range c.bootstrapPeers {
 		wg.Add(1)
 		go c.bootstrapPeer(peer, &wg)
 	}

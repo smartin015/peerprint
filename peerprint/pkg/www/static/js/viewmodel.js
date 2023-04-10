@@ -7,7 +7,8 @@ function AppViewModel(hash) {
   self.credentials = ko.observableArray([]);
   self.connections = ko.observableArray([]);
   self.events = ko.observableArray([]);
-  self.peerLogs = ko.observableArray([]);
+  self.peerTracking = ko.observableArray([]);
+  self.clientStatuses = ko.observableArray([]);
   self.lobby = ko.observableArray([]);
   self.lobbyStats = ko.observable({});
   self.runtil = ko.observable("n/a");
@@ -78,9 +79,13 @@ function AppViewModel(hash) {
     });
   }
 
-  self.updatePeerLogs = function() {
-    self._streamingGet("/peerLogs", {instance: self.selectedInstance()}, self.peerLogs);
+  self.updatePeerTracking = function() {
+    self._streamingGet("/peers/tracking", {instance: self.selectedInstance()}, self.peerTracking);
   };
+
+  self.updateClientStatuses = function() {
+    self._streamingGet("/clients", {instance: self.selectedInstance()}, self.clientStatuses);
+  }
 
   self.updateTimeline = function() {
     self._streamingGet("/timeline", {instance: self.selectedInstance()}, self.timeline.update);

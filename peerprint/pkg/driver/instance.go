@@ -86,6 +86,8 @@ func NewInstance(v *pb.ConnectRequest, baseDir string, l *pplog.Sublog) (*Instan
     PSK: psk,
     ConnectTimeout: time.Duration(v.ConnectTimeout) * time.Second,
     Topics: []string{server.DefaultTopic},
+    ExtraBootstrapPeers: v.ExtraBootstrapPeers,
+    ExtraRelayPeers: v.ExtraRelayPeers,
   }, ctx, l)
   if err != nil {
     return nil, fmt.Errorf("Error initializing transport layer: %w", err)

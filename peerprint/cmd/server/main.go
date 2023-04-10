@@ -19,6 +19,7 @@ var (
   wwwFlag      = flag.String("www", "localhost:0", "Address for hosting status page - set empty to disable")
   wwwDirFlag = flag.String("wwwDir", "", "Path to WWW serving directory - leave empty to use bundled assets")
   wwwConfigFlag = flag.String("wwwCfg", "www.yaml", "Config path")
+  wwwPasswordFlag = flag.String("wwwPassword", "", "Set the password for the status server, then exit.")
 
   // Registry server flags
   regDBWorldFlag = flag.String("regDBWorld", "registry_world.sqlite3", "Path to registry database (use :memory: for ephemeral, inmemory DB")
@@ -44,6 +45,13 @@ func exists(dir, path string) bool {
 
 func main() {
   flag.Parse()
+  if *wwwPasswordFlag != "" {
+    if err := www.WritePassword(*wwwPasswordFlag, *wwwConfigFlag); err != nil {
+      panic(err)
+    }
+    logger.Printf("Password successfully written to %s; exiting\n", *wwwConfigFlag)
+    return
+  }
   if *certsDirFlag == "" {
     panic("Require -certsDir")
   }

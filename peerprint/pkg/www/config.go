@@ -7,10 +7,6 @@ import (
   "crypto/rand"
 )
 
-const (
-  DefaultPassword = "changeme"
-)
-
 type WWWConfig struct {
   WebAuthnId [64]byte `yaml:",flow"`
   AdminSalt [128]byte `yaml:",flow"`
@@ -20,9 +16,11 @@ type WWWConfig struct {
 
 func NewConfig() *WWWConfig {
   d := &WWWConfig{}
-  if err := d.SetPassword(DefaultPassword); err != nil {
-    panic(err)
-  }
+
+  // Randomize the password hash and salt
+  // so login attempts fail without a loaded config
+  rand.Read(d.AdminPassHash[:])
+  rand.Read(d.AdminSalt[:])
   return d
 }
 

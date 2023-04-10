@@ -16,11 +16,13 @@ class AdvertiseRequest(_message.Message):
     def __init__(self, local: bool = ..., config: _Optional[_Union[_peers_pb2.NetworkConfig, _Mapping]] = ...) -> None: ...
 
 class ConnectRequest(_message.Message):
-    __slots__ = ["addr", "connect_timeout", "db_path", "display_name", "local", "max_records_per_peer", "max_tracked_peers", "network", "privkey_path", "psk", "pubkey_path", "rendezvous", "sync_period"]
+    __slots__ = ["addr", "connect_timeout", "db_path", "display_name", "extra_bootstrap_peers", "extra_relay_peers", "local", "max_records_per_peer", "max_tracked_peers", "network", "privkey_path", "psk", "pubkey_path", "rendezvous", "sync_period"]
     ADDR_FIELD_NUMBER: _ClassVar[int]
     CONNECT_TIMEOUT_FIELD_NUMBER: _ClassVar[int]
     DB_PATH_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
+    EXTRA_BOOTSTRAP_PEERS_FIELD_NUMBER: _ClassVar[int]
+    EXTRA_RELAY_PEERS_FIELD_NUMBER: _ClassVar[int]
     LOCAL_FIELD_NUMBER: _ClassVar[int]
     MAX_RECORDS_PER_PEER_FIELD_NUMBER: _ClassVar[int]
     MAX_TRACKED_PEERS_FIELD_NUMBER: _ClassVar[int]
@@ -34,6 +36,8 @@ class ConnectRequest(_message.Message):
     connect_timeout: int
     db_path: str
     display_name: str
+    extra_bootstrap_peers: _containers.RepeatedScalarFieldContainer[str]
+    extra_relay_peers: _containers.RepeatedScalarFieldContainer[str]
     local: bool
     max_records_per_peer: int
     max_tracked_peers: int
@@ -43,7 +47,7 @@ class ConnectRequest(_message.Message):
     pubkey_path: str
     rendezvous: str
     sync_period: int
-    def __init__(self, network: _Optional[str] = ..., addr: _Optional[str] = ..., rendezvous: _Optional[str] = ..., psk: _Optional[str] = ..., local: bool = ..., db_path: _Optional[str] = ..., privkey_path: _Optional[str] = ..., pubkey_path: _Optional[str] = ..., display_name: _Optional[str] = ..., connect_timeout: _Optional[int] = ..., sync_period: _Optional[int] = ..., max_records_per_peer: _Optional[int] = ..., max_tracked_peers: _Optional[int] = ...) -> None: ...
+    def __init__(self, network: _Optional[str] = ..., addr: _Optional[str] = ..., rendezvous: _Optional[str] = ..., psk: _Optional[str] = ..., local: bool = ..., db_path: _Optional[str] = ..., privkey_path: _Optional[str] = ..., pubkey_path: _Optional[str] = ..., display_name: _Optional[str] = ..., connect_timeout: _Optional[int] = ..., sync_period: _Optional[int] = ..., max_records_per_peer: _Optional[int] = ..., max_tracked_peers: _Optional[int] = ..., extra_bootstrap_peers: _Optional[_Iterable[str]] = ..., extra_relay_peers: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class CrawlRequest(_message.Message):
     __slots__ = ["batch_size", "network", "restart_crawl", "timeout_millis"]

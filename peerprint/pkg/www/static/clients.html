@@ -7,19 +7,17 @@
 <thead>
 <tr>
 <th>Name</th>
-<th>Location</th>
 </tr>
 </thead>
-<tbody data-bind="foreach: peerLogs">
+<tbody data-bind="foreach: clientStatuses">
 <tr>
-<td data-bind="text: $data.Name"></td>
-<td>TODO show location</td>
+<td data-bind="text: JSON.stringify($data)"></td>
 </tr>
 </tbody>
 </table>
 
 
-Cheater form for setting statuses:
+Testing override of client status:
 <form id="clientstatus">
 Network <input type="text" id="network"></input>
 <br/>

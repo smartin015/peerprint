@@ -60,6 +60,8 @@ type Opts struct {
   ConnectTimeout time.Duration
   Topics []string
   Service interface{}
+  ExtraBootstrapPeers []string
+  ExtraRelayPeers []string
 }
 
 type Transport struct {
@@ -85,19 +87,39 @@ type Transport struct {
 func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error) {
   pid := libp2p.Identity(opts.PrivKey)
 
+  s := &Transport{
+    opts: opts,
+    recvChan: make(chan topic.TopicMsg),
+    pubChan: make(map[string] chan<- proto.Message),
+    l: logger,
+  }
+
   // Initialize base pubsub infra
-	h, err := libp2p.New(libp2p.ListenAddrStrings(opts.Addr), libp2p.PrivateNetwork(opts.PSK), pid)
+	h, err := libp2p.New(
+    libp2p.ListenAddrStrings(opts.Addr),
+    libp2p.PrivateNetwork(opts.PSK),
+
+    // These options allow for symmetric NAT communications
+    // with the help of a publicly reachable relay server
+    libp2p.EnableRelayService(),
+    libp2p.EnableNATService(),
+    libp2p.EnableRelay(),
+    libp2p.EnableHolePunching(),
+    // TODO libp2p.EnableAutoRelayWithPeerSource(s.relayPeerSource),
+
+    pid)
 	if err != nil {
     return nil, fmt.Errorf("PubSub host creation failure: %w", err)
 	}
+  s.host = h
 
-  var ps *pubsub.PubSub
   if !opts.OnlyRPC {
     // TODO switch to using pubsub.WithDiscovery
-    ps, err = pubsub.NewGossipSub(ctx, h)
+    ps, err := pubsub.NewGossipSub(ctx, s.host)
     if err != nil {
       return nil, fmt.Errorf("GossipSub creation failure: %w", err)
     }
+    s.pubsub = ps
   }
 
   // Initialize discovery service for pubsub
@@ -105,23 +127,13 @@ func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error)
 	if opts.Local {
 		disco = discovery.MDNS
 	}
-	d := discovery.New(ctx, disco, h, opts.Rendezvous, opts.ConnectOnDiscover, logger)
-
-  s := &Transport{
-    opts: opts,
-    discovery: d,
-    pubsub: ps,
-    host: h,
-    recvChan: make(chan topic.TopicMsg),
-    pubChan: make(map[string] chan<- proto.Message),
-    l: logger,
-  }
+	s.discovery = discovery.New(ctx, disco, s.host, opts.Rendezvous, opts.ConnectOnDiscover, opts.ExtraBootstrapPeers, logger)
 
   if !opts.OnlyRPC {
     // Join topics
     opts.Topics = append(opts.Topics)
     for _, t := range(opts.Topics) {
-      c, err := topic.NewTopicChannel(ctx, s.recvChan, s.ID(), ps, t, s.errChan)
+      c, err := topic.NewTopicChannel(ctx, s.recvChan, s.ID(), s.pubsub, t, s.errChan)
       if err != nil {
         return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
       }
@@ -130,6 +142,28 @@ func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error)
     }
   }
   return s, nil
+}
+
+func (t *Transport) relayPeerSource(ctx context.Context, num int) <-chan peer.AddrInfo {
+  ch := make(chan peer.AddrInfo)
+  go func() {
+    defer close(ch)
+    for _, addr := range t.opts.ExtraRelayPeers {
+      p, err := peer.AddrInfoFromString(addr)
+      if err != nil {
+        t.l.Warning("Failed to parse ExtraRelayPeers %q: %v", addr, err)
+      }
+      select {
+      case ch <- *p:
+        continue
+      default:
+        return
+      }
+    }
+
+    // TODO also enqueue any discovered peers from the host
+  }()
+  return ch
 }
 
 func (s *Transport) Destroy() {

@@ -39,6 +39,19 @@ type webserver struct {
   cfgPath string
 }
 
+func WritePassword(password, path string) error {
+  cfg := NewConfig()
+  if _, err := os.Stat(path); !os.IsNotExist(err) {
+    if err := config.Read(cfg, path); err != nil {
+      return err
+    }
+  }
+  if err := cfg.SetPassword(password); err != nil {
+    return err
+  }
+  return config.Write(cfg, path)
+}
+
 func New(l *log.Sublog, d *driver.Driver, opts *Opts) *webserver {
   var f fs.FS
   var err error
@@ -101,7 +114,7 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
 
   // Server stats
   http.HandleFunc("/timeline", s.WithAuth(s.handleGetTimeline))
-  http.HandleFunc("/peerLogs", s.WithAuth(s.handleGetPeerLogs))
+  http.HandleFunc("/peers/tracking", s.WithAuth(s.handleGetPeerTracking))
   http.HandleFunc("/events", s.WithAuth(s.handleGetEvents))
   http.HandleFunc("/serverSummary", s.WithAuth(s.handleServerSummary))
   http.HandleFunc("/storageSummary", s.WithAuth(s.handleStorageSummary))
