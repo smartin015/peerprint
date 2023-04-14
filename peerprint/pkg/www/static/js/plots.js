@@ -1,6 +1,6 @@
 
 
-function PeerTimeline(id) {
+function PeerTimeline(id, title, xlabel, ylabel) {
   var self = this;
 
   let trace1 = {
@@ -13,6 +13,7 @@ function PeerTimeline(id) {
   }
 
   var layout = {
+    title: title,
     xaxis: {
       autorange: true,
       rangeselector: {buttons: [
@@ -30,11 +31,13 @@ function PeerTimeline(id) {
           },
           {step: 'all'}
         ]},
-      type: 'date'
+      type: 'date',
+      title: xlabel,
     },
     yaxis: {
       autorange: true,
-      type: 'linear'
+      type: 'linear',
+      title: ylabel,
     }
   };
   Plotly.newPlot(id, [trace1], layout);
@@ -50,7 +53,7 @@ function PeerTimeline(id) {
   };
 }
 
-function PeerGeoMap(id) {
+function PeerGeoMap(id, title) {
 	var self = this;
 
 	let data = {
@@ -59,7 +62,8 @@ function PeerGeoMap(id) {
 			lon: [],
 			lat: [],
 			marker: {
-					size: 4,
+          color: '#4444ff',
+					size: 10,
 					line: {
 							width: 1
 					}
@@ -67,24 +71,27 @@ function PeerGeoMap(id) {
 	};
 
 	var layout = {
+      title: title,
 			geo: {
 					scope: 'world',
 					resolution: 50,
 					showland: true,
-					landcolor: '#EAEAAE',
-					countrycolor: '#d3d3d3',
+					landcolor: '#ffffff',
+					//countrycolor: '#000000',
 					countrywidth: 1.5,
-					subunitcolor: '#d3d3d3'
+					subunitcolor: '#888888'
 			}
 	};
 
 	Plotly.newPlot(id, [data], layout); 
-  self.update = function(pts) {
+  self.update = function(pts) { // [[lat1, lon1, label1], [lat2, lon2, label2]...]
       data.lat = [];
       data.lon = [];
+      data.text = [];
       for (const d of pts) {
-        data.lat.push(d.Latitude);
-        data.lon.push(d.Longitude);
+        data.lat.push(d[0]);
+        data.lon.push(d[1]);
+        data.text.push(d[2]);
       }
       Plotly.react(id, [data], layout);
   };

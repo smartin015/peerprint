@@ -137,7 +137,7 @@ func New(opts *Opts, ctx context.Context, logger *log.Sublog) (Interface, error)
       if err != nil {
         return nil, fmt.Errorf("failed to join topic %s: %w", t, err)
       }
-      logger.Info("Joined topic: %q\n", t)
+      logger.Info("Joined topic: %q", t)
       s.pubChan[t] = c
     }
   }
@@ -240,19 +240,19 @@ func (s *Transport) Run(ctx context.Context) error {
     disco = "global"
   }
   if s.opts.ConnectTimeout != 0 {
-    s.l.Info("Discovering %s pubsub peers (self ID %v, timeout %v)\n", disco, s.ID(), s.opts.ConnectTimeout)
+    s.l.Info("Discovering %s pubsub peers (self ID %v, timeout %v)", disco, s.ID(), s.opts.ConnectTimeout)
     ctx2, cancel := context.WithTimeout(ctx, s.opts.ConnectTimeout)
     connectCtx = ctx2
     defer cancel()
   } else {
-    s.l.Info("Starting %s discovery (self ID %v, no timeout)\n", disco, s.ID())
+    s.l.Info("Starting %s discovery (self ID %v, no timeout)", disco, s.ID())
   }
 
   go s.discovery.Run()
 	if err := s.discovery.AwaitReady(connectCtx); err != nil {
 		return fmt.Errorf("Error connecting to peers: %w", err)
 	} else {
-		s.l.Println("Peers found; initial discovery complete")
+		s.l.Info("Peers found; initial discovery complete")
 	}
   return nil
 }

@@ -3,6 +3,7 @@
 </div>
 
 <div class="my-4 w-100" id="peerTimeline" width="900" height="380"></div>
+
 <table class="table">
 <thead>
 <tr>
@@ -14,8 +15,15 @@
 <tbody data-bind="foreach: peerTracking">
 <tr>
 <td data-bind="text: $data.Name"></td>
-<td data-bind="text: $data.Start"></td>
-<td data-bind="text: $data.End"></td>
+<td data-bind="text: (new Date($data.Start*1000)).toISOString()"></td>
+<td data-bind="text: (new Date($data.End*1000)).toISOString()"></td>
 </tr>
 </tbody>
 </table>
+
+<a href="#peerTest" data-bs-toggle="collapse">Click here to add test tracking</a>
+<div class="collapse", id="peerTest">
+  Name <input type="text" id="peertrackname"></input>
+  <button data-bind="click: trackPeer">Submit</button>
+  </form>
+</div>

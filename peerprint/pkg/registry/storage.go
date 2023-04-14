@@ -4,7 +4,6 @@ package registry
 import (
   "fmt"
   "strings"
-  "log"
   pb "github.com/smartin015/peerprint/p2pgit/pkg/proto"
   "database/sql"
   "context"
@@ -24,7 +23,6 @@ func (s *Registry) initStorage(path string) error {
   if path != ":memory:" {
     path = "file:" + path + "?_journal_mode=WAL"
   }
-  log.Println("NewRegistry: " + path)
   db, err := sql.Open("sqlite3", path)
   if err != nil {
     return fmt.Errorf("failed to open db at %s: %w", path, err)

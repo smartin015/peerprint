@@ -16,6 +16,11 @@ import (
   //"github.com/smartin015/peerprint/p2pgit/pkg/crypto"
   "github.com/go-webauthn/webauthn/webauthn"
   "embed"
+  "strings"
+)
+
+const (
+  defaultPort = 8000
 )
 
 //go:embed static
@@ -114,11 +119,12 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
 
   // Server stats
   http.HandleFunc("/timeline", s.WithAuth(s.handleGetTimeline))
+  http.HandleFunc("/peers/status", s.WithAuth(s.handleGetPeerStatuses))
   http.HandleFunc("/peers/tracking", s.WithAuth(s.handleGetPeerTracking))
+  http.HandleFunc("/peers/track", s.WithAuth(s.handleTrackPeer))
   http.HandleFunc("/events", s.WithAuth(s.handleGetEvents))
   http.HandleFunc("/serverSummary", s.WithAuth(s.handleServerSummary))
   http.HandleFunc("/storageSummary", s.WithAuth(s.handleStorageSummary))
-  http.HandleFunc("/clients", s.WithAuth(s.handleGetPeerStatuses))
   http.HandleFunc("/clients/set_status", s.WithAuth(s.handleSetClientStatus))
 
   // Connection management
@@ -135,14 +141,21 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
   // Server settings
   http.HandleFunc("/password/new", s.WithAuth(s.handleNewPassword))
 
-	// TLS stuff
-  l, err := net.Listen("tcp", addr)
-  if err != nil {
-      panic(err)
+	// Try listening on a default port if none is specified, failing silently
+  var l net.Listener
+  var err error
+  if strings.HasSuffix(addr, ":0") {
+    l, err = net.Listen("tcp", fmt.Sprintf("%s:%d", strings.Split(addr, ":")[0], defaultPort))
   }
+  if l == nil || err != nil {
+    l, err = net.Listen("tcp", addr)
+    if err != nil {
+      panic(err)
+    }
+  } 
   defer l.Close()
 
-  s.l.Info("Starting status HTTP server on %s\n", l.Addr().(*net.TCPAddr).String())
+  s.l.Info("Starting status server at https://%s", l.Addr().(*net.TCPAddr).String())
 	// nil args populated from http.TLSConfig
 
   srv := &http.Server{
@@ -154,10 +167,11 @@ func (s *webserver) Serve(ctx context.Context, addr, certPath, keyPath string) {
 }
 
 func (s *webserver) getInstance(r *http.Request, w http.ResponseWriter) *driver.Instance {
-  n := s.d.GetInstance(r.FormValue("instance"))
+  i := r.FormValue("instance")
+  n := s.d.GetInstance(i)
   if n == nil {
     w.WriteHeader(400)
-    w.Write([]byte("instance not found"))
+    w.Write([]byte("instance not found: " + i))
     return nil
   }
   return n

@@ -57,7 +57,7 @@ func New(ctx context.Context, dbPath string, local bool, l *pplog.Sublog) (*Regi
     PrivKey: kpriv,
     PubKey: kpub,
     PSK: nil,
-  }, ctx, pplog.New("transport", r.l))
+  }, ctx, r.l.Sub("transport"))
   if err != nil {
     return nil, fmt.Errorf("transport init: %w", err)
   }
@@ -79,7 +79,7 @@ func (r *Registry) Run(ctx context.Context) error {
   }
 
   defer r.t.Destroy()
-  s := NewServer(r.t, r, pplog.New("regsrv", r.l))
+  s := NewServer(r.t, r, r.l.Sub("regsrv"))
 
   if err := r.t.Run(ctx); err != nil {
     return fmt.Errorf("Error running transport: %w", err)

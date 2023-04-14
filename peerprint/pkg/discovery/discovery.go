@@ -127,14 +127,14 @@ func (c *Discovery) HandlePeerFound(p peer.AddrInfo) {
   if c.connect {
     err := c.h.Connect(c.ctx, p)
     if err != nil {
-      c.l.Println("Couldn't connect to: ", p.ID.Pretty(), ", error:", err)
+      c.l.Warning("Couldn't connect to: %s, error %w", p.ID.Pretty(), err)
     } else {
-      c.l.Println("Connected to:", p.ID.Pretty())
+      c.l.Info("Connected to: %s", p.ID.Pretty())
       c.notify(p)
     }
   } else {
     c.h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
-    c.l.Println("Added peer to PeerStore:", p.ID.Pretty())
+    c.l.Info("Added peer to PeerStore: %s", p.ID.Pretty())
     c.notify(p)
   }
 }
@@ -186,7 +186,7 @@ func (c *Discovery) discoverPeersDHT(rendezvous string) {
 func (c *Discovery) AwaitReady(ctx context.Context) error {
 	select {
 	case <-c.onReady:
-    c.l.Println("Ready state achieved, returning from AwaitReady")
+    c.l.Info("Ready state achieved, returning from AwaitReady")
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

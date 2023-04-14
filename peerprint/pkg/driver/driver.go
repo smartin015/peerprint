@@ -89,7 +89,11 @@ func (d *Driver) Start(ctx context.Context, defaultLAN bool) error {
     }
   }
 
-  d.l.Info("Initializing %d network(s)", len(d.Config.Connections))
+  plural := ""
+  if len(d.Config.Connections) != 1 {
+    plural = "s"
+  }
+  d.l.Info("Initializing %d network%s", len(d.Config.Connections), plural)
   for _, n := range d.Config.Connections {
     if err := d.handleConnect(n); err != nil {
       d.l.Error("Init %s: %v", n.Network, err)
@@ -112,7 +116,7 @@ func (d *Driver) Start(ctx context.Context, defaultLAN bool) error {
   if err != nil {
     return fmt.Errorf("Listen: %w", err)
   }
-  d.l.Info("Command server listening on %s", d.opts.RPCAddr)
+  d.l.Info("Secure command RPC server listening at %s", lis.Addr().String())
   go d.srv.Serve(lis)
   return nil
 }
@@ -144,7 +148,7 @@ func (d *Driver) GetInstance(name string) *Instance {
 }
 
 func (d *Driver) handleConnect(v *pb.ConnectRequest) error {
-  if i, err := NewInstance(v, d.opts.ConnectionDir, pplog.New(v.Network, d.l)); err != nil {
+  if i, err := NewInstance(v, d.opts.ConnectionDir, d.l.Sub(v.Network)); err != nil {
     return fmt.Errorf("Connect: %w", err)
   } else {
     d.inst[v.Network] = i

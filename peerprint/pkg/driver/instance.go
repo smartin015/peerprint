@@ -103,7 +103,7 @@ func NewInstance(v *pb.ConnectRequest, baseDir string, l *pplog.Sublog) (*Instan
     DisplayName: v.DisplayName,
     MaxRecordsPerPeer: v.MaxRecordsPerPeer,
     MaxTrackedPeers: v.MaxTrackedPeers,
-  }, pplog.New(name, l))
+  }, l.Sub(name))
 
   return &Instance{
     name: v.Network,

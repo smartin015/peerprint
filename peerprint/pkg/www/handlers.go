@@ -50,8 +50,10 @@ func (s *webserver) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *webserver) handleManualSync(w http.ResponseWriter, r *http.Request) {
   n := s.getInstance(r, w)
-  n.S.Sync(context.Background())
-  w.Write([]byte("ok"))
+  if n != nil {
+    n.S.Sync(context.Background())
+    w.Write([]byte("ok"))
+  }
 }
 
 func (s *webserver) handleSyncLobby(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +150,7 @@ func (s *webserver) handleGetRegistry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) handleGetPeerStatuses(w http.ResponseWriter, r *http.Request) {
+  s.l.Info("handleGetPeerStatuses")
   streamingReadInstance[*pb.PeerStatus](s, w, r, func(n *driver.Instance, cur chan *pb.PeerStatus) error {
     return n.St.GetPeerStatuses(r.Context(), cur, storage.AfterTimestamp(time.Now().Unix() - 60*60*24))
   })
@@ -178,6 +181,25 @@ func (s *webserver) handleGetPeerTracking(w http.ResponseWriter, r *http.Request
   streamingReadInstance[*storage.TimeProfile](s, w, r, func(n *driver.Instance, cur chan *storage.TimeProfile) error {
     return n.St.GetPeerTracking(r.Context(), cur)
   })
+}
+
+func (s *webserver) handleTrackPeer(w http.ResponseWriter, r *http.Request) {
+  n := s.getInstance(r, w)
+  if n == nil {
+    return
+  }
+  name := r.PostFormValue("name")
+  if name == "" {
+    w.WriteHeader(400)
+    w.Write([]byte("Missing name field"))
+    return
+  }
+
+  if err := n.St.TrackPeer(name); err != nil {
+    w.WriteHeader(500)
+    w.Write([]byte(err.Error()))
+  }
+  w.Write([]byte("ok"))
 }
 
 func (s *webserver) handleServerSummary(w http.ResponseWriter, r *http.Request) {
@@ -225,8 +247,6 @@ func (s *webserver) handleSetClientStatus(w http.ResponseWriter, r *http.Request
   }
   n := s.getInstance(r, w)
   if n == nil {
-    w.WriteHeader(400)
-    w.Write([]byte("Instance no found: " + vs["network"]))
     return
   }
 
@@ -245,6 +265,7 @@ func (s *webserver) handleSetClientStatus(w http.ResponseWriter, r *http.Request
                   Latitude: latF,
                   Longitude: lonF,
           },
+          Timestamp: time.Now().Unix(),
         },
       },
   }); err != nil {

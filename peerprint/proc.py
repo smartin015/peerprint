@@ -15,6 +15,7 @@ class ProcessOptsBase():
 @dataclass
 class ServerProcessOpts(ProcessOptsBase):
     # See cmd/server/main.go for flag defs and defaults
+    baseDir: str = None
     addr: str = None
     certsDir: str = None
     connDir: str = None

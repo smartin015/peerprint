@@ -253,6 +253,10 @@ func (s *Server) syncCompletions(ctx context.Context, p peer.ID) int {
 }
 
 func (s *Server) Sync(ctx context.Context) {
+  if len(s.t.GetPeers()) == 1 { // 1 because self connection
+    s.l.Warning("Sync attempted with 0 peers; skipping")
+  }
+
   s.connStr = "Syncing"
   s.lastSyncStart = time.Now()
   s.lastSyncEnd = time.Unix(0,0)

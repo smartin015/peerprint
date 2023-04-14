@@ -8,7 +8,16 @@ function AppViewModel(hash) {
   self.connections = ko.observableArray([]);
   self.events = ko.observableArray([]);
   self.peerTracking = ko.observableArray([]);
-  self.clientStatuses = ko.observableArray([]);
+  self.peerStatuses = ko.observableArray([]);
+  self.clientStatuses = ko.computed(function() {
+    let result = [];
+    for (let p of self.peerStatuses()) {
+      for (let c of p.clients) {
+        result.push({...c, peer: p.name});
+      }
+    }
+    return result;
+  });
   self.lobby = ko.observableArray([]);
   self.lobbyStats = ko.observable({});
   self.runtil = ko.observable("n/a");
@@ -17,8 +26,21 @@ function AppViewModel(hash) {
 	self.showToast = function(title, body) {
 		self.toastData({title, body});
 	};
-  self.timeline = new PeerTimeline('peerTimeline');
-  self.geo = new PeerGeoMap('peerGeo');
+  self.timeline = new PeerTimeline('peerTimeline', 'Census Timeline', 'Time', 'Peer Count');
+  self.geo = new PeerGeoMap('peerGeo', 'Client Locations');
+  self.geoUpdater = ko.computed(function() {
+    let pts = [];
+    for (let p of self.peerStatuses()) {
+      for (let c of p.clients) {
+        if (!c.location) {
+          continue;
+        }
+        pts.push([c.location.latitude, c.location.longitude, `${p.name} ${c.name} (${c.status})`]);
+      }
+    }
+    self.geo.update(pts);
+    return pts;
+  });
 
   setInterval(() => {
     const ls = self.lobbyStats();
@@ -51,9 +73,33 @@ function AppViewModel(hash) {
     self.selectedInstance(i);
   }
 
-  self.genPSK = function() {
-    throw new Error("todo");
+  self.loadWordList = function(cb) {
+    if (self.wordList) {
+      cb(self.wordList);
+    } else {
+      $.get('wordlist.txt', function(data) {
+        self.wordList = data.split('\n');
+        cb(self.wordList)
+      });
+    }
   }
+  function getRandomSubarray(arr, size) {
+    // Optimized Fisher-Yates shuffle, from https://stackoverflow.com/a/11935263
+    var shuffled = arr.slice(0), i = arr.length, min = i - size, temp, index;
+    while (i-- > min) {
+      index = Math.floor((i + 1) * Math.random());
+      temp = shuffled[index];
+      shuffled[index] = shuffled[i];
+      shuffled[i] = temp;
+    }
+    return shuffled.slice(min);
+  }
+
+  self.genPSK = function() {
+    self.loadWordList(function(words) {
+      $('#newconn #psk').val(getRandomSubarray(words, 4).join('-'));
+    });
+  };
 
   $("#myTab a").on("shown.bs.tab", function(e) {
 		let tid = $(e.target).attr("id");
@@ -83,31 +129,53 @@ function AppViewModel(hash) {
     self._streamingGet("/peers/tracking", {instance: self.selectedInstance()}, self.peerTracking);
   };
 
-  self.updateClientStatuses = function() {
-    self._streamingGet("/clients", {instance: self.selectedInstance()}, self.clientStatuses);
+  self.updatePeerStatuses = function() {
+    self._streamingGet("/peers/status", {instance: self.selectedInstance()}, self.peerStatuses);
   }
 
   self.updateTimeline = function() {
     self._streamingGet("/timeline", {instance: self.selectedInstance()}, self.timeline.update);
   };
 
-  self.updateGeo = function() {
-    self._streamingGet("/clients/location", {instance: self.selectedInstance()}, self.geo.update);
-  };
 
+  self.randomizeTestClient = function() {
+    var arr = new Uint8Array(4);
+    window.crypto.getRandomValues(arr);
+    dec2hex = function(dec) {
+      return dec.toString(16).padStart(2, "0");
+    };
+    name = Array.from(arr, dec2hex).join('');
+
+    $("#clientstatus input#network").val(name);
+    $("#clientstatus input#name").val(name);
+    $("#clientstatus input#active_record").val("test");
+    $("#clientstatus input#active_unit").val("test");
+    $("#clientstatus input#status").val("testing");
+    $("#clientstatus input#profile").val("{}");
+    $("#clientstatus input#latitude").val((180*Math.random()) - 90);
+    $("#clientstatus input#longitude").val((360*Math.random()) - 180);
+  }
   self.setStatus = function() {
-    var data = $('#setstatus input').toArray().reduce(function(obj, item) {
+    var data = $('#clientstatus input').toArray().reduce(function(obj, item) {
           obj[item.id] = item.value;
           return obj;
     }, {});
-    $("#newconn input").each(function(i,v){v.value = ""});
+    data.instance = self.selectedInstance();
+    $("#clientstatus input").each(function(i,v){v.value = ""});
     $.post("/clients/set_status", data).done((data) => {
-			self.showToast("Success", "Connection created");
-			self.gotoTab("conns")
+			self.showToast("Success", "Status sent");
     }).fail(() => {
-			self.showToast("Error", "Failed to create connection");
+			self.showToast("Error", "Failed to set status");
     });
   }
+
+  self.trackPeer = function() {
+    $.post("/peers/track", {name: $('#peertrackname').val(), instance: self.selectedInstance()}).done(function(data) {
+      self.showToast("Success", "Tracking applied");
+    }).fail(() => {
+      self.showToast("Error", "Failed to apply tracking");
+    });
+  };
 
   self.updateServerSummary = function() {
     $.getJSON("/serverSummary", {instance: self.selectedInstance()}, function(data) { 
@@ -123,8 +191,8 @@ function AppViewModel(hash) {
     self._streamingGet("/events", {instance: self.selectedInstance()}, self.events);
   };
   self.syncManual = function() {
-    $.getJSON("/server/sync", {}, function() {
-			self.showToast("Success", "Synced with other peers");
+    $.get("/server/sync", {instance: self.selectedInstance()}, function() {
+			self.showToast("Success", "Sync requested; see logs for more details");
       self.updateStorageSummary();
     });
   }
@@ -176,11 +244,15 @@ function AppViewModel(hash) {
       case "events":
         self.updateEvents();
         break;
+      case "peers":
+        self.updatePeerTracking();
+        break;
+      case "clients":
+        self.updatePeerStatuses();
+        break;
       case "lobby":
         self.updateLobby(true);
         break;
-      case "geography":
-        self.updateGeo();
       case "registry":
         self.updateRegistry();
     }
@@ -271,7 +343,6 @@ function AppViewModel(hash) {
       return;
     }
     window.location.hash =  `${inst}.${tab}`;
-    console.log("set href");
     self.refresh();
   });
 

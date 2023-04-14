@@ -18,7 +18,6 @@ TOMBSTONE = json.dumps("TOMBSTONE").encode("utf8")
 
 WWW_PORT = 5000
 SERVER_ADDR = "0.0.0.0:8000"
-STATUS_PAGE_ADDR ="0.0.0.0:8334"
 
 server=None
 
@@ -78,16 +77,7 @@ class ExampleServer():
     def __init__(self, cfgDir, certsDir):
         self._logger = logging.getLogger()
         self.srv = P2PServer(
-            P2PServerOpts(
-                  addr=SERVER_ADDR,
-                  www=STATUS_PAGE_ADDR,
-                  driverCfg=str(Path(cfgDir).parent / "driver.yaml"),
-                  wwwCfg=str(Path(cfgDir).parent / "www.yaml"),
-                  certsDir=certsDir,
-                  serverCert="server.crt",
-                  serverKey="server.key",
-                  rootCert="rootCA.crt",
-            ),  
+            P2PServerOpts(addr=SERVER_ADDR),  
             self._logger,
         )
         self.cli = P2PClient(SERVER_ADDR, certsDir, self._logger)

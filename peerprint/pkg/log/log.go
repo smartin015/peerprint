@@ -24,8 +24,12 @@ func NewBasic() (*Sublog) {
   }
 }
 
-func New(name string, l withprintln) (*Sublog) {
+func New(name string, l withprintln) *Sublog {
   return &Sublog{l: l, n: name}
+}
+
+func (l *Sublog) Sub(n string) *Sublog {
+  return &Sublog{l: l.l, n: l.n + "." + n}
 }
 
 func (l *Sublog) log(prefix string, args []interface{}, suffix string) {
@@ -42,9 +46,5 @@ func (l *Sublog) Error(args ...interface{}) {
 }
 func (l *Sublog) Fatal(args ...interface{}) {
   l.l.Fatal(args...)
-}
-func (l *Sublog) Println(v ...any) {
-  v = append([]any{fmt.Sprintf("%s: ", l.n)}, v...)
-  l.l.Println(v...)
 }
 
