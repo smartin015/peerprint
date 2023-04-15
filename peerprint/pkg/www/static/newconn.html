@@ -1,0 +1,49 @@
+<div class="pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2">Join Network</h1>
+  <p class="text-muted">Use this form to create a new network connection with other PeerPrint instances!</p>
+</div>
+
+<form id="newconn">
+  <div class="mb-3">
+    <label class="form-label" for="network">Network name</label>
+    <input class="form-control" id="network" type="text"></input>
+    <div class="form-text">Use this name to refer to the network in PeerPrint and integrations</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="display_name">Display name</label>
+    <input class="form-control" type="text" id="display_name"></input>
+    <div class="form-text">How this PeerPrint instance appears to others on the network</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="rendezvous">Rendezvous</label>
+    <input class="form-control" type="text" id="rendezvous"></input>
+    <div class="form-text">A (unique) string used on bootstrapping; peers with the same rendezvous will find and connect to each other</div>
+  </div>
+  <div class="mb-3">
+    <label for="psk">Pre-shared Key</label>
+    <div class="input-group">
+      <input class="form-control" type="text" id="psk"></input>
+      <button class="btn btn-outline-secondary" data-bind="click: genPSK">
+        <i class="fas fa-sync"></i>
+      </button>
+    </div>
+    <div class="form-text">Network communications are encrypted using the PSK; all peers must have the same PSK to access the network. Click the button to generate a PSK from a 4-word sample of ~2048 words (11 bits/word, 44 bits entropy, ~550 years to guess at 1k guess/sec)</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="extra_bootstrap_peers">Extra Bootstrap Peers</label>
+    <input class="form-control" type="text" id="extra_bootstrap_peers"></input>
+    <div class="form-text">CSV of multiaddr addresses of bootstrap peers to connect to for peer discovery</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="extra_relay_peers">Extra Relay Peers</label>
+    <input class="form-control" type="text" id="extra_relay_peers"></input>
+    <div class="form-text">CSV of multiaddr addresses of relay peers to use for NAT traversal of private peers</div>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" id="local" type="checkbox"></input>
+    <label class="form-check-label" for="local">Local Network Only</label>
+  </div>
+  <div class="form-text mb-5">If checked, PeerPrint will only search for peers on the local network (i.e. the LAN).</div>
+
+  <button class="btn btn-primary" data-bind="click: newConnection">Create</button>
+</form>

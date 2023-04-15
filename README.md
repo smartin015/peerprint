@@ -59,6 +59,8 @@ All tests can also be run manually via `docker-compose run test`
 ## Deploying
 
 ```
-python3 -m build
+pip3 install build twine
+cd peerprint && ./build_multiarch.sh
+cd .. && python3 -m build
 python3 -m twine upload --repository testpypi dist/*
 ```

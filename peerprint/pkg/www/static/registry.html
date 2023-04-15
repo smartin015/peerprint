@@ -1,0 +1,58 @@
+<div class="pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2">Manage Published Networks</h1>
+  <p class="text-muted">Control the list of networks being broadcast to other peers.</p>
+</div>
+
+<div data-bind="visible: registry().length === 0" class="container-fluid text-center h-75 pt-5 align-middle">
+  <h5 class="text-muted">No Networks are Published</h5>
+  <p class="text-muted">Broadcast new networks on the <a href="#" data-bind="click: (_, e) => gotoTab('newregistry', e)">Publish Network</a> tab.</p>
+</div>
+
+<div data-bind="foreach: registry">
+	<div class="container-md mb-6">
+		<h4>
+      <span data-bind="text: config.name"></span>:
+      <small class="text-muted" data-bind="text: config.description"></small>
+    </h4>
+		<div class="container border-top row pt-3">
+      <div class="col">
+        <table class="table">
+          <tbody>
+            <tr>
+              <th scope="row">Location:</th>
+              <td data-bind="text: config.location"></td>
+            </tr>
+            <tr>
+              <th scope="row">Rendezvous:</th>
+              <td data-bind="text: config.rendezvous"></td>
+            </tr>
+            <tr>
+              <th scope="row">Creator:</th>
+              <td data-bind="text: config.creator"></td>
+            </tr>
+            <tr>
+              <th scope="row">Created:</th>
+              <td data-bind="text: config.created"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col">
+        <h6>Tags:</h6>
+        <ul class="pb-3 list-group list-group-horizontal" data-bind="foreach: config.tags">
+          <li class="list-group-item" data-bind="text: $data"></li>
+        </ul>
+      
+        <h6>Links:</h6>
+        <div class="pb-3 list-group" data-bind="foreach: config.links">
+          <a class="list-group-item list-group-item-action" target="_blank" data-bind="text: $data, attr: {href: $data}"></a>
+        </div>
+
+        <!-- TODO stats -->
+      </div>
+      <div class="d-flex pt-3 justify-content-end">
+        <button class="btn btn-secondary" data-bind="click: $root.deleteRegistry">Unpublish</button>
+      </div>
+		</div>
+	</div>
+</div>

@@ -130,3 +130,11 @@ dmypy.json
 
 # CUSTOM - sqlite3 DBs
 *.sqlite3
+
+# Vim swapfiles
+*.swp
+
+
+peerprint/bin/server-*
+peerprint/server
+peerprint/tester

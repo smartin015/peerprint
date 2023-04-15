@@ -1,0 +1,59 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+<h1 class="h2">Client Stats</h1>
+</div>
+
+<div class="my-4 w-100" id="peerGeo" width="900" height="380"></div>
+
+<table class="table">
+<thead>
+<tr>
+<th>Peer</th>
+<th>Name</th>
+<th>Record</th>
+<th>Unit</th>
+<th>Status</th>
+<th>Profile</th>
+<th>LatLon</th>
+</tr>
+</thead>
+<tbody data-bind="foreach: clientStatuses">
+  <tr>
+    <td data-bind="text: peer"></td>
+    <td data-bind="text: name"></td>
+    <td data-bind="text: active_record"></td>
+    <td data-bind="text: active_unit"></td>
+    <td data-bind="text: status"></td>
+    <td data-bind="text: profile"></td>
+    <td data-bind="text: location.latitude.toFixed(2) + ', ' + location.longitude.toFixed(2)"></td>
+  </tr>
+</tbody>
+</table>
+
+<a href="#clientTest" data-bs-toggle="collapse">Click here to add testing client records</a>
+<div class="collapse", id="clientTest">
+  Testing override of client status:
+
+  <div>
+    <button class="btn" data-bind="click: $root.randomizeTestClient">Randomize</button>
+  </div>
+
+  <form id="clientstatus">
+  Network <input type="text" id="network"></input>
+  <br/>
+  Name <input type="text" id="name"></input>
+  <br/>
+  Active Record <input type="text" id="active_record"></input>
+  <br/>
+  Active Unit<input type="text" id="active_unit"></input>
+  <br/>
+  Status <input type="text" id="status"></input>
+  <br/>
+  Profile <input type="text" id="profile"></input>
+  <br/>
+  Latitude <input type="text" id="latitude"></input>
+  <br/>
+  Longitude <input type="text" id="longitude"></input>
+  <br/>
+  <button data-bind="click: setStatus">Submit</button>
+  </form>
+</div>

@@ -1,0 +1,36 @@
+<div class="pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2">Manage Connections</h1>
+  <p class="text-muted">Manage the list of networks this server is connected to.</p>
+</div>
+
+<div class="container-md mb-3">
+  <table class="table">
+  <div class="container border-top">
+    <thead>
+      <tr>
+        <th>Network</th>
+        <th>Display Name</th>
+        <th>Rendezvous</th>
+        <th>Type</th>
+        <th></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody data-bind="foreach: connections">
+      <tr>
+        <td data-bind="text:network"></td>
+        <td data-bind="text:displayName"></td>
+        <td data-bind="text:rendezvous"></td>
+        <td data-bind="text: (local===true) ? 'Local' : 'World'"></td>
+        <td><a href="#" data-bind="click: $root.gotoPublish">Publish</a></td>
+        <td><a href="#" data-bind="click: $root.deleteConn">Delete</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div data-bind="visible: connections().length === 0" class="container-fluid text-center h-75 pt-5 align-middle">
+    <h5 class="text-muted">No Connections</h5>
+    <p class="text-muted">Join networks on the <a href="#" data-bind="click: (_, e) => gotoTab('newconn', e)">Join Network</a> tab.</p>
+  </div>
+
+</div>
