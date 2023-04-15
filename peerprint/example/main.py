@@ -17,7 +17,7 @@ import re
 TOMBSTONE = json.dumps("TOMBSTONE").encode("utf8")
 
 WWW_PORT = 5000
-SERVER_ADDR = "0.0.0.0:8000"
+SERVER_ADDR = "0.0.0.0:8080"
 
 server=None
 
@@ -74,13 +74,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return super().do_GET()
 
 class ExampleServer():
-    def __init__(self, cfgDir, certsDir):
+    def __init__(self, baseDir):
         self._logger = logging.getLogger()
         self.srv = P2PServer(
-            P2PServerOpts(addr=SERVER_ADDR),  
+            P2PServerOpts(addr=SERVER_ADDR, baseDir=baseDir),  
             self._logger,
         )
-        self.cli = P2PClient(SERVER_ADDR, certsDir, self._logger)
+        self.cli = P2PClient(SERVER_ADDR, baseDir, self._logger)
 
     def run(self):
         socketserver.TCPServer.allow_reuse_address = True
@@ -91,6 +91,6 @@ class ExampleServer():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     with tempfile.TemporaryDirectory() as tmpDir:
-        server = ExampleServer(tmpDir, tmpDir)
+        server = ExampleServer(tmpDir)
         server.run()
     

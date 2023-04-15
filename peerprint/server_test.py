@@ -1,4 +1,5 @@
 import unittest
+from enum import IntEnum
 import logging
 from unittest.mock import MagicMock
 from .proc import ServerProcessOpts
@@ -19,6 +20,12 @@ class ObjectCodec:
         return dict()
 
 class MockServer:
+    class CompletionType(IntEnum):
+        UNKNOWN = spb.UNKNOWN_COMPLETION_TYPE
+        ACQUIRE = spb.ACQUIRE
+        RELEASE = spb.RELEASE
+        TOMBSTONE = spb.TOMBSTONE
+
     def __init__(self, peers):
         self.peers = peers
         # Just keyed by uuid, although real schema is by uuid+signer

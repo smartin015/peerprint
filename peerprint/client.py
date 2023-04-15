@@ -13,13 +13,13 @@ RpcError = grpc.RpcError
 # See scripts/cert_gen.py - must match common name of server cert
 GRPC_OPT = (('grpc.ssl_target_name_override', 'peerprint-server'),)
 
-class CompletionType(IntEnum):
-    UNKNOWN = spb.UNKNOWN_COMPLETION_TYPE
-    ACQUIRE = spb.ACQUIRE
-    RELEASE = spb.RELEASE
-    TOMBSTONE = spb.TOMBSTONE
-
 class P2PClient():
+    class CompletionType(IntEnum):
+        UNKNOWN = spb.UNKNOWN_COMPLETION_TYPE
+        ACQUIRE = spb.ACQUIRE
+        RELEASE = spb.RELEASE
+        TOMBSTONE = spb.TOMBSTONE
+
     def __init__(self, addr, certsDir, logger):
         self._addr = addr
         self._logger = logger
@@ -27,9 +27,13 @@ class P2PClient():
         rootPath = Path(certsDir)/ 'rootCA.crt'
         keyPath = Path(certsDir)/ 'client1.key'
         certPath = Path(certsDir)/ 'client1.crt'
+        spins = 0
         while not rootPath.exists() or not keyPath.exists() or not certPath.exists():
-            self._logger.debug("Waiting for certificate files to exist...")
+            self._logger.info("Waiting for certificate files to exist...")
             time.sleep(5.0)
+            spins += 1
+            if spins >= 6:
+                raise Exception("Timed out waiting for certificate files")
 
         with open(rootPath, 'rb') as f:
             rootcert = f.read()

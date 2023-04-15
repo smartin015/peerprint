@@ -133,3 +133,8 @@ dmypy.json
 
 # Vim swapfiles
 *.swp
+
+
+peerprint/bin/server-*
+peerprint/server
+peerprint/tester

@@ -71,7 +71,7 @@ func mustGenCerts(certsDir string) {
 }
 
 func main() {
-  l := pplog.New("main", logger)
+  l := pplog.New("peerprint", logger)
   flag.Parse()
   if *baseDirFlag == "" {
     l.Error("-baseDir must be specified")
@@ -106,13 +106,13 @@ func main() {
 
   rlDir := filepath.Join(*baseDirFlag, *regDBLocalFlag)
   l.Info("Local registry DB: %s", rlDir)
-  rLocal, err := registry.New(ctx, rlDir, true, pplog.New("local_registry", logger))
+  rLocal, err := registry.New(ctx, rlDir, true, l.Sub("local_registry"))
   if err != nil {
     panic(err)
   }
   rwDir := filepath.Join(*baseDirFlag, *regDBWorldFlag)
   l.Info("World registry DB: %s", rwDir)
-  rWorld, err := registry.New(ctx, rwDir, false, pplog.New("global_registry", logger))
+  rWorld, err := registry.New(ctx, rwDir, false, l.Sub("global_registry"))
   if err != nil {
     panic(err)
   }
@@ -125,7 +125,7 @@ func main() {
     RootCert: *rootCertFlag,
     ConfigPath: filepath.Join(*baseDirFlag, *driverConfigFlag),
     ConnectionDir: filepath.Join(*baseDirFlag, *connDirFlag),
-  }, rLocal, rWorld, pplog.New("driver", logger))
+  }, rLocal, rWorld, l.Sub("driver"))
 
 
   if *wwwFlag != "" {
@@ -133,7 +133,7 @@ func main() {
     if !strings.HasPrefix(liveDir, "/") {
       liveDir = filepath.Join(*baseDirFlag, *wwwDirFlag)
     }
-    wsrv := www.New(pplog.New("www", logger), d, &www.Opts{
+    wsrv := www.New(l.Sub("www"), d, &www.Opts{
       LiveDir: liveDir,
       CookieStoreKey: []byte(*cookieStoreKeyFlag),
       ConfigPath: filepath.Join(*baseDirFlag, *wwwConfigFlag),
